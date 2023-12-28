@@ -2,6 +2,8 @@
  *  Copyright (C) 2011 Cedric Pinson <cedric.pinson@plopbyte.com>
  */
 
+#include "pch.h"
+
 #include <osgAnimation/Animation>
 #include <osgAnimation/Channel>
 #include <osgAnimation/CubicBezier>
@@ -13,8 +15,8 @@
 #include <osgAnimation/StackedMatrixElement>
 #include <osgAnimation/StackedScaleElement>
 #include <osg/Array>
-#include "JSON_Objects"
-#include "WriteVisitor"
+#include "JSON_Objects.h"
+#include "WriteVisitor.h"
 
 
 template<typename T>

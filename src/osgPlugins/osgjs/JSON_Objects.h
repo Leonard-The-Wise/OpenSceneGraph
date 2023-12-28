@@ -17,7 +17,7 @@
 #include <vector>
 #include <algorithm>
 
-#include "json_stream"
+#include "json_stream.h"
 
 class WriteVisitor;
 

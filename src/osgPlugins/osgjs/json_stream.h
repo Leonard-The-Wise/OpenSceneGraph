@@ -25,7 +25,7 @@
 
 #include <osgDB/fstream>
 
-#include "utf8_string"
+#include "utf8_string.h"
 
 
 // A simple class wrapping ofstream calls to enable generic cleaning of json data.

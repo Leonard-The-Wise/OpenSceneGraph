@@ -2,7 +2,9 @@
  *  Copyright (C) 2010 Cedric Pinson <cedric.pinson@plopbyte.net>
  */
 
-#include "JSON_Objects"
+#include "pch.h"
+
+#include "JSON_Objects.h"
 #include <osgDB/WriteFile>
 #include <osgDB/FileNameUtils>
 #include <osg/Material>
@@ -14,7 +16,7 @@
 #include <osg/Texture1D>
 #include <osg/Image>
 #include <sstream>
-#include "WriteVisitor"
+#include "WriteVisitor.h"
 
 int JSONObjectBase::level = 0;
 unsigned int JSONObject::uniqueID = 0;

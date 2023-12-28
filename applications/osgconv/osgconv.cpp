@@ -434,7 +434,7 @@ static void usage( const char *prog, const char *msg )
 
     // print tool options
     osg::notify(osg::NOTICE)<<"options:"<< std::endl;
-    osg::notify(osg::NOTICE)<<"    -O option          - ReaderWriter option"<< std::endl;
+    osg::notify(osg::NOTICE)<<"    -O option [-O option...]          - ReaderWriter option(s)"<< std::endl;
     osg::notify(osg::NOTICE)<< std::endl;
     osg::notify(osg::NOTICE)<<"    --compressed       - Enable the usage of compressed textures,"<< std::endl;
     osg::notify(osg::NOTICE)<<"                         defaults to OpenGL ARB compressed textures."<< std::endl;
@@ -617,10 +617,15 @@ int main( int argc, char **argv )
     }
 
     std::string str;
-    while (arguments.read("-O",str))
+    std::string optionstr;
+    while (arguments.read("-O", str))
+    {
+        optionstr += " " + str;
+    }
+    if (optionstr != "")
     {
         osgDB::ReaderWriter::Options* options = new osgDB::ReaderWriter::Options;
-        options->setOptionString(str);
+        options->setOptionString(optionstr);
         osgDB::Registry::instance()->setOptions(options);
     }
 

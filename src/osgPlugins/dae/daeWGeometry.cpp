@@ -80,6 +80,9 @@ bool daeWriter::ArrayNIndices::append(domListOfFloats & list)
     case VEC4_UB:
         for (osg::Vec4ubArray::const_iterator it=vec4ub->begin(), itEnd=vec4ub->end(); it!=itEnd; ++it) ::append<osg::Vec4ub>(list, *it);
         break;
+    case VEC4_US:
+        for (osg::Vec4usArray::const_iterator it = vec4us->begin(), itEnd = vec4us->end(); it != itEnd; ++it) ::append<osg::Vec4us>(list, *it);
+        break;
     default:
         return false;
     }

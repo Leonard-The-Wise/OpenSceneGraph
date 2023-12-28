@@ -2,18 +2,28 @@ SET(TARGET_SRC
     Animation.cpp
     Base64.cpp
     JSON_Objects.cpp
+    OsgjsFileCache.cpp
+    OsgjsParser.cpp
+    OsgjsParserHelper.cpp
+    pch.cpp
     ReaderWriterJSON.cpp
     WriteVisitor.cpp)
 
 SET(TARGET_H
-    Adaptor
-    Animation
-    Base64
-    CompactBufferVisitor
-    JSON_Objects
-    json_stream
-    utf8_string
-    WriteVisitor
+    Adaptor.h
+    Animation.h
+    Base64.h
+    CompactBufferVisitor.h
+    json.hpp
+    JSON_Objects.h
+    json_stream.h
+    OsgjsFileCache.h
+    OsgjsParser.h
+    OsgjsParserHelper.h
+    pch.h
+    ReaderWriterJSON.h
+    utf8_string.h
+    WriteVisitor.h
 )
 
 #### end var setup  ###

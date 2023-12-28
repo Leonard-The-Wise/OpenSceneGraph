@@ -292,7 +292,7 @@ protected: //inner classes
     class ArrayNIndices
     {
     public:
-        enum Mode { NONE, VEC2F, VEC2D, VEC3F, VEC3D, VEC4F, VEC4D, VEC4_UB };
+        enum Mode { NONE, VEC2F, VEC2D, VEC3F, VEC3D, VEC4F, VEC4D, VEC4_UB, VEC4_US };
 
         osg::Vec2Array*         vec2;
         osg::Vec3Array*         vec3;
@@ -301,6 +301,7 @@ protected: //inner classes
         osg::Vec3dArray*        vec3d;
         osg::Vec4dArray*        vec4d;
         osg::Vec4ubArray*       vec4ub;
+        osg::Vec4usArray*       vec4us;
 
         osg::Array*             valArray;
         osg::IndexArray*        inds;

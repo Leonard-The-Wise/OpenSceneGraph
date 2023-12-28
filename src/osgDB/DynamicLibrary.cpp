@@ -47,6 +47,30 @@
 
 using namespace osgDB;
 
+std::string GetLastErrorAsString(DWORD errorCode)
+{
+    // Aloca uma string que armazena a mensagem de erro
+    LPSTR messageBuffer = nullptr;
+
+    // Usa a função FormatMessage para obter a mensagem de erro do código
+    size_t size = FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        errorCode,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&messageBuffer,
+        0,
+        NULL);
+
+    // Copia a mensagem para uma string do C++
+    std::string message(messageBuffer, size);
+
+    // Libera o buffer alocado
+    LocalFree(messageBuffer);
+
+    return message;
+}
+
 DynamicLibrary::DynamicLibrary(const std::string& name, HANDLE handle)
 {
     _name = name;
@@ -100,6 +124,11 @@ DynamicLibrary::HANDLE DynamicLibrary::getLibraryHandle( const std::string& libr
     handle = LoadLibraryW(  convertUTF8toUTF16(libraryName).c_str() );
 #else
     handle = LoadLibrary( libraryName.c_str() );
+    if (handle == NULL)
+    {
+        DWORD dwError = GetLastError();
+        OSG_WARN << "Error loading " << libraryName << ". LoadLibrary API returned with code = " << dwError << "(" << GetLastErrorAsString(dwError) << ")" << std::endl;
+    }
 #endif
 #elif defined(__APPLE__) && defined(APPLE_PRE_10_3)
     NSObjectFileImage image;

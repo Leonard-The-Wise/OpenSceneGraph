@@ -41,9 +41,9 @@
 #include <algorithm>
 #include <sstream>
 
-#include "JSON_Objects"
-#include "Animation"
-#include "json_stream"
+#include "JSON_Objects.h"
+#include "Animation.h"
+#include "json_stream.h"
 
 
 #define WRITER_VERSION 9

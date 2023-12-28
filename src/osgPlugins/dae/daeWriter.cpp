@@ -28,7 +28,7 @@ namespace osgDAE {
 daeWriter::ArrayNIndices::ArrayNIndices( osg::Array* vArray, osg::IndexArray* ind ) :
     vec2(0),  vec3(0),  vec4(0),
     vec2d(0), vec3d(0), vec4d(0),
-    vec4ub(0),
+    vec4ub(0), vec4us(0),
     valArray(vArray),
     inds( ind ), mode(NONE)
 {
@@ -63,6 +63,10 @@ daeWriter::ArrayNIndices::ArrayNIndices( osg::Array* vArray, osg::IndexArray* in
         case osg::Array::Vec4ubArrayType:
             mode = VEC4_UB;
             vec4ub = (osg::Vec4ubArray*)valArray;
+            break;
+        case osg::Array::Vec4usArrayType:
+            mode = VEC4_US;
+            vec4us = (osg::Vec4usArray*)valArray;
             break;
         default:
             OSG_WARN << "Array is unsupported vector type" << std::endl;

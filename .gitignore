@@ -17,6 +17,8 @@ include/osg/Version
 include/osgQt/Version
 src/osgQt/__
 
+3rdparty/
+build/
 lib/
 bin/
 
