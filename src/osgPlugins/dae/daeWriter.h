@@ -292,16 +292,36 @@ protected: //inner classes
     class ArrayNIndices
     {
     public:
-        enum Mode { NONE, VEC2F, VEC2D, VEC3F, VEC3D, VEC4F, VEC4D, VEC4_UB, VEC4_US };
+        enum Mode { NONE, VEC2D, VEC2F, VEC2UB, VEC2US, VEC2UI, VEC2B, VEC2S, VEC2I, VEC3D, VEC3F, VEC3UB, VEC3US, VEC3UI, VEC3B, VEC3S, VEC3I, 
+            VEC4D, VEC4F, VEC4UB, VEC4US, VEC4UI, VEC4B, VEC4S, VEC4I  };
 
-        osg::Vec2Array*         vec2;
-        osg::Vec3Array*         vec3;
-        osg::Vec4Array*         vec4;
         osg::Vec2dArray*        vec2d;
+        osg::Vec2Array*         vec2;
+        osg::Vec2ubArray*       vec2ub;
+        osg::Vec2usArray*       vec2us;
+        osg::Vec2uiArray*       vec2ui;
+        osg::Vec2bArray*        vec2b;
+        osg::Vec2sArray*        vec2s;
+        osg::Vec2iArray*        vec2i;
+
         osg::Vec3dArray*        vec3d;
+        osg::Vec3Array*         vec3;
+        osg::Vec3ubArray*       vec3ub;
+        osg::Vec3usArray*       vec3us;
+        osg::Vec3uiArray*       vec3ui;
+        osg::Vec3bArray*        vec3b;
+        osg::Vec3sArray*        vec3s;
+        osg::Vec3iArray*        vec3i;
+
         osg::Vec4dArray*        vec4d;
+        osg::Vec4Array*         vec4;
         osg::Vec4ubArray*       vec4ub;
         osg::Vec4usArray*       vec4us;
+        osg::Vec4uiArray*       vec4ui;
+        osg::Vec4bArray*        vec4b;
+        osg::Vec4sArray*        vec4s;
+        osg::Vec4iArray*        vec4i;
+
 
         osg::Array*             valArray;
         osg::IndexArray*        inds;

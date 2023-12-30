@@ -78,6 +78,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
                           const std::string& srcDirectory) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
             _pSdkManager(pSdkManager),
+            _succeedLastApply(true),
             _pScene(pScene),
             _curFbxNode(pScene->GetRootNode()),
             _currentStateSet(new osg::StateSet()),
@@ -93,7 +94,12 @@ class WriterNodeVisitor: public osg::NodeVisitor
         virtual void apply(osg::Geometry& node);
         virtual void apply(osg::Group& node);
         virtual void apply(osg::MatrixTransform& node);
-        
+
+        //virtual void apply(osg::Drawable& node);
+        //virtual void apply(osgAnimation::Skeleton& node);
+        //virtual void apply(osgAnimation::Bone& node);
+
+
         void traverse (osg::Node& node)
         {
             pushStateSet(node.getStateSet());

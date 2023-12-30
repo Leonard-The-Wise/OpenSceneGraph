@@ -722,7 +722,7 @@ void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, cons
 
 	if (bones && !bonesVec)
 	{
-		osg::notify(osg::WARN) << "WARNING: Unsuported bone array for RigGeometry. Must be Vec4usArray type. " << rigGeometry->getName() << std::endl;
+		osg::notify(osg::WARN) << "WARNING: Unsuported bones array for RigGeometry. Must be Vec4usArray type. " << rigGeometry->getName() << std::endl;
 		return;
 	}
 

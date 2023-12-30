@@ -101,12 +101,10 @@ namespace osgJSONParser
                 { "osgAnimation.FloatCubicBezierChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Callback> {return this->parseOsgAnimationFloatCubicBezierChannel(json, nodeKey); }},
                 { "osgAnimation.Vec3CubicBezierChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Callback> {return this->parseOsgAnimationVec3CubicBezierChannel(json, nodeKey); }},
             }, 
-            geodeNodes{
+            drawableNodes{
                 "osg.Geometry",
                 "osgAnimation.RigGeometry",
                 "osgAnimation.MorphGeometry",
-                "osgAnimation.Skeleton",
-                "osgAnimation.Bone",
                 "osgText.Text"
             }
         {};
@@ -123,7 +121,7 @@ namespace osgJSONParser
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;
-        const std::unordered_set<std::string> geodeNodes;
+        const std::unordered_set<std::string> drawableNodes;
 
         void lookForChildren(osg::ref_ptr<osg::Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey);
 

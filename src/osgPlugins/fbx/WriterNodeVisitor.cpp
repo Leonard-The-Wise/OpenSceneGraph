@@ -18,10 +18,14 @@
 #include <osg/MatrixTransform>
 #include <osg/NodeVisitor>
 #include <osg/PrimitiveSet>
+#include <osgAnimation/RigGeometry>
+#include <osgAnimation/MorphGeometry>
 #include <osgDB/FileUtils>
 #include <osgDB/WriteFile>
 #include "WriterNodeVisitor.h"
 
+using namespace osg;
+using namespace osgAnimation;
 
 // Use namespace qualification to avoid static-link symbol collisions
 // from multiply defined symbols.
@@ -648,6 +652,17 @@ void WriterNodeVisitor::createListTriangle(const osg::Geometry* geo,
 
 void WriterNodeVisitor::apply(osg::Geometry& geometry)
 {
+    ref_ptr<RigGeometry> rigGeometry = dynamic_cast<RigGeometry*>(&geometry);
+    const ref_ptr<Group> geoParent = geometry.getParent(0);
+
+    if (rigGeometry)
+    {
+        rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
+
+        if (rigGeometry->getName().empty())
+            rigGeometry->setName(rigGeometry->getSourceGeometry()->getName());
+    }
+
     // retrieved from the geometry.
     _geometryList.push_back(&geometry);
 
@@ -657,25 +672,42 @@ void WriterNodeVisitor::apply(osg::Geometry& geometry)
 
     osg::NodeVisitor::traverse(geometry);
 
-    if (getNodePath().size() == 1)
+    if (_listTriangles.size() > 0)
+    {
+        FbxNode* parent = _curFbxNode;
+
+        FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, geometry.getName().empty() ? "DefaultMesh" : geometry.getName().c_str());
+        _curFbxNode->AddChild(nodeFBX);
+        _curFbxNode = nodeFBX;
+
         buildFaces(geometry.getName(), _geometryList, _listTriangles, _texcoords);
 
+        _curFbxNode = parent;
+    }
 }
 
 void WriterNodeVisitor::apply(osg::Group& node)
 {
+    std::string defaultName;
+    if (dynamic_cast<Geode*>(&node))
+        defaultName = "DefaultGeode";
+    else
+        defaultName = "DefaultGroupNode";
+
     if (_firstNodeProcessed)
     {
         FbxNode* parent = _curFbxNode;
 
-        FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? "DefaultName" : node.getName().c_str());
+        FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
         _curFbxNode->AddChild(nodeFBX);
         _curFbxNode = nodeFBX;
 
         traverse(node);
 
         if (_listTriangles.size() > 0)
+        {
             buildFaces(node.getName(), _geometryList, _listTriangles, _texcoords);
+        }
 
         _curFbxNode = parent;
     }
@@ -689,11 +721,42 @@ void WriterNodeVisitor::apply(osg::Group& node)
 
 void WriterNodeVisitor::apply(osg::MatrixTransform& node)
 {
+
+    std::string defaultName;
+    ref_ptr<Skeleton> skeleton = dynamic_cast<Skeleton*>(&node);
+    ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
+
+    if (skeleton)
+        defaultName = "DefaultSkeleton";
+    else if (bone)
+        defaultName = "DefaultBone";
+    else
+        defaultName = "DefaultTransform";
+
     FbxNode* parent = _curFbxNode;
-    _curFbxNode = FbxNode::Create(_pSdkManager, node.getName().empty() ? "DefaultName" : node.getName().c_str());
+    _curFbxNode = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
     parent->AddChild(_curFbxNode);
 
-    const osg::Matrix& matrix = node.getMatrix();
+    if (skeleton || bone)
+    {
+        // Set parent bone property to eLimb, since this is a new bone in chain
+        //FbxNodeAttribute* parentAttribute = parent->GetNodeAttribute();
+        //if (parentAttribute && parentAttribute->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+        //{
+        //    FbxSkeleton* parentSkeleton = static_cast<FbxSkeleton*>(parentAttribute);
+        //    if (parentSkeleton->GetSkeletonType() != FbxSkeleton::eRoot)
+        //    {
+        //        parentSkeleton->SetSkeletonType(FbxSkeleton::eLimb);
+        //    }
+        //}
+
+        FbxSkeleton* fbxSkel = FbxSkeleton::Create(_curFbxNode, defaultName.c_str());
+        fbxSkel->SetSkeletonType(skeleton ? FbxSkeleton::eRoot : FbxSkeleton::eLimbNode);
+        _curFbxNode->SetNodeAttribute(fbxSkel);
+    }
+
+    osg::Matrix matrix = node.getMatrix();
+
     osg::Vec3d pos, scl;
     osg::Quat rot, so;
 
@@ -710,6 +773,7 @@ void WriterNodeVisitor::apply(osg::MatrixTransform& node)
     _curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 
     traverse(node);
+
     _curFbxNode = parent;
 }
 

@@ -28,7 +28,9 @@ namespace osgDAE {
 daeWriter::ArrayNIndices::ArrayNIndices( osg::Array* vArray, osg::IndexArray* ind ) :
     vec2(0),  vec3(0),  vec4(0),
     vec2d(0), vec3d(0), vec4d(0),
-    vec4ub(0), vec4us(0),
+    vec2ub(0), vec2us(0), vec2ui(0), vec2b(0), vec2s(0), vec2i(0),
+    vec3ub(0), vec3us(0), vec3ui(0), vec3b(0), vec3s(0), vec3i(0),
+    vec4ub(0), vec4us(0), vec4ui(0), vec4b(0), vec4s(0), vec4i(0),
     valArray(vArray),
     inds( ind ), mode(NONE)
 {
@@ -36,37 +38,101 @@ daeWriter::ArrayNIndices::ArrayNIndices( osg::Array* vArray, osg::IndexArray* in
     {
         switch( valArray->getType() )
         {
+        case osg::Array::Vec2dArrayType:
+            mode = VEC2D;
+            vec2d = (osg::Vec2dArray*)valArray;
+            break;
         case osg::Array::Vec2ArrayType:
             mode = VEC2F;
             vec2 = (osg::Vec2Array*)valArray;
             break;
-        case osg::Array::Vec3ArrayType:
-            mode = VEC3F;
-            vec3 = (osg::Vec3Array*)valArray;
+        case osg::Array::Vec2ubArrayType:
+            mode = VEC2UB;
+            vec2ub = (osg::Vec2ubArray*)valArray;
             break;
-        case osg::Array::Vec4ArrayType:
-            mode = VEC4F;
-            vec4 = (osg::Vec4Array*)valArray;
+        case osg::Array::Vec2usArrayType:
+            mode = VEC2US;
+            vec2us = (osg::Vec2usArray*)valArray;
             break;
-        case osg::Array::Vec2dArrayType:
-            mode = VEC2D;
-            vec2d = (osg::Vec2dArray*)valArray;
+        case osg::Array::Vec2uiArrayType:
+            mode = VEC2UI;
+            vec2ui = (osg::Vec2uiArray*)valArray;
+            break;
+        case osg::Array::Vec2bArrayType:
+            mode = VEC2B;
+            vec2b = (osg::Vec2bArray*)valArray;
+            break;
+        case osg::Array::Vec2sArrayType:
+            mode = VEC2S;
+            vec2s = (osg::Vec2sArray*)valArray;
+            break;
+        case osg::Array::Vec2iArrayType:
+            mode = VEC2I;
+            vec2i = (osg::Vec2iArray*)valArray;
             break;
         case osg::Array::Vec3dArrayType:
             mode = VEC3D;
             vec3d = (osg::Vec3dArray*)valArray;
             break;
+        case osg::Array::Vec3ArrayType:
+            mode = VEC3F;
+            vec3 = (osg::Vec3Array*)valArray;
+            break;
+        case osg::Array::Vec3ubArrayType:
+            mode = VEC3UB;
+            vec3ub = (osg::Vec3ubArray*)valArray;
+            break;
+        case osg::Array::Vec3usArrayType:
+            mode = VEC3US;
+            vec3us = (osg::Vec3usArray*)valArray;
+            break;
+        case osg::Array::Vec3uiArrayType:
+            mode = VEC3UI;
+            vec3ui = (osg::Vec3uiArray*)valArray;
+            break;
+        case osg::Array::Vec3bArrayType:
+            mode = VEC3B;
+            vec3b = (osg::Vec3bArray*)valArray;
+            break;
+        case osg::Array::Vec3sArrayType:
+            mode = VEC3S;
+            vec3s = (osg::Vec3sArray*)valArray;
+            break;
+        case osg::Array::Vec3iArrayType:
+            mode = VEC3I;
+            vec3i = (osg::Vec3iArray*)valArray;
+            break;
         case osg::Array::Vec4dArrayType:
             mode = VEC4D;
             vec4d = (osg::Vec4dArray*)valArray;
             break;
+        case osg::Array::Vec4ArrayType:
+            mode = VEC4F;
+            vec4 = (osg::Vec4Array*)valArray;
+            break;
         case osg::Array::Vec4ubArrayType:
-            mode = VEC4_UB;
+            mode = VEC4UB;
             vec4ub = (osg::Vec4ubArray*)valArray;
             break;
         case osg::Array::Vec4usArrayType:
-            mode = VEC4_US;
+            mode = VEC4US;
             vec4us = (osg::Vec4usArray*)valArray;
+            break;
+        case osg::Array::Vec4uiArrayType:
+            mode = VEC4UI;
+            vec4ui = (osg::Vec4uiArray*)valArray;
+            break;
+        case osg::Array::Vec4bArrayType:
+            mode = VEC4B;
+            vec4b = (osg::Vec4bArray*)valArray;
+            break;
+        case osg::Array::Vec4sArrayType:
+            mode = VEC4S;
+            vec4s = (osg::Vec4sArray*)valArray;
+            break;
+        case osg::Array::Vec4iArrayType:
+            mode = VEC4I;
+            vec4i = (osg::Vec4iArray*)valArray;
             break;
         default:
             OSG_WARN << "Array is unsupported vector type" << std::endl;

@@ -81,7 +81,7 @@ void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSO
         for (const auto& child : currentJSONNode["Children"])
         {
             if (!parseObject(object, child, nodeKey))
-                notify(WARN) << "WARNING: object " << object->getName() + " had not parseable children. ->" << std::endl << ADD_KEY_NAME << std::endl;
+                OSG_WARN << "WARNING: object " << object->getName() + " had not parseable children. ->" << std::endl << ADD_KEY_NAME << std::endl;
         }
     }
 
@@ -101,7 +101,7 @@ void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSO
             ref_ptr<Callback> newCallback = new Callback;
             if (!parseCallback(newCallback, child, nodeKey) || dynamic_pointer_cast<Node>(object) == false)
             {
-                notify(WARN) << "WARNING: Could not apply animation callbacks to object. ->" << std::endl << ADD_KEY_NAME << std::endl;
+                OSG_WARN << "WARNING: Could not apply animation callbacks to object. ->" << std::endl << ADD_KEY_NAME << std::endl;
                 break;
             }
             else
@@ -134,7 +134,7 @@ bool OsgjsParser::parseObject(ref_ptr<Object> currentObject, const json& current
             }
             else if (found != processObjects.end() && !itr.value().is_object())
             {
-                notify(WARN) << " found a Object JSON node [" << itr.key() <<
+                OSG_WARN << " found a Object JSON node [" << itr.key() <<
                     "] that is not an object or is malformed." << ADD_KEY_NAME << std::endl;
             }
         }
@@ -154,13 +154,13 @@ bool OsgjsParser::parseObject(ref_ptr<Object> currentObject, const json& current
             if (newObject->asDrawable())
                 dynamic_pointer_cast<Geode>(currentObject)->addDrawable(newObject->asDrawable());
             else
-                notify(WARN) << "WARNING: Could not find Drawable geometry in Geode node!" << ADD_KEY_NAME << std::endl;
+                OSG_WARN << "WARNING: Could not find Drawable geometry in Geode node!" << ADD_KEY_NAME << std::endl;
         }
         else if (dynamic_pointer_cast<Group>(currentObject))
             dynamic_pointer_cast<Group>(currentObject)->addChild(reinterpret_cast<Node*>(newObject.get()));
         else
         {
-            notify(FATAL) << "Something went wrong and object tree is broken!" << ADD_KEY_NAME << std::endl;
+            OSG_FATAL << "Something went wrong and object tree is broken!" << ADD_KEY_NAME << std::endl;
             return false;
         }
 
@@ -230,7 +230,7 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
     {
     case UserDataContainerType::None:
     {
-        notify(WARN) << "Container for current object has no specification!" << ADD_KEY_NAME << std::endl;
+        OSG_WARN << "Container for current object has no specification!" << ADD_KEY_NAME << std::endl;
         break;
     }
     case UserDataContainerType::UserData:
@@ -327,7 +327,7 @@ ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std
 
             for (auto itr = child.begin(); itr != child.end(); itr++)
             {
-                if (geodeNodes.find(itr.key()) != geodeNodes.end())
+                if (drawableNodes.find(itr.key()) != drawableNodes.end())
                     isGeode = true;
                 else
                 {
@@ -387,7 +387,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
     // Get the matrix
     if (!currentJSONNode.contains("Matrix") || !currentJSONNode["Matrix"].is_array() || currentJSONNode["Matrix"].size() != 16)
     {
-        notify(WARN) << "WARNING: MatrixTransform's Matrix object does not exist or have incorrect size!" << ADD_KEY_NAME << std::endl;
+        OSG_WARN << "WARNING: MatrixTransform's Matrix object does not exist or have incorrect size!" << ADD_KEY_NAME << std::endl;
     }
     else
     {
@@ -400,7 +400,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
         }
 
         // Fix rotate and scale
-        if (_firstMatrix)
+        if (_firstMatrix & 0) // FIXME: TEMPORARILY DISABLED (Make optional?)
         {
             matrix.postMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
             matrix.postMult(osg::Matrix::scale(100.0, 100.0, 100.0));
@@ -476,7 +476,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         newGeometry = new RigGeometry;
     else
     {
-        notify(WARN) << "WARNING: Unknown geometry node!" << ADD_KEY_NAME << std::endl;
+        OSG_WARN << "WARNING: Unknown geometry node!" << ADD_KEY_NAME << std::endl;
         return nullptr;
     }
 
@@ -568,20 +568,20 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             {
                 if (vertexes->getNumElements() == 0)
                 {
-                    osg::notify(osg::WARN) << "WARNING: Model contains a geometry node without any vertices. Ignoring..." << ADD_KEY_NAME << std::endl;
+                    OSG_WARN << "WARNING: Model contains a geometry node without any vertices. Ignoring..." << ADD_KEY_NAME << std::endl;
                     return newGeometry;
                 }
                 if (normals && vertexes->getNumElements() != normals->getNumElements())
                 {
-                    osg::notify(osg::WARN) << "WARNING: Model contains normals that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
+                    OSG_WARN << "WARNING: Model contains normals that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
                 }
                 if (tangents && vertexes->getNumElements() != tangents->getNumElements())
                 {
-                    osg::notify(osg::WARN) << "WARNING: Model contains tangents that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
+                    OSG_WARN << "WARNING: Model contains tangents that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
                 }
                 if (colors && vertexes->getNumElements() != colors->getNumElements())
                 {
-                    osg::notify(osg::WARN) << "WARNING: Model contains colors that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
+                    OSG_WARN << "WARNING: Model contains colors that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
                 }
                 bool texError = false;
                 for (auto& texcoordcheck : texcoords)
@@ -589,7 +589,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                         texError = true;
 
                 if (texError)
-                    osg::notify(osg::WARN) << "WARNING: Model contain 1 or more texCoords that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
+                    OSG_WARN << "WARNING: Model contain 1 or more texCoords that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
             }
         }
 
@@ -644,7 +644,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                 newDrawElementNode = &primitiveSet["DrawArrays"];
             }
             else {
-                notify(WARN) << "WARNING: Unsuported primitive type. Skipping." << std::endl;
+                OSG_WARN << "WARNING: Unsuported primitive type. Skipping." << std::endl;
                 continue;
             }
 
@@ -741,18 +741,17 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                     }
                     else if (found != processObjects.end() && !itr.value().is_object())
                     {
-                        notify(WARN) << " found a Object JSON node [" << itr.key() <<
+                        OSG_WARN << " found a Object JSON node [" << itr.key() <<
                             "] that is not an object or is malformed." << ADD_KEY_NAME << std::endl;
                     }
 
                     if (!childGeometry || !dynamic_pointer_cast<Geometry>(childGeometry))
-                        notify(WARN) << "WARNING: invalid geometry for MorphTargets." << ADD_KEY_NAME
+                        OSG_WARN << "WARNING: invalid geometry for MorphTargets." << ADD_KEY_NAME
                         << "[Subkey: " << itr.key()
                         << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
                         << std::endl;
                     else
                         morphGeometry->addMorphTarget(dynamic_pointer_cast<Geometry>(childGeometry));
-
                 }
             }
         }
@@ -778,14 +777,16 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             childGeometry = parseOsgGeometry(sourceGeometry[subKey], subKey);
 
             if (!childGeometry || !dynamic_pointer_cast<Geometry>(childGeometry))
-                    notify(WARN) << "WARNING: invalid geometry for SourceGeometry." << ADD_KEY_NAME
-                        << "[Subkey: " << subKey
-                        << (sourceGeometry[subKey].contains("Name") ? ("[Name: " + sourceGeometry[subKey]["Name"].get<std::string>() + "]") : "")
-                        << std::endl;
+            {
+                OSG_WARN << "WARNING: invalid geometry for SourceGeometry." << ADD_KEY_NAME
+                    << "[Subkey: " << subKey
+                    << (sourceGeometry[subKey].contains("Name") ? ("[Name: " + sourceGeometry[subKey]["Name"].get<std::string>() + "]") : "")
+                    << std::endl;
+            }
             else
             {
                 rigGeometry->setSourceGeometry(dynamic_pointer_cast<Geometry>(childGeometry));
-                rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
+                //rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
             }
         }
 

@@ -31,15 +31,32 @@ unsigned int daeWriter::ArrayNIndices::getDAESize()
 {
     switch( mode )
     {
-    case VEC2F:
     case VEC2D:
+    case VEC2F:
+    case VEC2UB:
+    case VEC2US:
+    case VEC2UI:
+    case VEC2B:
+    case VEC2S:
+    case VEC2I:
         return 2;
-    case VEC3F:
     case VEC3D:
+    case VEC3F:
+    case VEC3UB:
+    case VEC3US:
+    case VEC3UI:
+    case VEC3B:
+    case VEC3S:
+    case VEC3I:
         return 3;
-    case VEC4F:
     case VEC4D:
-    case VEC4_UB:
+    case VEC4F:
+    case VEC4UB:
+    case VEC4US:
+    case VEC4UI:
+    case VEC4B:
+    case VEC4S:
+    case VEC4I:
         return 4;
     case NONE:
         return 0;
@@ -59,29 +76,77 @@ bool daeWriter::ArrayNIndices::append(domListOfFloats & list)
 {
     switch(getMode())
     {
+    case VEC2D:
+        for (osg::Vec2dArray::const_iterator it = vec2d->begin(), itEnd = vec2d->end(); it != itEnd; ++it) ::append<osg::Vec2d>(list, *it);
+        break;
     case VEC2F:
         for (osg::Vec2Array::const_iterator it=vec2->begin(), itEnd=vec2->end(); it!=itEnd; ++it) ::append<osg::Vec2>(list, *it);
         break;
-    case VEC2D:
-        for (osg::Vec2dArray::const_iterator it=vec2d->begin(), itEnd=vec2d->end(); it!=itEnd; ++it) ::append<osg::Vec2d>(list, *it);
+    case VEC2UB:
+        for (osg::Vec2ubArray::const_iterator it = vec2ub->begin(), itEnd = vec2ub->end(); it != itEnd; ++it) ::append<osg::Vec2ub>(list, *it);
+        break;
+    case VEC2US:
+        for (osg::Vec2usArray::const_iterator it = vec2us->begin(), itEnd = vec2us->end(); it != itEnd; ++it) ::append<osg::Vec2us>(list, *it);
+        break;
+    case VEC2UI:
+        for (osg::Vec2uiArray::const_iterator it = vec2ui->begin(), itEnd = vec2ui->end(); it != itEnd; ++it) ::append<osg::Vec2ui>(list, *it);
+        break;
+    case VEC2B:
+        for (osg::Vec2bArray::const_iterator it = vec2b->begin(), itEnd = vec2b->end(); it != itEnd; ++it) ::append<osg::Vec2b>(list, *it);
+        break;
+    case VEC2S:
+        for (osg::Vec2sArray::const_iterator it = vec2s->begin(), itEnd = vec2s->end(); it != itEnd; ++it) ::append<osg::Vec2s>(list, *it);
+        break;
+    case VEC2I:
+        for (osg::Vec2iArray::const_iterator it = vec2i->begin(), itEnd = vec2i->end(); it != itEnd; ++it) ::append<osg::Vec2i>(list, *it);
+        break;
+    case VEC3D:
+        for (osg::Vec3dArray::const_iterator it = vec3d->begin(), itEnd = vec3d->end(); it != itEnd; ++it) ::append<osg::Vec3d>(list, *it);
         break;
     case VEC3F:
         for (osg::Vec3Array::const_iterator it=vec3->begin(), itEnd=vec3->end(); it!=itEnd; ++it) ::append<osg::Vec3>(list, *it);
         break;
-    case VEC3D:
-        for (osg::Vec3dArray::const_iterator it=vec3d->begin(), itEnd=vec3d->end(); it!=itEnd; ++it) ::append<osg::Vec3d>(list, *it);
+    case VEC3UB:
+        for (osg::Vec3ubArray::const_iterator it = vec3ub->begin(), itEnd = vec3ub->end(); it != itEnd; ++it) ::append<osg::Vec3ub>(list, *it);
+        break;
+    case VEC3US:
+        for (osg::Vec3usArray::const_iterator it = vec3us->begin(), itEnd = vec3us->end(); it != itEnd; ++it) ::append<osg::Vec3us>(list, *it);
+        break;
+    case VEC3UI:
+        for (osg::Vec3uiArray::const_iterator it = vec3ui->begin(), itEnd = vec3ui->end(); it != itEnd; ++it) ::append<osg::Vec3ui>(list, *it);
+        break;
+    case VEC3B:
+        for (osg::Vec3bArray::const_iterator it = vec3b->begin(), itEnd = vec3b->end(); it != itEnd; ++it) ::append<osg::Vec3b>(list, *it);
+        break;
+    case VEC3S:
+        for (osg::Vec3sArray::const_iterator it = vec3s->begin(), itEnd = vec3s->end(); it != itEnd; ++it) ::append<osg::Vec3s>(list, *it);
+        break;
+    case VEC3I:
+        for (osg::Vec3iArray::const_iterator it = vec3i->begin(), itEnd = vec3i->end(); it != itEnd; ++it) ::append<osg::Vec3i>(list, *it);
+        break;
+    case VEC4D:
+        for (osg::Vec4dArray::const_iterator it = vec4d->begin(), itEnd = vec4d->end(); it != itEnd; ++it) ::append<osg::Vec4d>(list, *it);
         break;
     case VEC4F:
         for (osg::Vec4Array::const_iterator it=vec4->begin(), itEnd=vec4->end(); it!=itEnd; ++it) ::append<osg::Vec4>(list, *it);
         break;
-    case VEC4D:
-        for (osg::Vec4dArray::const_iterator it=vec4d->begin(), itEnd=vec4d->end(); it!=itEnd; ++it) ::append<osg::Vec4d>(list, *it);
+    case VEC4UB:
+        for (osg::Vec4ubArray::const_iterator it = vec4ub->begin(), itEnd = vec4ub->end(); it != itEnd; ++it) ::append<osg::Vec4ub>(list, *it);
         break;
-    case VEC4_UB:
-        for (osg::Vec4ubArray::const_iterator it=vec4ub->begin(), itEnd=vec4ub->end(); it!=itEnd; ++it) ::append<osg::Vec4ub>(list, *it);
-        break;
-    case VEC4_US:
+    case VEC4US:
         for (osg::Vec4usArray::const_iterator it = vec4us->begin(), itEnd = vec4us->end(); it != itEnd; ++it) ::append<osg::Vec4us>(list, *it);
+        break;
+    case VEC4UI:
+        for (osg::Vec4uiArray::const_iterator it = vec4ui->begin(), itEnd = vec4ui->end(); it != itEnd; ++it) ::append<osg::Vec4ui>(list, *it);
+        break;
+    case VEC4B:
+        for (osg::Vec4bArray::const_iterator it = vec4b->begin(), itEnd = vec4b->end(); it != itEnd; ++it) ::append<osg::Vec4b>(list, *it);
+        break;
+    case VEC4S:
+        for (osg::Vec4sArray::const_iterator it = vec4s->begin(), itEnd = vec4s->end(); it != itEnd; ++it) ::append<osg::Vec4s>(list, *it);
+        break;
+    case VEC4I:
+        for (osg::Vec4iArray::const_iterator it = vec4i->begin(), itEnd = vec4i->end(); it != itEnd; ++it) ::append<osg::Vec4i>(list, *it);
         break;
     default:
         return false;
@@ -178,12 +243,15 @@ void daeWriter::writeRigGeometry(osgAnimation::RigGeometry *pOsgRigGeometry)
             int size = 0; // TODO number of animated joints
 
             osgAnimation::VertexInfluenceMap* vim = pOsgRigGeometry->getInfluenceMap();
-            osgAnimation::VertexInfluenceMap::iterator vim_iter =    vim->begin();
-            while (vim_iter != vim->end())
+            if (vim)
             {
-                jointNames.append(vim_iter->first.c_str());
-                //vim_iter->second.getn
-                ++vim_iter;
+                osgAnimation::VertexInfluenceMap::iterator vim_iter = vim->begin();
+                while (vim_iter != vim->end())
+                {
+                    jointNames.append(vim_iter->first.c_str());
+                    //vim_iter->second.getn
+                    ++vim_iter;
+                }
             }
 
             domName_array* pDomJointsNameArray = daeSafeCast< domName_array >(pDomJointsSource->add(COLLADA_ELEMENT_NAME_ARRAY));
