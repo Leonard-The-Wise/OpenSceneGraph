@@ -407,10 +407,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
             _firstMatrix = false;
         }
 
-        if (bone)
-            bone->setMatrixInSkeletonSpace(matrix);
-        else
-            newObject->setMatrix(matrix);
+        newObject->setMatrix(matrix);
     }
 
     // Bone processing
