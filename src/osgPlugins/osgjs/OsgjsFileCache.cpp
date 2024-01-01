@@ -54,12 +54,13 @@ void FileCache::setCache(const std::set<std::string>& fileNames, const std::set<
         osg::notify(osg::ALWAYS) << "INFO: Consider locating missing files or your model will be incomplete." << std::endl;
 }
 
-std::vector<uint8_t>* osgJSONParser::FileCache::getFileBuffer(const std::string& fileName)
+bool FileCache::getFileBuffer(const std::string& fileName, std::vector<uint8_t>& fileBuffer) const
 {
     if (_fileCacheInternal.find(fileName) == _fileCacheInternal.end())
-        return nullptr;
+        return false;
 
-    return &_fileCacheInternal.at(fileName);
+    fileBuffer = _fileCacheInternal.at(fileName);
+    return true;
 }
 
 bool FileCache::getBytes(const std::string& fileName, std::vector<uint8_t>& outBytes, size_t vecSize, size_t offSet) const

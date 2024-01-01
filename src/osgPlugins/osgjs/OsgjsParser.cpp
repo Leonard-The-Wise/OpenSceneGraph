@@ -400,10 +400,10 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
         }
 
         // Fix rotate and scale
-        if (_firstMatrix & 0) // FIXME: TEMPORARILY DISABLED (Make optional?)
+        if (_firstMatrix)
         {
             matrix.postMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
-            matrix.postMult(osg::Matrix::scale(100.0, 100.0, 100.0));
+            // matrix.postMult(osg::Matrix::scale(100.0, 100.0, 100.0)); //FIXME: Make optional?
             _firstMatrix = false;
         }
 
@@ -485,7 +485,17 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     if (currentJSONNode.contains("Name"))
         newGeometry->setName(currentJSONNode["Name"]);
 
-    ref_ptr<Array> vertexes;
+    const json* vertexAttributeList = &currentJSONNode["VertexAttributeList"];
+    const json* vertexNode = nullptr;
+    const json* normalNode = nullptr;
+    const json* colorNode = nullptr;
+    const json* tangentNode = nullptr;
+    const json* bonesNode = nullptr;
+    const json* weightsNode = nullptr;
+
+    std::vector<const json*> texCoordNodes;
+
+    ref_ptr<Array> vertices;
     ref_ptr<Array> normals;
     ref_ptr<Array> colors;
     ref_ptr<Array> tangents;
@@ -494,20 +504,16 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     std::vector<ref_ptr<Array>> texcoords;
     ref_ptr<Array> indices;
     int vertexAttribArrays = 0;
+    uint32_t magic = 0;
+    GLenum drawMode = GL_POINTS;
+
+    bool verticesVarIntEncoded = false;
+    bool isVarintEncoded = false; // dummy variable
+
 
     // 1) Parse Vertex Attributes List
     if (currentJSONNode.contains("VertexAttributeList") && currentJSONNode["VertexAttributeList"].is_object())
     {
-        const json* vertexAttributeList = &currentJSONNode["VertexAttributeList"];
-        const json* vertexNode = nullptr;
-        const json* normalNode = nullptr;
-        const json* colorNode = nullptr;
-        const json* tangentNode = nullptr;
-        const json* bonesNode = nullptr;
-        const json* weightsNode = nullptr;
-
-        std::vector<const json*> texCoordNodes;
-
         // 1.1) Get VertexAttributeList members
 
         if (vertexAttributeList->contains("Vertex") && (*vertexAttributeList)["Vertex"].is_object())
@@ -543,46 +549,46 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 #endif
 
         if (vertexNode && vertexNode->contains("Array") && (*vertexNode)["Array"].is_object() && vertexNode->contains("ItemSize") && (*vertexNode)["ItemSize"].is_number())
-            vertexes = ParserHelper::parseJSONArray((*vertexNode)["Array"], (*vertexNode)["ItemSize"].get<int>(), _fileCache);
+            vertices = ParserHelper::parseJSONArray((*vertexNode)["Array"], (*vertexNode)["ItemSize"].get<int>(), _fileCache, verticesVarIntEncoded, magic);
         if (normalNode && normalNode->contains("Array") && (*normalNode)["Array"].is_object() && normalNode->contains("ItemSize") && (*normalNode)["ItemSize"].is_number())
-            normals = ParserHelper::parseJSONArray((*normalNode)["Array"], (*normalNode)["ItemSize"].get<int>(), _fileCache);
+            normals = ParserHelper::parseJSONArray((*normalNode)["Array"], (*normalNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
         if (colorNode && colorNode->contains("Array") && (*colorNode)["Array"].is_object() && colorNode->contains("ItemSize") && (*colorNode)["ItemSize"].is_number())
-            colors = ParserHelper::parseJSONArray((*colorNode)["Array"], (*colorNode)["ItemSize"].get<int>(), _fileCache);
+            colors = ParserHelper::parseJSONArray((*colorNode)["Array"], (*colorNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
         if (tangentNode && tangentNode->contains("Array") && (*tangentNode)["Array"].is_object() && tangentNode->contains("ItemSize") && (*tangentNode)["ItemSize"].is_number())
-            tangents = ParserHelper::parseJSONArray((*tangentNode)["Array"], (*tangentNode)["ItemSize"].get<int>(), _fileCache);
+            tangents = ParserHelper::parseJSONArray((*tangentNode)["Array"], (*tangentNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
         if (bonesNode && bonesNode->contains("Array") && (*bonesNode)["Array"].is_object() && bonesNode->contains("ItemSize") && (*bonesNode)["ItemSize"].is_number())
-            bones = ParserHelper::parseJSONArray((*bonesNode)["Array"], (*bonesNode)["ItemSize"].get<int>(), _fileCache);
+            bones = ParserHelper::parseJSONArray((*bonesNode)["Array"], (*bonesNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
         if (weightsNode && weightsNode->contains("Array") && (*weightsNode)["Array"].is_object() && weightsNode->contains("ItemSize") && (*weightsNode)["ItemSize"].is_number())
-            weights = ParserHelper::parseJSONArray((*weightsNode)["Array"], (*weightsNode)["ItemSize"].get<int>(), _fileCache);
+            weights = ParserHelper::parseJSONArray((*weightsNode)["Array"], (*weightsNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
         for (auto& texCoordNode : texCoordNodes)
             if (texCoordNode->contains("Array") && (*texCoordNode)["Array"].is_object() && texCoordNode->contains("ItemSize") && (*texCoordNode)["ItemSize"].is_number())
-                texcoords.push_back(ParserHelper::parseJSONArray((*texCoordNode)["Array"], (*texCoordNode)["ItemSize"].get<int>(), _fileCache));
+                texcoords.push_back(ParserHelper::parseJSONArray((*texCoordNode)["Array"], (*texCoordNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic));
 
         // 1.3) Sanity checks
         if (nodeKey == "osg.Geometry")
         {
-            if (vertexes)
+            if (vertices)
             {
-                if (vertexes->getNumElements() == 0)
+                if (vertices->getNumElements() == 0)
                 {
                     OSG_WARN << "WARNING: Model contains a geometry node without any vertices. Ignoring..." << ADD_KEY_NAME << std::endl;
                     return newGeometry;
                 }
-                if (normals && vertexes->getNumElements() != normals->getNumElements())
+                if (normals && vertices->getNumElements() != normals->getNumElements())
                 {
                     OSG_WARN << "WARNING: Model contains normals that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
                 }
-                if (tangents && vertexes->getNumElements() != tangents->getNumElements())
+                if (tangents && vertices->getNumElements() != tangents->getNumElements())
                 {
                     OSG_WARN << "WARNING: Model contains tangents that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
                 }
-                if (colors && vertexes->getNumElements() != colors->getNumElements())
+                if (colors && vertices->getNumElements() != colors->getNumElements())
                 {
                     OSG_WARN << "WARNING: Model contains colors that don't match number of vertices..." << ADD_KEY_NAME << std::endl;
                 }
                 bool texError = false;
                 for (auto& texcoordcheck : texcoords)
-                    if (vertexes->getNumElements() != texcoordcheck->getNumElements())
+                    if (vertices->getNumElements() != texcoordcheck->getNumElements())
                         texError = true;
 
                 if (texError)
@@ -590,10 +596,11 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             }
         }
 
+
         // 1.4) Set Geometry Attributes
 
-        if (vertexes)
-            newGeometry->setVertexArray(vertexes);
+        if (vertices)
+            newGeometry->setVertexArray(vertices);
         if (normals)
             newGeometry->setNormalArray(normals, Array::BIND_PER_VERTEX);
         if (colors)
@@ -650,7 +657,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                 // Parse Draw modes
                 if ((*newDrawElementNode).contains("Mode"))
                 {
-                    GLenum drawMode = ParserHelper::getModeFromString((*newDrawElementNode)["Mode"].get<std::string>());
+                    drawMode = ParserHelper::getModeFromString((*newDrawElementNode)["Mode"].get<std::string>());
                     newPrimitiveSet->setMode(drawMode);
                 }
 
@@ -661,7 +668,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                     if (newPrimitiveIndices.contains("Array") && newPrimitiveIndices["Array"].is_object() && newPrimitiveIndices.contains("ItemSize") && newPrimitiveIndices["ItemSize"].is_number())
                     {
                         indices = ParserHelper::parseJSONArray(newPrimitiveIndices["Array"], 
-                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache);
+                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic, _needDecodeIndices, drawMode);
 
                         if (indices)
                         {
@@ -783,7 +790,10 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             else
             {
                 rigGeometry->setSourceGeometry(dynamic_pointer_cast<Geometry>(childGeometry));
-                //rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
+                rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
+
+                if (rigGeometry->getName().empty())
+                    rigGeometry->setName(childGeometry->getName());
             }
         }
 
@@ -812,14 +822,17 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 
         // Set type of data variance and display lists
         rigGeometry->setDataVariance(osg::Object::DYNAMIC);
-        //rigGeometry->setUseDisplayList(false);
-        rigGeometry->setRigTransformImplementation(new osgAnimation::RigTransformSoftware);
+        rigGeometry->setUseDisplayList(false);
     }
 
     // 6) Get object statesets and userData
     lookForChildren(newGeometry, currentJSONNode, UserDataContainerType::ShapeAttributes, nodeKey);
 
-    // 7) Done
+    // 7) Vertices post-processing (for varint encoded only)
+    if (nodeKey == "osg.Geometry" && vertices && newGeometry->getPrimitiveSetList().size() > 0 && verticesVarIntEncoded)
+        postProcessGeometry(newGeometry);
+
+    // 8) Done
     return newGeometry;
 }
 
@@ -835,6 +848,104 @@ ref_ptr<Object> OsgjsParser::parseComputeBoundingBoxCallback(const json& current
     // [Maybe the export is incomplete ? see WriteVisitor::createJSONGeometry]
 
     return nullptr;
+}
+
+void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
+{
+#ifdef DEBUG
+    std::string geometryName = geometry->getName();
+    ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
+#endif // DEBUG
+
+    // Check for user data
+    ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(geometry->getUserData());
+    if (!shapeAttrList)
+        return;
+
+    ref_ptr<Array> indices;
+    osg::PrimitiveSet* firstPrimitive = geometry->getPrimitiveSet(0);
+
+    // Convert primitive sets into indices array.
+    DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(firstPrimitive);
+    DrawElementsUShort* des = dynamic_cast<DrawElementsUShort*>(firstPrimitive);
+    DrawElementsUByte* deb = dynamic_cast<DrawElementsUByte*>(firstPrimitive);
+
+    if (dei)
+        indices = new UIntArray(dei->begin(), dei->end());
+    else if (des)
+        indices = new UShortArray(dei->begin(), dei->end());
+    else if (deb)
+        indices = new UByteArray(dei->begin(), dei->end());
+    else
+    {
+        OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
+        return;
+    }
+
+    // Get Vertex Shape Attributes
+    std::vector<double> vtx_bbl(3, 0);
+    std::vector<double> vtx_h(3, 0);
+    std::vector<bool> success(10, false);
+
+    success[0] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_x", vtx_bbl[0]);
+    success[1] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_y", vtx_bbl[1]);
+    success[2] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_z", vtx_bbl[2]);
+    success[3] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_x", vtx_h[0]);
+    success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
+    success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
+
+
+    if (success[0] && success[3])
+    {
+        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(indices, geometry->getVertexArray(), vtx_bbl, vtx_h);
+
+        if (!verticesConverted)
+        {
+            OSG_WARN << "WARNING: Failed to decode vertex array!" << std::endl;
+            return;
+        }
+        
+        geometry->setVertexArray(verticesConverted);
+    }
+    else
+    {
+        return;
+    }
+
+    // Get UV's Shape Attributes
+    std::vector<double> uv_bbl(2, 0);
+    std::vector<double> uv_h(2, 0);
+
+    int i = 0;
+    for (auto& texCoord : geometry->getTexCoordArrayList())
+    {
+        std::stringstream uvbblx, uvbbly, uvhx, uvhy;
+        uvbblx << "uv_" << i << "_bbl_x";
+        uvbbly << "uv_" << i << "_bbl_y";
+        uvhx << "uv_" << i << "_h_x";
+        uvhy << "uv_" << i << "_h_y";
+
+        success[6] = ParserHelper::getShapeAttribute(shapeAttrList, uvbblx.str(), uv_bbl[0]);
+        success[7] = ParserHelper::getShapeAttribute(shapeAttrList, uvbbly.str(), uv_bbl[1]);
+        success[8] = ParserHelper::getShapeAttribute(shapeAttrList, uvhx.str(), uv_h[0]);
+        success[9] = ParserHelper::getShapeAttribute(shapeAttrList, uvhy.str(), uv_h[1]);
+
+        if (success[6] && success[8])
+        {
+            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(indices, texCoord, uv_bbl, uv_h);
+
+            if (!texCoordConverted)
+            {
+                OSG_WARN << "WARNING: Failed to decode texCoord array!" << std::endl;
+                continue;
+            }
+
+            geometry->setTexCoordArray(i, texCoordConverted);
+        }
+
+        i++;
+    }
+
 }
 
 

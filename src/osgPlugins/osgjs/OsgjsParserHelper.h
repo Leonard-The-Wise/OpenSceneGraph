@@ -19,9 +19,18 @@ namespace osgJSONParser
 
 		static bool getSafeDouble(const std::string& in, double& outValue);
 
-		static osg::ref_ptr<osg::Array> recastArray(const osg::ref_ptr<osg::Array> toRecast, osg::Array::Type arrayType, DesiredVectorSize vecSize);
+		static osg::ref_ptr<osg::Array> parseJSONArray(const json& currentJSONNode, int itemSize, const FileCache& fileCache, 
+			bool& isVarintEncoded, uint32_t& magic, bool needDecodeIndices = false, GLenum drawMode = 0);
 
-		static osg::ref_ptr<osg::Array> parseJSONArray(const json& currentJSONNode, int itemSize, FileCache& fileCache);
+		static void makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const osg::ref_ptr<osg::Array> bones, const osg::ref_ptr<osg::Array> weights,
+			const std::map<int, std::string>& boneIndexes);
+
+		static osg::ref_ptr<osg::Array> decodeVertices(const osg::ref_ptr<osg::Array> indices, const osg::ref_ptr<osg::Array> vertices,
+			const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h);
+
+		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, double& value);
+		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, int& value);
+		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, std::string& value);
 
 		static GLenum getModeFromString(const std::string& mode);
 
@@ -29,19 +38,33 @@ namespace osgJSONParser
 
 		static osg::Texture::FilterMode getFilterModeFromString(const std::string& blendfunc);
 
-		osg::Texture::WrapMode getWrapModeFromString(const std::string& filterMode);
+		static osg::Texture::WrapMode getWrapModeFromString(const std::string& filterMode);
 
-		osgText::Text::AlignmentType getTextAlignmentFromString(const std::string& textAlignment);
-
-		static void makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const osg::ref_ptr<osg::Array> bones, const osg::ref_ptr<osg::Array> weights, 
-			const std::map<int, std::string>& boneIndexes);
+		static osgText::Text::AlignmentType getTextAlignmentFromString(const std::string& textAlignment);
 
 	private:
 		static bool getPrimitiveType(const json& currentJSONNode, osg::PrimitiveSet::Type& outPrimitiveType);
+		static inline int64_t varintSigned(uint64_t input);
 		template <typename T>
 		static void copyIntToByteVector(T value, std::vector<uint8_t>& vec);
-		static uint32_t ParserHelper::decodeVarInt(const uint8_t* const data, int& decoded_bytes);
+		static uint64_t decodeVarInt(const uint8_t* const data, int& decoded_bytes);
 		static std::vector<uint8_t>* decodeVarintVector(const std::vector<uint8_t>& input, osg::Array::Type inputType, size_t itemCount, size_t offSet);
 		static osg::Array* getVertexAttribArray(osgAnimation::RigGeometry& rigGeometry, const std::string arrayName);
+
+		static osg::ref_ptr<osg::Array> recastArray(const osg::ref_ptr<osg::Array> toRecast, DesiredVectorSize vecSize);
+		static osg::ref_ptr<osg::Array> decastVector(const osg::ref_ptr<osg::Array> toRecast);
+
+		template <typename T>
+		static void decodeDelta(std::vector<T>& t, int e);
+		template <typename T>
+		static std::vector<T> decodeImplicit(const std::vector<T>& t, int n);
+		template <typename T>
+		static std::vector<T> decodeWatermark(const std::vector<T>& t, uint32_t& magic);
+		template<typename T, typename U>
+		static osg::ref_ptr<osg::Array> decodePredict(const osg::ref_ptr<T> indices, const osg::ref_ptr<U> vertices, int itemSize);
+		template <typename T>
+		static osg::ref_ptr<osg::Array> decodeQuantize(const osg::ref_ptr<T> vertices, const std::vector<double>& vtx_bbl,
+			const std::vector<double>& vtx_h, int elementSize);
+
 	};
 }

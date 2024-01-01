@@ -109,8 +109,13 @@ namespace osgJSONParser
             }
         {};
 
-		void setFileCache(const FileCache& fileCache) 
+		inline void setFileCache(const FileCache& fileCache) 
 		{ _fileCache = fileCache; };
+
+        inline void setNeedDecodeIndices(bool need)
+        {
+            _needDecodeIndices = need;
+        }
 
 		osg::ref_ptr<osg::Group> parseObjectTree(const json& firstOsgNodeJSON);
 
@@ -118,6 +123,7 @@ namespace osgJSONParser
 
 		FileCache _fileCache;
         bool _firstMatrix = true;
+        bool _needDecodeIndices = true;
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;
@@ -174,6 +180,9 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Callback> parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey);
         osg::ref_ptr<osg::Callback> parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
         osg::ref_ptr<osg::Callback> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
+
+        void postProcessGeometry(osg::ref_ptr<osg::Geometry> geometry);
+
 	};
 
 }

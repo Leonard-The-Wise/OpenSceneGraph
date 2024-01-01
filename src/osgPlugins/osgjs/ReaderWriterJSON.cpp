@@ -219,15 +219,19 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input) const
             return nullptr;
         }
 
+        osg::ref_ptr<osg::Group> rootNode;
+        osgJSONParser::OsgjsParser nodeParser;
+
         if (input.contains("Generator"))
-            osg::notify(osg::ALWAYS) << "Generator: " << input["Generator"];
+        {
+            osg::notify(osg::ALWAYS) << "Generator: " << input["Generator"].get<std::string>();
+            if (input["Generator"].get<std::string>() == "OpenSceneGraph 3.7.0")
+                nodeParser.setNeedDecodeIndices(false);
+        }
         if (input.contains("Generator") && input.contains("Version"))
             osg::notify(osg::ALWAYS) << " [Version " << input["Version"] << "]";
         if (input.contains("Generator"))
             osg::notify(osg::ALWAYS) << std::endl;
-
-        osg::ref_ptr<osg::Group> rootNode;
-        osgJSONParser::OsgjsParser nodeParser;
 
         // Get list of files inside the node to build file cache
         std::set<std::string> files;

@@ -5,16 +5,23 @@
 
 
 using namespace osgJSONParser;
+using namespace osg;
+
 using json = nlohmann::json;
 
+constexpr auto IMPLICIT_HEADER_LENGTH = 3;
+constexpr auto IMPLICIT_HEADER_MASK_LENGTH = 1;
+constexpr auto IMPLICIT_HEADER_PRIMITIVE_LENGTH = 0;
+constexpr auto IMPLICIT_HEADER_EXPECTED_INDEX = 2;
+constexpr auto HIGH_WATERMARK = 2;
 
-const std::unordered_map<std::string, osg::PrimitiveSet::Type> primitiveTypeMap {
-	{"DrawElementsUShort", osg::PrimitiveSet::DrawArraysPrimitiveType},
-	{"DrawArrays", osg::PrimitiveSet::DrawArraysPrimitiveType},
-	{"DrawElementsUInt", osg::PrimitiveSet::DrawElementsUIntPrimitiveType},
-	{"DrawElementsUShort", osg::PrimitiveSet::DrawElementsUShortPrimitiveType},
-	{"DrawElementsUByte", osg::PrimitiveSet::DrawElementsUBytePrimitiveType},
-	{"DrawArrayLengths", osg::PrimitiveSet::DrawArrayLengthsPrimitiveType},
+const std::unordered_map<std::string, PrimitiveSet::Type> primitiveTypeMap {
+	{"DrawElementsUShort", PrimitiveSet::DrawArraysPrimitiveType},
+	{"DrawArrays", PrimitiveSet::DrawArraysPrimitiveType},
+	{"DrawElementsUInt", PrimitiveSet::DrawElementsUIntPrimitiveType},
+	{"DrawElementsUShort", PrimitiveSet::DrawElementsUShortPrimitiveType},
+	{"DrawElementsUByte", PrimitiveSet::DrawElementsUBytePrimitiveType},
+	{"DrawArrayLengths", PrimitiveSet::DrawArrayLengthsPrimitiveType},
 };
 
 // PUBLIC METHODS
@@ -34,7 +41,7 @@ bool ParserHelper::getSafeInteger(const std::string& in, int& outValue)
 	}
 	catch (const std::out_of_range&)
 	{
-		osg::notify(osg::WARN) << "Warning, integer parameter out of range" << std::endl;
+		OSG_WARN << "Warning, integer parameter out of range" << std::endl;
 		return false;
 	}
 }
@@ -55,425 +62,102 @@ bool ParserHelper::getSafeDouble(const std::string& in, double& outValue)
 	return true;
 }
 
-osg::ref_ptr<osg::Array> ParserHelper::recastArray(const osg::ref_ptr<osg::Array> toRecast, osg::Array::Type arrayType, DesiredVectorSize vecSize)
-{
-	osg::ref_ptr<osg::Array> returnArray;
-
-	if (vecSize == DesiredVectorSize::Array)
-		return nullptr;
-
-	switch (vecSize)
-	{
-	case DesiredVectorSize::Vec2:
-	{
-		// Certify the array contains appropriate number of elements
-		if (toRecast->getNumElements() % 2 != 0)
-		{
-			osg::notify(osg::WARN) << "WARNING: Array has incorrect size. Ignoring!" << std::endl;
-			return nullptr;
-		}
-
-		int totalElements = toRecast->getNumElements() / 2;
-		switch (arrayType)
-		{
-		case osg::Array::FloatArrayType:
-		{
-			returnArray = new osg::Vec2Array;
-			returnArray->reserveArray(totalElements);
-			osg::FloatArray* converted = dynamic_cast<osg::FloatArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2 newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2Array*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UByteArrayType:
-		{
-			returnArray = new osg::Vec2ubArray;
-			returnArray->reserveArray(totalElements);
-			osg::UByteArray* converted = dynamic_cast<osg::UByteArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2ub newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2ubArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UShortArrayType:
-		{
-			returnArray = new osg::Vec2usArray;
-			returnArray->reserveArray(totalElements);
-			osg::UShortArray* converted = dynamic_cast<osg::UShortArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2us newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2usArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UIntArrayType:
-		{
-			returnArray = new osg::Vec2uiArray;
-			returnArray->reserveArray(totalElements);
-			osg::UIntArray* converted = dynamic_cast<osg::UIntArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2ui newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2uiArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::ByteArrayType:
-		{
-			returnArray = new osg::Vec2bArray;
-			returnArray->reserveArray(totalElements);
-			osg::ByteArray* converted = dynamic_cast<osg::ByteArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2b newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2bArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::ShortArrayType:
-		{
-			returnArray = new osg::Vec2sArray;
-			returnArray->reserveArray(totalElements);
-			osg::ShortArray* converted = dynamic_cast<osg::ShortArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2s newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2sArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::IntArrayType:
-		{
-			returnArray = new osg::Vec2iArray;
-			returnArray->reserveArray(totalElements);
-			osg::IntArray* converted = dynamic_cast<osg::IntArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec2i newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<osg::Vec2iArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		}
-		break;
-	}
-	case DesiredVectorSize::Vec3:
-	{
-		// Certify the array contains appropriate number of elements
-		if (toRecast->getNumElements() % 3 != 0)
-		{
-			osg::notify(osg::WARN) << "WARNING: Array has incorrect size. Ignoring!" << std::endl;
-			return nullptr;
-		}
-
-		int totalElements = toRecast->getNumElements() / 3;
-		switch (arrayType)
-		{
-		case osg::Array::FloatArrayType:
-		{
-			returnArray = new osg::Vec3Array;
-			returnArray->reserveArray(totalElements);
-			osg::FloatArray* converted = dynamic_cast<osg::FloatArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3 newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3Array*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UByteArrayType:
-		{
-			returnArray = new osg::Vec3ubArray;
-			returnArray->reserveArray(totalElements);
-			osg::UByteArray* converted = dynamic_cast<osg::UByteArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3ub newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3ubArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UShortArrayType:
-		{
-			returnArray = new osg::Vec3usArray;
-			returnArray->reserveArray(totalElements);
-			osg::UShortArray* converted = dynamic_cast<osg::UShortArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3us newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3usArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UIntArrayType:
-		{
-			returnArray = new osg::Vec3uiArray;
-			returnArray->reserveArray(totalElements);
-			osg::UIntArray* converted = dynamic_cast<osg::UIntArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3ui newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3uiArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::ByteArrayType:
-		{
-			returnArray = new osg::Vec3bArray;
-			returnArray->reserveArray(totalElements);
-			osg::ByteArray* converted = dynamic_cast<osg::ByteArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3b newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3bArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::ShortArrayType:
-		{
-			returnArray = new osg::Vec3sArray;
-			returnArray->reserveArray(totalElements);
-			osg::ShortArray* converted = dynamic_cast<osg::ShortArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3s newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3sArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::IntArrayType:
-		{
-			returnArray = new osg::Vec3iArray;
-			returnArray->reserveArray(totalElements);
-			osg::IntArray* converted = dynamic_cast<osg::IntArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec3i newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
-				dynamic_cast<osg::Vec3iArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		}
-		break;
-	}
-	case DesiredVectorSize::Vec4:
-	{
-		// Certify the array contains appropriate number of elements
-		if (toRecast->getNumElements() % 4 != 0)
-		{
-			osg::notify(osg::WARN) << "WARNING: Array has incorrect size. Ignoring!" << std::endl;
-			return nullptr;
-		}
-
-		int totalElements = toRecast->getNumElements() / 4;
-		switch (arrayType)
-		{
-		case osg::Array::FloatArrayType:
-		{
-			returnArray = new osg::Vec4Array;
-			returnArray->reserveArray(totalElements);
-			osg::FloatArray* converted = dynamic_cast<osg::FloatArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4 newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4Array*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UByteArrayType:
-		{
-			returnArray = new osg::Vec4ubArray;
-			returnArray->reserveArray(totalElements);
-			osg::UByteArray* converted = dynamic_cast<osg::UByteArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4ub newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4ubArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UShortArrayType:
-		{
-			returnArray = new osg::Vec4usArray;
-			returnArray->reserveArray(totalElements);
-			osg::UShortArray* converted = dynamic_cast<osg::UShortArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4us newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4usArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::UIntArrayType:
-		{
-			returnArray = new osg::Vec4uiArray;
-			returnArray->reserveArray(totalElements);
-			osg::UIntArray* converted = dynamic_cast<osg::UIntArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4ui newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4uiArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::ByteArrayType:
-		{
-			returnArray = new osg::Vec4bArray;
-			returnArray->reserveArray(totalElements);
-			osg::ByteArray* converted = dynamic_cast<osg::ByteArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4b newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4bArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::ShortArrayType:
-		{
-			returnArray = new osg::Vec4sArray;
-			returnArray->reserveArray(totalElements);
-			osg::ShortArray* converted = dynamic_cast<osg::ShortArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4s newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4sArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		case osg::Array::IntArrayType:
-		{
-			returnArray = new osg::Vec4iArray;
-			returnArray->reserveArray(totalElements);
-			osg::IntArray* converted = dynamic_cast<osg::IntArray*>(toRecast.get());
-			if (!converted)
-				return nullptr;
-			for (int i = 0; i < totalElements; i++)
-			{
-				osg::Vec4i newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
-				dynamic_cast<osg::Vec4iArray*>(returnArray.get())->push_back(newVec);
-			}
-			break;
-		}
-		}
-		break;
-	}
-	}
-
-	return returnArray;
-}
-
-osg::ref_ptr<osg::Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int elementsPerItem, FileCache& fileCache)
+ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int elementsPerItem, const FileCache& fileCache,
+	bool& isVarintEncoded, uint32_t& magic, bool needDecodeIndices, GLenum drawMode)
 {
 #ifdef DEBUG
 	std::string CurrentNode = currentJSONNode.dump();
 #endif
-	osg::ref_ptr<osg::Array> returnArray;
-	osg::Array::Type arrayType{};
+	ref_ptr<Array> returnArray;
+	Array::Type arrayType{};
 	const json* elementsNode = nullptr;
 	int elementTypeSize = 0;
 
 	if (elementsPerItem < 1 || elementsPerItem > 4)
 	{
-		osg::notify(osg::WARN) << "WARNING: Error importing array. Field 'ItemSize' not between 1 and 4. Ignoring..." << std::endl;
+		OSG_WARN << "WARNING: Error importing array. Field 'ItemSize' not between 1 and 4. Ignoring..." << std::endl;
 		return nullptr;
 	}
 
 	// 1) Determine Array Elements type
-	if (currentJSONNode.contains("Float32Array") && currentJSONNode["Float32Array"].is_object())
+	if (currentJSONNode.contains("Float64Array") && currentJSONNode["Float64Array"].is_object())
+	{
+		returnArray = new DoubleArray;
+		arrayType = Array::DoubleArrayType;
+		elementTypeSize = sizeof(double);
+		elementsNode = &currentJSONNode["Float64Array"];
+	}
+	else if (currentJSONNode.contains("Float32Array") && currentJSONNode["Float32Array"].is_object())
 	{ 
-		returnArray = new osg::FloatArray;
-		arrayType = osg::Array::FloatArrayType;
+		returnArray = new FloatArray;
+		arrayType = Array::FloatArrayType;
 		elementTypeSize = sizeof(float);
 		elementsNode = &currentJSONNode["Float32Array"];
 	}
 	else if (currentJSONNode.contains("Uint8Array") && currentJSONNode["Uint8Array"].is_object())
 	{
-		returnArray = new osg::UByteArray;
-		arrayType = osg::Array::UByteArrayType;
+		returnArray = new UByteArray;
+		arrayType = Array::UByteArrayType;
 		elementTypeSize = sizeof(uint8_t);
 		elementsNode = &currentJSONNode["Uint8Array"];
 	}
+	else if (currentJSONNode.contains("Uint8ClampedArray") && currentJSONNode["Uint8ClampedArray"].is_object())
+	{
+		returnArray = new UByteArray;
+		arrayType = Array::UByteArrayType;
+		elementTypeSize = sizeof(uint8_t);
+		elementsNode = &currentJSONNode["Uint8ClampedArray"];
+	}
 	else if (currentJSONNode.contains("Uint16Array") && currentJSONNode["Uint16Array"].is_object())
 	{
-		returnArray = new osg::UShortArray;
-		arrayType = osg::Array::UShortArrayType;
+		returnArray = new UShortArray;
+		arrayType = Array::UShortArrayType;
 		elementTypeSize = sizeof(uint16_t);
 		elementsNode = &currentJSONNode["Uint16Array"];
 	}
 	else if (currentJSONNode.contains("Uint32Array") && currentJSONNode["Uint32Array"].is_object())
 	{
-		returnArray = new osg::UIntArray;
-		arrayType = osg::Array::UIntArrayType;
+		returnArray = new UIntArray;
+		arrayType = Array::UIntArrayType;
 		elementTypeSize = sizeof(uint32_t);
 		elementsNode = &currentJSONNode["Uint32Array"];
 	}
+	else if (currentJSONNode.contains("Uint64Array") && currentJSONNode["Uint64Array"].is_object())
+	{
+		returnArray = new UInt64Array;
+		arrayType = Array::UInt64ArrayType;
+		elementTypeSize = sizeof(uint64_t);
+		elementsNode = &currentJSONNode["Uint64Array"];
+	}
 	else if (currentJSONNode.contains("Int8Array") && currentJSONNode["Int8Array"].is_object())
 	{
-		returnArray = new osg::ByteArray;
-		arrayType = osg::Array::ByteArrayType;
+		returnArray = new ByteArray;
+		arrayType = Array::ByteArrayType;
 		elementTypeSize = sizeof(int8_t);
 		elementsNode = &currentJSONNode["Int8Array"];
 	}
 	else if (currentJSONNode.contains("Int16Array") && currentJSONNode["Int16Array"].is_array())
 	{
-		returnArray = new osg::ShortArray;
-		arrayType = osg::Array::ShortArrayType;
+		returnArray = new ShortArray;
+		arrayType = Array::ShortArrayType;
 		elementTypeSize = sizeof(int16_t);
 		elementsNode = &currentJSONNode["Int16Array"];
 	}
 	else if (currentJSONNode.contains("Int32Array") && currentJSONNode["Int32Array"].is_object())
 	{
-		returnArray = new osg::IntArray;
-		arrayType = osg::Array::IntArrayType;
+		returnArray = new IntArray;
+		arrayType = Array::IntArrayType;
 		elementTypeSize = sizeof(int32_t);
 		elementsNode = &currentJSONNode["Int32Array"];
 	}
+	else if (currentJSONNode.contains("Int64Array") && currentJSONNode["Int64Array"].is_object())
+	{
+		returnArray = new Int64Array;
+		arrayType = Array::Int64ArrayType;
+		elementTypeSize = sizeof(int64_t);
+		elementsNode = &currentJSONNode["Int64Array"];
+	}
+
 
 	// 2) Determine Write Mode: inline or file
 
@@ -484,36 +168,36 @@ osg::ref_ptr<osg::Array> ParserHelper::parseJSONArray(const json& currentJSONNod
 
 		switch (arrayType)
 		{
-		case osg::Array::FloatArrayType:
+		case Array::FloatArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::FloatArray*>(returnArray.get())->push_back(element.get<float>());
+				dynamic_cast<FloatArray*>(returnArray.get())->push_back(element.get<float>());
 			break;
-		case osg::Array::UByteArrayType:
+		case Array::UByteArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::UByteArray*>(returnArray.get())->push_back(element.get<uint8_t>());
+				dynamic_cast<UByteArray*>(returnArray.get())->push_back(element.get<uint8_t>());
 			break;
-		case osg::Array::UShortArrayType:
+		case Array::UShortArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::UShortArray*>(returnArray.get())->push_back(element.get<uint16_t>());
+				dynamic_cast<UShortArray*>(returnArray.get())->push_back(element.get<uint16_t>());
 			break;
-		case osg::Array::UIntArrayType:
+		case Array::UIntArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::UIntArray*>(returnArray.get())->push_back(element.get<uint32_t>());
+				dynamic_cast<UIntArray*>(returnArray.get())->push_back(element.get<uint32_t>());
 			break;
-		case osg::Array::ByteArrayType:
+		case Array::ByteArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::ByteArray*>(returnArray.get())->push_back(element.get<int8_t>());
+				dynamic_cast<ByteArray*>(returnArray.get())->push_back(element.get<int8_t>());
 			break;
-		case osg::Array::ShortArrayType:
+		case Array::ShortArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::ShortArray*>(returnArray.get())->push_back(element.get<int16_t>());
+				dynamic_cast<ShortArray*>(returnArray.get())->push_back(element.get<int16_t>());
 			break;
-		case osg::Array::IntArrayType:
+		case Array::IntArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
-				dynamic_cast<osg::IntArray*>(returnArray.get())->push_back(element.get<int32_t>());
+				dynamic_cast<IntArray*>(returnArray.get())->push_back(element.get<int32_t>());
 			break;
 		default:
-			osg::notify(osg::WARN) << "WARNING: Unknown Array Type." << std::endl;
+			OSG_WARN << "WARNING: Unknown Array Type." << std::endl;
 			return nullptr;
 		}
 	}
@@ -526,25 +210,155 @@ osg::ref_ptr<osg::Array> ParserHelper::parseJSONArray(const json& currentJSONNod
 		int readOffset = (*elementsNode).contains("Offset") ? (*elementsNode)["Offset"].get<int>() : 0;
 		int totalElements = itemCount * elementsPerItem;
 		size_t totalBytesSize = static_cast<size_t>(totalElements * elementTypeSize + readOffset);
-		std::vector<uint8_t>* elementsBytes = fileCache.getFileBuffer(fileName);
+		std::vector<uint8_t> elementsBytes;
+		std::ignore = fileCache.getFileBuffer(fileName, elementsBytes);
 		std::vector<uint8_t>* elementsBytesConverted = nullptr;
 		
-		if (elementsBytes)
+		if (!elementsBytes.empty())
 		{
 			// Verify size - only valid for non-compressed items
-			if ((elementsBytes->size() < totalBytesSize) && !(*elementsNode).contains("Encoding"))
+			if ((elementsBytes.size() < totalBytesSize) && !(*elementsNode).contains("Encoding"))
 			{
-				osg::notify(osg::WARN) << "WARNING: Error reading " << fileName << ". " <<
-					"File has incorrect size. [expected = " << totalBytesSize << ", found = " << elementsBytes->size() << "]" << std::endl;
+				OSG_WARN << "WARNING: Error reading " << fileName << ". " <<
+					"File has incorrect size. [expected = " << totalBytesSize << ", found = " << elementsBytes.size() << "]" << std::endl;
 				return nullptr;
 			}
 
 			// Decode array if necessary
 			if ((*elementsNode).contains("Encoding") && (*elementsNode)["File"].get<std::string>() != "varint")
 			{
-				elementsBytesConverted = decodeVarintVector(*elementsBytes, arrayType, static_cast<size_t>(itemCount * elementsPerItem), readOffset);
-				elementsBytes = elementsBytesConverted;
+				isVarintEncoded = true;
+				elementsBytesConverted = decodeVarintVector(elementsBytes, arrayType, static_cast<size_t>(itemCount * elementsPerItem), readOffset);
+				elementsBytes = *elementsBytesConverted;
 				readOffset = 0;
+			}
+
+			// Decode indexes when necessary
+			if (needDecodeIndices)
+			{
+				int k = 0;
+
+				switch (drawMode)
+				{
+				case GL_LINES:
+				{
+					break;
+				}
+				case GL_TRIANGLE_STRIP:
+				{
+					switch (arrayType) // We only deal with 3 types of arrays for indexes: UByteArray, UShortArray, UIntArray.
+					{
+					case Array::UByteArrayType:
+					{
+						std::vector<uint8_t> elementsDecodeCopy = std::vector<uint8_t>(elementsBytes.begin() + readOffset, elementsBytes.end());
+						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
+						decodeDelta<uint8_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeImplicit<uint8_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeWatermark<uint8_t>(elementsDecodeCopy, magic);
+
+						for (auto& element : elementsDecodeCopy)
+							dynamic_cast<UByteArray*>(returnArray.get())->push_back(element);
+
+						break;
+					}
+
+					case Array::UShortArrayType:
+					{
+						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes.data());
+						std::vector<uint16_t> elementsDecodeCopy;
+						for (size_t i = 0; i < totalElements; ++i)
+							elementsDecodeCopy.push_back(shortData[i]);
+
+						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
+						decodeDelta<uint16_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeImplicit<uint16_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
+
+						for (auto& element : elementsDecodeCopy)
+							dynamic_cast<UShortArray*>(returnArray.get())->push_back(element);
+
+						break;
+					}
+					case Array::UIntArrayType:
+					{
+						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes.data());
+						std::vector<uint32_t> elementsDecodeCopy;
+						for (size_t i = 0; i < totalElements; ++i)
+							elementsDecodeCopy.push_back(intData[i]);
+
+						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
+						decodeDelta<uint32_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeImplicit<uint32_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
+
+						for (auto& element : elementsDecodeCopy)
+							dynamic_cast<UIntArray*>(returnArray.get())->push_back(element);
+
+						break;
+					}
+					default:
+					{
+						OSG_WARN << "WARNING: Unsuported indices array!" << std::endl;
+						return nullptr;
+					}
+					}
+					break;
+				}
+				case GL_TRIANGLES:
+				{
+					switch (arrayType) // We only deal with 3 types of arrays for indexes
+					{
+					case Array::UByteArrayType:
+					{
+						decodeDelta(elementsBytes, k);
+						elementsBytes = decodeWatermark(elementsBytes, magic);
+
+						for (auto& element : elementsBytes)
+							dynamic_cast<UByteArray*>(returnArray.get())->push_back(element);
+
+						break;
+					}
+					case Array::UShortArrayType:
+					{
+						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes.data());
+						std::vector<uint16_t> elementsDecodeCopy;
+						for (size_t i = 0; i < totalElements; ++i)
+							elementsDecodeCopy.push_back(shortData[i]);
+
+						decodeDelta<uint16_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
+
+						for (auto& element : elementsDecodeCopy)
+							dynamic_cast<UShortArray*>(returnArray.get())->push_back(element);
+
+						break;
+					}
+					case Array::UIntArrayType:
+					{
+						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes.data());
+						std::vector<uint32_t> elementsDecodeCopy;
+						for (size_t i = 0; i < totalElements; ++i)
+							elementsDecodeCopy.push_back(intData[i]);
+
+						decodeDelta<uint32_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
+
+						for (auto& element : elementsDecodeCopy)
+							dynamic_cast<UIntArray*>(returnArray.get())->push_back(element);
+
+						break;
+					}
+					}
+					break;
+				}
+				default:
+				{
+					OSG_WARN << "WARNING: Incompatible draw mode for indices decoding." << std::endl;
+					return nullptr;
+				}
+				}
+
+				return returnArray;
 			}
 
 			// Read and Copy bytes
@@ -552,64 +366,64 @@ osg::ref_ptr<osg::Array> ParserHelper::parseJSONArray(const json& currentJSONNod
 			returnArray->reserveArray(totalElements);
 			switch (arrayType)
 			{
-			case osg::Array::FloatArrayType:
+			case Array::FloatArrayType:
 			{
-				const float* floatData = reinterpret_cast<const float*>(elementsBytes->data() + readOffset);
+				const float* floatData = reinterpret_cast<const float*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::FloatArray*>(returnArray.get())->push_back(floatData[i]);
+					dynamic_cast<FloatArray*>(returnArray.get())->push_back(floatData[i]);
 				}
 				break;
 			}
-			case osg::Array::ByteArrayType:
+			case Array::ByteArrayType:
 			{
-				const int8_t* byteData = reinterpret_cast<const int8_t*>(elementsBytes->data() + readOffset);
+				const int8_t* byteData = reinterpret_cast<const int8_t*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::ByteArray*>(returnArray.get())->push_back(byteData[i]);
+					dynamic_cast<ByteArray*>(returnArray.get())->push_back(byteData[i]);
 				}
 				break;
 			}
-			case osg::Array::UByteArrayType:
+			case Array::UByteArrayType:
 			{
-				const uint8_t* ubyteData = reinterpret_cast<const uint8_t*>(elementsBytes->data() + readOffset);
+				const uint8_t* ubyteData = reinterpret_cast<const uint8_t*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::UByteArray*>(returnArray.get())->push_back(ubyteData[i]);
+					dynamic_cast<UByteArray*>(returnArray.get())->push_back(ubyteData[i]);
 				}
 				break;
 			}
-			case osg::Array::ShortArrayType:
+			case Array::ShortArrayType:
 			{
-				const int16_t* shortData = reinterpret_cast<const int16_t*>(elementsBytes->data() + readOffset);
+				const int16_t* shortData = reinterpret_cast<const int16_t*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::ShortArray*>(returnArray.get())->push_back(shortData[i]);
+					dynamic_cast<ShortArray*>(returnArray.get())->push_back(shortData[i]);
 				}
 				break;
 			}
-			case osg::Array::UShortArrayType:
+			case Array::UShortArrayType:
 			{
-				const uint16_t* ushortData = reinterpret_cast<const uint16_t*>(elementsBytes->data() + readOffset);
+				const uint16_t* ushortData = reinterpret_cast<const uint16_t*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::UShortArray*>(returnArray.get())->push_back(ushortData[i]);
+					dynamic_cast<UShortArray*>(returnArray.get())->push_back(ushortData[i]);
 				}
 				break;
 			}
-			case osg::Array::IntArrayType:
+			case Array::IntArrayType:
 			{
-				const int32_t* intData = reinterpret_cast<const int32_t*>(elementsBytes->data() + readOffset);
+				const int32_t* intData = reinterpret_cast<const int32_t*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::IntArray*>(returnArray.get())->push_back(intData[i]);
+					dynamic_cast<IntArray*>(returnArray.get())->push_back(intData[i]);
 				}
 				break;
 			}
-			case osg::Array::UIntArrayType:
+			case Array::UIntArrayType:
 			{
-				const uint16_t* uintData = reinterpret_cast<const uint16_t*>(elementsBytes->data() + readOffset);
+				const uint16_t* uintData = reinterpret_cast<const uint16_t*>(elementsBytes.data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
-					dynamic_cast<osg::UIntArray*>(returnArray.get())->push_back(uintData[i]);
+					dynamic_cast<UIntArray*>(returnArray.get())->push_back(uintData[i]);
 				}
 				break;
 			}
 			default:
-				osg::notify(osg::WARN) << "WARNING: Unknown Array Type." << std::endl;
+				OSG_WARN << "WARNING: Unknown Array Type." << std::endl;
 				return nullptr;
 			}
 
@@ -618,7 +432,7 @@ osg::ref_ptr<osg::Array> ParserHelper::parseJSONArray(const json& currentJSONNod
 
 			if (readFail)
 			{
-				osg::notify(osg::WARN) << "WARNING: File Array have incorrect size." << std::endl;
+				OSG_WARN << "WARNING: File Array have incorrect size." << std::endl;
 				return nullptr;
 			}
 		}
@@ -627,11 +441,242 @@ osg::ref_ptr<osg::Array> ParserHelper::parseJSONArray(const json& currentJSONNod
 	// 3) Convert Element nodes to Vectors if it applies.
 	if (returnArray && elementsPerItem > 1)
 	{
-		returnArray = recastArray(returnArray, arrayType, static_cast<DesiredVectorSize>(elementsPerItem));
+		returnArray = recastArray(returnArray, static_cast<DesiredVectorSize>(elementsPerItem));
 		
 	}
 
 	return returnArray;
+}
+
+void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const ref_ptr<Array> bones, const ref_ptr<Array> weights,
+	const std::map<int, std::string>& boneIndexes)
+{
+	ref_ptr<osgAnimation::VertexInfluenceMap> influenceMap = new osgAnimation::VertexInfluenceMap;
+
+	// The most common type [not sure if it has others]
+	ref_ptr<Vec4usArray> bonesVec = dynamic_pointer_cast<Vec4usArray>(bones);
+	ref_ptr<Vec4Array> weightsVec = dynamic_pointer_cast<Vec4Array>(weights);
+
+	if (bones && !bonesVec)
+	{
+		OSG_WARN << "WARNING: Unsuported bones array for RigGeometry. Must be Vec4usArray type. " << rigGeometry->getName() << std::endl;
+		return;
+	}
+
+	if (weights && !weightsVec)
+	{
+		OSG_WARN << "WARNING: Unsuported weights for RigGeometry. Must be Vec4Array type. " << rigGeometry->getName() << std::endl;
+		return;
+	}
+
+
+	if (!bonesVec && !weightsVec)
+		return;
+
+	if (!bonesVec || !weightsVec)
+	{
+		OSG_WARN << "WARNING: Missing either bones or weights array for RigGeometry " << rigGeometry->getName() << std::endl;
+		return;
+	}
+
+	if (bonesVec->getNumElements() != weightsVec->getNumElements())
+	{
+		OSG_WARN << "WARNING: Number of bone indices don't match number of weight indices for RigGeometry " << rigGeometry->getName() << std::endl;
+		return;
+	}
+
+	// Build influence map
+	int elementSize = bones->getDataSize();
+	for (unsigned int vertexIndex = 0; vertexIndex < bonesVec->getNumElements(); ++vertexIndex)
+	{
+		const Vec4us& boneIndices = (*bonesVec)[vertexIndex];
+		const Vec4& boneWeights = (*weightsVec)[vertexIndex];
+
+		for (int boneIndex = 0; boneIndex < elementSize; ++boneIndex)
+		{
+			uint16_t boneID = boneIndices[boneIndex];
+			float weight = boneWeights[boneIndex];
+
+			if (weight > 0.0f)
+			{
+				if (boneIndexes.find(boneID) == boneIndexes.end())
+				{
+					OSG_WARN << "WARNING: Bone index " << boneID << " not found! [" << rigGeometry->getName() << "]" << std::endl;
+					continue;
+				}
+				std::string boneName = boneIndexes.at(boneID);
+
+				(*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, weight));
+			}
+		}
+	}
+
+	rigGeometry->setInfluenceMap(influenceMap);
+}
+
+osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Array> indices, const osg::ref_ptr<osg::Array> vertices,
+	const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h)
+{
+	// Decast vertices to array.
+	osg::ref_ptr<osg::Array> verticesConverted = ParserHelper::recastArray(vertices, DesiredVectorSize::Array);
+	int elementSize = vertices->getDataSize();
+
+	// Decode Predict
+	switch (indices->getType())
+	{
+	case Array::UIntArrayType:
+		switch (verticesConverted->getType())
+		{
+		case Array::UIntArrayType:
+			verticesConverted = decodePredict<UIntArray, UIntArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+			break;
+		case Array::UShortArrayType:
+			verticesConverted = decodePredict<UIntArray, UShortArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+			break;
+		case Array::UByteArrayType:
+			verticesConverted = decodePredict<UIntArray, UByteArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
+			break;
+		case Array::IntArrayType:
+			verticesConverted = decodePredict<UIntArray, IntArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
+			break;
+		case Array::ShortArrayType:
+			verticesConverted = decodePredict<UIntArray, ShortArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
+			break;
+		case Array::ByteArrayType:
+			verticesConverted = decodePredict<UIntArray, ByteArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+			break;
+		default:
+			return nullptr;
+		}
+		break;
+	case Array::UShortArrayType:
+		switch (verticesConverted->getType())
+		{
+		case Array::UIntArrayType:
+			verticesConverted = decodePredict<UShortArray, UIntArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+			break;
+		case Array::UShortArrayType:
+			verticesConverted = decodePredict<UShortArray, UShortArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+			break;
+		case Array::UByteArrayType:
+			verticesConverted = decodePredict<UShortArray, UByteArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
+			break;
+		case Array::IntArrayType:
+			verticesConverted = decodePredict<UShortArray, IntArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
+			break;
+		case Array::ShortArrayType:
+			verticesConverted = decodePredict<UShortArray, ShortArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
+			break;
+		case Array::ByteArrayType:
+			verticesConverted = decodePredict<UShortArray, ByteArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+			break;
+		default:
+			return nullptr;
+		}
+		break;
+	case Array::UByteArrayType:
+		switch (verticesConverted->getType())
+		{
+		case Array::UIntArrayType:
+			verticesConverted = decodePredict<UByteArray, UIntArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+			break;
+		case Array::UShortArrayType:
+			verticesConverted = decodePredict<UByteArray, UShortArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+			break;
+		case Array::UByteArrayType:
+			verticesConverted = decodePredict<UByteArray, UByteArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
+			break;
+		case Array::IntArrayType:
+			verticesConverted = decodePredict<UByteArray, IntArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
+			break;
+		case Array::ShortArrayType:
+			verticesConverted = decodePredict<UByteArray, ShortArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
+			break;
+		case Array::ByteArrayType:
+			verticesConverted = decodePredict<UByteArray, ByteArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+			break;
+		default:
+			return nullptr;
+		}
+		break;
+	default:
+		return nullptr;
+	}
+
+	// Decode Quantize
+	switch (verticesConverted->getType())
+	{
+	case Array::UIntArrayType:
+		verticesConverted = decodeQuantize<UIntArray>(dynamic_pointer_cast<UIntArray>(verticesConverted), vtx_bbl, vtx_h, elementSize);
+		break;
+	case Array::UShortArrayType:
+		verticesConverted = decodeQuantize<UShortArray>(dynamic_pointer_cast<UShortArray>(verticesConverted), vtx_bbl, vtx_h, elementSize);
+		break;
+	case Array::UByteArrayType:
+		verticesConverted = decodeQuantize<UByteArray>(dynamic_pointer_cast<UByteArray>(verticesConverted), vtx_bbl, vtx_h, elementSize);
+		break;
+	case Array::IntArrayType:
+		verticesConverted = decodeQuantize<IntArray>(dynamic_pointer_cast<IntArray>(verticesConverted), vtx_bbl, vtx_h, elementSize);
+		break;
+	case Array::ShortArrayType:
+		verticesConverted = decodeQuantize<ShortArray>(dynamic_pointer_cast<ShortArray>(verticesConverted), vtx_bbl, vtx_h, elementSize);
+		break;
+	case Array::ByteArrayType:
+		verticesConverted = decodeQuantize<ByteArray>(dynamic_pointer_cast<ByteArray>(verticesConverted), vtx_bbl, vtx_h, elementSize);
+		break;
+	default:
+		return nullptr;
+	}
+
+	// Recast array
+	verticesConverted = recastArray(verticesConverted, static_cast<DesiredVectorSize>(elementSize));
+
+	return verticesConverted;
+}
+
+
+bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, double& value)
+{
+	for (const osgSim::ShapeAttribute& attr : *shapeAttrList) 
+	{
+		if (attr.getName() == name && attr.getType() == osgSim::ShapeAttribute::Type::DOUBLE)
+		{
+			value = attr.getDouble();
+			return true;
+		}
+		else if (attr.getName() == name && attr.getType() == osgSim::ShapeAttribute::Type::INTEGER)
+		{
+			value = static_cast<double>(attr.getInt());
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, int& value)
+{
+	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
+	{
+		if (attr.getName() == name && attr.getType() == osgSim::ShapeAttribute::Type::INTEGER)
+		{
+			value = attr.getInt();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, std::string& value)
+{
+	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
+	{
+		if (attr.getName() == name && attr.getType() == osgSim::ShapeAttribute::Type::STRING)
+		{
+			value = attr.getString();
+			return true;
+		}
+	}
+	return false;
 }
 
 GLenum ParserHelper::getModeFromString(const std::string& mode)
@@ -647,47 +692,47 @@ GLenum ParserHelper::getModeFromString(const std::string& mode)
 	return GL_POINTS;
 }
 
-osg::BlendFunc::BlendFuncMode ParserHelper::getBlendFuncFromString(const std::string& blendFunc)
+BlendFunc::BlendFuncMode ParserHelper::getBlendFuncFromString(const std::string& blendFunc)
 {
-	if (blendFunc == "DST_ALPHA") return osg::BlendFunc::DST_ALPHA;
-	if (blendFunc == "DST_COLOR") return osg::BlendFunc::DST_COLOR;
-	if (blendFunc == "ONE") return osg::BlendFunc::ONE;
-	if (blendFunc == "ONE_MINUS_DST_ALPHA") return osg::BlendFunc::ONE_MINUS_DST_ALPHA;
-	if (blendFunc == "ONE_MINUS_DST_COLOR") return osg::BlendFunc::ONE_MINUS_DST_COLOR;
-	if (blendFunc == "ONE_MINUS_SRC_ALPHA") return osg::BlendFunc::ONE_MINUS_SRC_ALPHA;
-	if (blendFunc == "ONE_MINUS_SRC_COLOR") return osg::BlendFunc::ONE_MINUS_SRC_COLOR;
-	if (blendFunc == "SRC_ALPHA") return osg::BlendFunc::SRC_ALPHA;
-	if (blendFunc == "SRC_ALPHA_SATURATE") return osg::BlendFunc::SRC_ALPHA_SATURATE;
-	if (blendFunc == "SRC_COLOR") return osg::BlendFunc::SRC_COLOR;
-	if (blendFunc == "CONSTANT_COLOR") return osg::BlendFunc::CONSTANT_COLOR;
-	if (blendFunc == "ONE_MINUS_CONSTANT_COLOR") return osg::BlendFunc::ONE_MINUS_CONSTANT_COLOR;
-	if (blendFunc == "CONSTANT_ALPHA") return osg::BlendFunc::CONSTANT_ALPHA;
-	if (blendFunc == "ONE_MINUS_CONSTANT_ALPHA") return osg::BlendFunc::ONE_MINUS_CONSTANT_ALPHA;
-	if (blendFunc == "ZERO") return osg::BlendFunc::ZERO;
+	if (blendFunc == "DST_ALPHA") return BlendFunc::DST_ALPHA;
+	if (blendFunc == "DST_COLOR") return BlendFunc::DST_COLOR;
+	if (blendFunc == "ONE") return BlendFunc::ONE;
+	if (blendFunc == "ONE_MINUS_DST_ALPHA") return BlendFunc::ONE_MINUS_DST_ALPHA;
+	if (blendFunc == "ONE_MINUS_DST_COLOR") return BlendFunc::ONE_MINUS_DST_COLOR;
+	if (blendFunc == "ONE_MINUS_SRC_ALPHA") return BlendFunc::ONE_MINUS_SRC_ALPHA;
+	if (blendFunc == "ONE_MINUS_SRC_COLOR") return BlendFunc::ONE_MINUS_SRC_COLOR;
+	if (blendFunc == "SRC_ALPHA") return BlendFunc::SRC_ALPHA;
+	if (blendFunc == "SRC_ALPHA_SATURATE") return BlendFunc::SRC_ALPHA_SATURATE;
+	if (blendFunc == "SRC_COLOR") return BlendFunc::SRC_COLOR;
+	if (blendFunc == "CONSTANT_COLOR") return BlendFunc::CONSTANT_COLOR;
+	if (blendFunc == "ONE_MINUS_CONSTANT_COLOR") return BlendFunc::ONE_MINUS_CONSTANT_COLOR;
+	if (blendFunc == "CONSTANT_ALPHA") return BlendFunc::CONSTANT_ALPHA;
+	if (blendFunc == "ONE_MINUS_CONSTANT_ALPHA") return BlendFunc::ONE_MINUS_CONSTANT_ALPHA;
+	if (blendFunc == "ZERO") return BlendFunc::ZERO;
 
-	return osg::BlendFunc::ONE;
+	return BlendFunc::ONE;
 }
 
-osg::Texture::FilterMode ParserHelper::getFilterModeFromString(const std::string& filterMode)
+Texture::FilterMode ParserHelper::getFilterModeFromString(const std::string& filterMode)
 {
-	if (filterMode == "LINEAR") return osg::Texture::FilterMode::LINEAR;
-	if (filterMode == "LINEAR_MIPMAP_LINEAR") return osg::Texture::FilterMode::LINEAR_MIPMAP_LINEAR;
-	if (filterMode == "LINEAR_MIPMAP_NEAREST") return osg::Texture::FilterMode::LINEAR_MIPMAP_NEAREST;
-	if (filterMode == "NEAREST") return osg::Texture::FilterMode::NEAREST;
-	if (filterMode == "NEAREST_MIPMAP_LINEAR") return osg::Texture::FilterMode::NEAREST_MIPMAP_LINEAR;
-	if (filterMode == "NEAREST_MIPMAP_NEAREST") return osg::Texture::FilterMode::NEAREST_MIPMAP_NEAREST;
+	if (filterMode == "LINEAR") return Texture::FilterMode::LINEAR;
+	if (filterMode == "LINEAR_MIPMAP_LINEAR") return Texture::FilterMode::LINEAR_MIPMAP_LINEAR;
+	if (filterMode == "LINEAR_MIPMAP_NEAREST") return Texture::FilterMode::LINEAR_MIPMAP_NEAREST;
+	if (filterMode == "NEAREST") return Texture::FilterMode::NEAREST;
+	if (filterMode == "NEAREST_MIPMAP_LINEAR") return Texture::FilterMode::NEAREST_MIPMAP_LINEAR;
+	if (filterMode == "NEAREST_MIPMAP_NEAREST") return Texture::FilterMode::NEAREST_MIPMAP_NEAREST;
 
-	return osg::Texture::FilterMode::LINEAR;
+	return Texture::FilterMode::LINEAR;
 }
 
-osg::Texture::WrapMode ParserHelper::getWrapModeFromString(const std::string& wrapMode)
+Texture::WrapMode ParserHelper::getWrapModeFromString(const std::string& wrapMode)
 {
-	if (wrapMode == "CLAMP_TO_EDGE") return osg::Texture::WrapMode::CLAMP_TO_EDGE;
-	if (wrapMode == "CLAMP_TO_BORDER") return osg::Texture::WrapMode::CLAMP_TO_BORDER;
-	if (wrapMode == "REPEAT") return osg::Texture::WrapMode::REPEAT;
-	if (wrapMode == "MIRROR") return osg::Texture::WrapMode::MIRROR;
+	if (wrapMode == "CLAMP_TO_EDGE") return Texture::WrapMode::CLAMP_TO_EDGE;
+	if (wrapMode == "CLAMP_TO_BORDER") return Texture::WrapMode::CLAMP_TO_BORDER;
+	if (wrapMode == "REPEAT") return Texture::WrapMode::REPEAT;
+	if (wrapMode == "MIRROR") return Texture::WrapMode::MIRROR;
 
-	return osg::Texture::WrapMode::CLAMP_TO_EDGE;
+	return Texture::WrapMode::CLAMP_TO_EDGE;
 }
 
 osgText::Text::AlignmentType ParserHelper::getTextAlignmentFromString(const std::string& textAlignment)
@@ -711,77 +756,12 @@ osgText::Text::AlignmentType ParserHelper::getTextAlignmentFromString(const std:
 	return osgText::Text::AlignmentType::LEFT_TOP;
 }
 
-void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const osg::ref_ptr<osg::Array> bones, const osg::ref_ptr<osg::Array> weights,
-	const std::map<int, std::string>& boneIndexes)
-{
-	osg::ref_ptr<osgAnimation::VertexInfluenceMap> influenceMap = new osgAnimation::VertexInfluenceMap;
-
-	// The most common type [not sure if it has others]
-	osg::ref_ptr<osg::Vec4usArray> bonesVec = osg::dynamic_pointer_cast<osg::Vec4usArray>(bones);
-	osg::ref_ptr<osg::Vec4Array> weightsVec = osg::dynamic_pointer_cast<osg::Vec4Array>(weights);
-
-	if (bones && !bonesVec)
-	{
-		osg::notify(osg::WARN) << "WARNING: Unsuported bones array for RigGeometry. Must be Vec4usArray type. " << rigGeometry->getName() << std::endl;
-		return;
-	}
-
-	if (weights && !weightsVec)
-	{
-		osg::notify(osg::WARN) << "WARNING: Unsuported weights for RigGeometry. Must be Vec4Array type. " << rigGeometry->getName() << std::endl;
-		return;
-	}
-
-
-	if (!bonesVec && !weightsVec)
-		return;
-
-	if (!bonesVec || !weightsVec)
-	{
-		osg::notify(osg::WARN) << "WARNING: Missing either bones or weights array for RigGeometry " << rigGeometry->getName() << std::endl;
-		return;
-	}
-
-	if (bonesVec->getNumElements() != weightsVec->getNumElements())
-	{
-		osg::notify(osg::WARN) << "WARNING: Number of bone indices don't match number of weight indices for RigGeometry " << rigGeometry->getName() << std::endl;
-		return;
-	}
-
-	// Build influence map
-	int elementSize = bones->getDataSize();
-	for (unsigned int vertexIndex = 0; vertexIndex < bonesVec->getNumElements(); ++vertexIndex)
-	{
-		const osg::Vec4us& boneIndices = (*bonesVec)[vertexIndex];
-		const osg::Vec4& boneWeights = (*weightsVec)[vertexIndex];
-
-		for (int boneIndex = 0; boneIndex < elementSize; ++boneIndex)
-		{
-			uint16_t boneID = boneIndices[boneIndex];
-			float weight = boneWeights[boneIndex];
-
-			if (weight > 0.0f)
-			{
-				if (boneIndexes.find(boneID) == boneIndexes.end())
-				{
-					osg::notify(osg::WARN) << "WARNING: Bone index " << boneID << " not found! [" << rigGeometry->getName() << "]" << std::endl;
-					continue;
-				}
-				std::string boneName = boneIndexes.at(boneID);
-
-				(*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, weight));
-			}
-		}
-	}
-
-	rigGeometry->setInfluenceMap(influenceMap);
-}
 
 
 
 // PRIVATE METHODS
 
-bool ParserHelper::getPrimitiveType(const json& currentJSONNode, osg::PrimitiveSet::Type& outPrimitiveType)
+bool ParserHelper::getPrimitiveType(const json& currentJSONNode, PrimitiveSet::Type& outPrimitiveType)
 {
 	for (auto& nodeElement : currentJSONNode)
 	{
@@ -798,6 +778,11 @@ bool ParserHelper::getPrimitiveType(const json& currentJSONNode, osg::PrimitiveS
 	return false;
 }
 
+inline int64_t ParserHelper::varintSigned(uint64_t input)
+{
+	return static_cast<int64_t>(input & 1 ? ~(input >> 1) : (input >> 1));
+}
+
 template <typename T>
 void ParserHelper::copyIntToByteVector(T value, std::vector<uint8_t>& vec)
 {
@@ -809,15 +794,15 @@ void ParserHelper::copyIntToByteVector(T value, std::vector<uint8_t>& vec)
 	}
 }
 
-uint32_t ParserHelper::decodeVarInt(const uint8_t* const data, int& decoded_bytes)
+uint64_t ParserHelper::decodeVarInt(const uint8_t* const data, int& decoded_bytes)
 {
 	int i = 0;
-	uint32_t decoded_value = 0;
+	uint64_t decoded_value = 0;
 	int shift_amount = 0;
 
 	do
 	{
-		decoded_value |= (uint32_t)(data[i] & 0x7F) << shift_amount;
+		decoded_value |= (uint64_t)(data[i] & 0x7F) << shift_amount;
 		shift_amount += 7;
 	} while ((data[i++] & 0x80) != 0);
 
@@ -825,7 +810,7 @@ uint32_t ParserHelper::decodeVarInt(const uint8_t* const data, int& decoded_byte
 	return decoded_value;
 }
 
-std::vector<uint8_t>* ParserHelper::decodeVarintVector(const std::vector<uint8_t>& input, osg::Array::Type inputType, size_t itemCount, size_t offSet)
+std::vector<uint8_t>* ParserHelper::decodeVarintVector(const std::vector<uint8_t>& input, Array::Type inputType, size_t itemCount, size_t offSet)
 {
 	std::vector<uint8_t>* parsedVector = new std::vector<uint8_t>;
 
@@ -834,30 +819,42 @@ std::vector<uint8_t>* ParserHelper::decodeVarintVector(const std::vector<uint8_t
 	while (parsedItemCount < itemCount)
 	{
 		int decodedBytes = 0;
-		uint32_t decodedValue = 0;
+		uint64_t decodedValue = 0;
 		try
 		{
 			decodedValue = decodeVarInt(input.data() + offSet + parsedSize, decodedBytes);
 		}
 		catch (std::exception)
 		{
-			osg::notify(osg::WARN) << "WARNING: Error while decoding input vector!" << std::endl;
+			OSG_WARN << "WARNING: Error while decoding input vector!" << std::endl;
 			return nullptr;
 		}
 
 		switch (inputType)
 		{
-		case osg::Array::ByteArrayType:
-		case osg::Array::UByteArrayType:
+		case Array::ByteArrayType:
+			copyIntToByteVector(static_cast<int8_t>(varintSigned(decodedValue)), (*parsedVector));
+			break;
+		case Array::UByteArrayType:
 			copyIntToByteVector(static_cast<uint8_t>(decodedValue), (*parsedVector));
 			break;
-		case osg::Array::ShortArrayType:
-		case osg::Array::UShortArrayType:
+		case Array::ShortArrayType:
+			copyIntToByteVector(static_cast<int16_t>(varintSigned(decodedValue)), (*parsedVector));
+			break;
+		case Array::UShortArrayType:
 			copyIntToByteVector(static_cast<uint16_t>(decodedValue), (*parsedVector));
 			break;
-		case osg::Array::IntArrayType:
-		case osg::Array::UIntArrayType:
+		case Array::IntArrayType:
+			copyIntToByteVector(static_cast<int32_t>(varintSigned(decodedValue)), (*parsedVector));
+			break;
+		case Array::UIntArrayType:
 			copyIntToByteVector(static_cast<uint32_t>(decodedValue), (*parsedVector));
+			break;
+		case Array::Int64ArrayType:
+			copyIntToByteVector(static_cast<int64_t>(varintSigned(decodedValue)), (*parsedVector));
+			break;
+		case Array::UInt64ArrayType:
+			copyIntToByteVector(static_cast<uint64_t>(decodedValue), (*parsedVector));
 			break;
 		}
 
@@ -868,10 +865,9 @@ std::vector<uint8_t>* ParserHelper::decodeVarintVector(const std::vector<uint8_t
 	return parsedVector;
 }
 
-
-osg::Array* ParserHelper::getVertexAttribArray(osgAnimation::RigGeometry& rigGeometry, const std::string arrayName) {
+Array* ParserHelper::getVertexAttribArray(osgAnimation::RigGeometry& rigGeometry, const std::string arrayName) {
 	for (unsigned int i = 0; i < rigGeometry.getNumVertexAttribArrays(); ++i) {
-		osg::Array* attribute = rigGeometry.getVertexAttribArray(i);
+		Array* attribute = rigGeometry.getVertexAttribArray(i);
 		bool isBones = false;
 		if (attribute && attribute->getUserValue(arrayName, isBones) && isBones) {
 			return attribute;
@@ -880,3 +876,916 @@ osg::Array* ParserHelper::getVertexAttribArray(osgAnimation::RigGeometry& rigGeo
 	return 0;
 }
 
+
+ref_ptr<Array> ParserHelper::recastArray(const ref_ptr<Array> toRecast, DesiredVectorSize vecSize)
+{
+	if (!toRecast)
+		return nullptr;
+
+	ref_ptr<Array> returnArray;
+
+	if (vecSize == DesiredVectorSize::Array)
+		return decastVector(toRecast);
+
+	switch (vecSize)
+	{
+	case DesiredVectorSize::Vec2:
+	{
+		// Certify the array contains appropriate number of elements
+		if (toRecast->getNumElements() % 2 != 0)
+		{
+			OSG_WARN << "WARNING: Array has incorrect size. Ignoring!" << std::endl;
+			return nullptr;
+		}
+
+		int totalElements = toRecast->getNumElements() / 2;
+		switch (toRecast->getType())
+		{
+		case Array::DoubleArrayType:
+		{
+			returnArray = new Vec2dArray;
+			returnArray->reserveArray(totalElements);
+			DoubleArray* converted = dynamic_cast<DoubleArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2d newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2dArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::FloatArrayType:
+		{
+			returnArray = new Vec2Array;
+			returnArray->reserveArray(totalElements);
+			FloatArray* converted = dynamic_cast<FloatArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2 newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2Array*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UByteArrayType:
+		{
+			returnArray = new Vec2ubArray;
+			returnArray->reserveArray(totalElements);
+			UByteArray* converted = dynamic_cast<UByteArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2ub newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2ubArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UShortArrayType:
+		{
+			returnArray = new Vec2usArray;
+			returnArray->reserveArray(totalElements);
+			UShortArray* converted = dynamic_cast<UShortArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2us newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2usArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UIntArrayType:
+		{
+			returnArray = new Vec2uiArray;
+			returnArray->reserveArray(totalElements);
+			UIntArray* converted = dynamic_cast<UIntArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2ui newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UInt64ArrayType:
+		{
+			OSG_WARN << "WARNING: Uint64Array don't have a proper vector implemented. Data may be lost." << std::endl;
+			returnArray = new Vec2uiArray;
+			returnArray->reserveArray(totalElements);
+			UInt64Array* converted = dynamic_cast<UInt64Array*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2ui newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::ByteArrayType:
+		{
+			returnArray = new Vec2bArray;
+			returnArray->reserveArray(totalElements);
+			ByteArray* converted = dynamic_cast<ByteArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2b newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2bArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::ShortArrayType:
+		{
+			returnArray = new Vec2sArray;
+			returnArray->reserveArray(totalElements);
+			ShortArray* converted = dynamic_cast<ShortArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2s newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2sArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::IntArrayType:
+		{
+			returnArray = new Vec2iArray;
+			returnArray->reserveArray(totalElements);
+			IntArray* converted = dynamic_cast<IntArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2i newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2iArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::Int64ArrayType:
+		{
+			OSG_WARN << "WARNING: Int64Array don't have a proper vector implemented. Data may be lost." << std::endl;
+			returnArray = new Vec2iArray;
+			returnArray->reserveArray(totalElements);
+			Int64Array* converted = dynamic_cast<Int64Array*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec2ui newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		}
+		break;
+	}
+	case DesiredVectorSize::Vec3:
+	{
+		// Certify the array contains appropriate number of elements
+		if (toRecast->getNumElements() % 3 != 0)
+		{
+			OSG_WARN << "WARNING: Array has incorrect size. Ignoring!" << std::endl;
+			return nullptr;
+		}
+
+		int totalElements = toRecast->getNumElements() / 3;
+		switch (toRecast->getType())
+		{
+		case Array::DoubleArrayType:
+		{
+			returnArray = new Vec3dArray;
+			returnArray->reserveArray(totalElements);
+			DoubleArray* converted = dynamic_cast<DoubleArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3d newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3dArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::FloatArrayType:
+		{
+			returnArray = new Vec3Array;
+			returnArray->reserveArray(totalElements);
+			FloatArray* converted = dynamic_cast<FloatArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3 newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3Array*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UByteArrayType:
+		{
+			returnArray = new Vec3ubArray;
+			returnArray->reserveArray(totalElements);
+			UByteArray* converted = dynamic_cast<UByteArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3ub newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3ubArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UShortArrayType:
+		{
+			returnArray = new Vec3usArray;
+			returnArray->reserveArray(totalElements);
+			UShortArray* converted = dynamic_cast<UShortArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3us newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3usArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UIntArrayType:
+		{
+			returnArray = new Vec3uiArray;
+			returnArray->reserveArray(totalElements);
+			UIntArray* converted = dynamic_cast<UIntArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3ui newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UInt64ArrayType:
+		{
+			OSG_WARN << "WARNING: Uint64Array don't have a proper vector implemented. Data may be lost." << std::endl;
+			returnArray = new Vec3uiArray;
+			returnArray->reserveArray(totalElements);
+			UInt64Array* converted = dynamic_cast<UInt64Array*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3ui newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::ByteArrayType:
+		{
+			returnArray = new Vec3bArray;
+			returnArray->reserveArray(totalElements);
+			ByteArray* converted = dynamic_cast<ByteArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3b newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3bArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::ShortArrayType:
+		{
+			returnArray = new Vec3sArray;
+			returnArray->reserveArray(totalElements);
+			ShortArray* converted = dynamic_cast<ShortArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3s newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3sArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::IntArrayType:
+		{
+			returnArray = new Vec3iArray;
+			returnArray->reserveArray(totalElements);
+			IntArray* converted = dynamic_cast<IntArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3i newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3iArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::Int64ArrayType:
+		{
+			OSG_WARN << "WARNING: Int64Array don't have a proper vector implemented. Data may be lost." << std::endl;
+			returnArray = new Vec3iArray;
+			returnArray->reserveArray(totalElements);
+			Int64Array* converted = dynamic_cast<Int64Array*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec3i newVec((*converted)[3 * i], (*converted)[3 * i + 1], (*converted)[3 * i + 2]);
+				dynamic_cast<Vec3iArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		}
+		break;
+	}
+	case DesiredVectorSize::Vec4:
+	{
+		// Certify the array contains appropriate number of elements
+		if (toRecast->getNumElements() % 4 != 0)
+		{
+			OSG_WARN << "WARNING: Array has incorrect size. Ignoring!" << std::endl;
+			return nullptr;
+		}
+
+		int totalElements = toRecast->getNumElements() / 4;
+		switch (toRecast->getType())
+		{
+		case Array::DoubleArrayType:
+		{
+			returnArray = new Vec4dArray;
+			returnArray->reserveArray(totalElements);
+			DoubleArray* converted = dynamic_cast<DoubleArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4d newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4dArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::FloatArrayType:
+		{
+			returnArray = new Vec4Array;
+			returnArray->reserveArray(totalElements);
+			FloatArray* converted = dynamic_cast<FloatArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4 newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4Array*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UByteArrayType:
+		{
+			returnArray = new Vec4ubArray;
+			returnArray->reserveArray(totalElements);
+			UByteArray* converted = dynamic_cast<UByteArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4ub newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4ubArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UShortArrayType:
+		{
+			returnArray = new Vec4usArray;
+			returnArray->reserveArray(totalElements);
+			UShortArray* converted = dynamic_cast<UShortArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4us newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4usArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UIntArrayType:
+		{
+			returnArray = new Vec4uiArray;
+			returnArray->reserveArray(totalElements);
+			UIntArray* converted = dynamic_cast<UIntArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4ui newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::UInt64ArrayType:
+		{
+			OSG_WARN << "WARNING: Uint64Array don't have a proper vector implemented. Data may be lost." << std::endl;
+			returnArray = new Vec4uiArray;
+			returnArray->reserveArray(totalElements);
+			UInt64Array* converted = dynamic_cast<UInt64Array*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4ui newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4uiArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::ByteArrayType:
+		{
+			returnArray = new Vec4bArray;
+			returnArray->reserveArray(totalElements);
+			ByteArray* converted = dynamic_cast<ByteArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4b newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4bArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::ShortArrayType:
+		{
+			returnArray = new Vec4sArray;
+			returnArray->reserveArray(totalElements);
+			ShortArray* converted = dynamic_cast<ShortArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4s newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4sArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::IntArrayType:
+		{
+			returnArray = new Vec4iArray;
+			returnArray->reserveArray(totalElements);
+			IntArray* converted = dynamic_cast<IntArray*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4i newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4iArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		case Array::Int64ArrayType:
+		{
+			OSG_WARN << "WARNING: Int64Array don't have a proper vector implemented. Data may be lost." << std::endl;
+			returnArray = new Vec4iArray;
+			returnArray->reserveArray(totalElements);
+			Int64Array* converted = dynamic_cast<Int64Array*>(toRecast.get());
+			if (!converted)
+				return nullptr;
+			for (int i = 0; i < totalElements; i++)
+			{
+				Vec4i newVec((*converted)[4 * i], (*converted)[4 * i + 1], (*converted)[4 * i + 2], (*converted)[4 * i + 3]);
+				dynamic_cast<Vec4iArray*>(returnArray.get())->push_back(newVec);
+			}
+			break;
+		}
+		}
+		break;
+	}
+	}
+
+	return returnArray;
+}
+
+ref_ptr<Array> ParserHelper::decastVector(const ref_ptr<Array> toRecast)
+{
+	if (!toRecast)
+		return nullptr;
+
+	ref_ptr<Array> returnArray;
+
+	switch (toRecast->getType())
+	{
+	case Array::ByteArrayType:
+		returnArray = new ByteArray(*dynamic_pointer_cast<ByteArray>(toRecast));
+		break;
+	case Array::ShortArrayType:
+		returnArray = new ShortArray(*dynamic_pointer_cast<ShortArray>(toRecast));
+		break;
+	case Array::IntArrayType:
+		returnArray = new IntArray(*dynamic_pointer_cast<IntArray>(toRecast));
+		break;
+	case Array::Int64ArrayType:
+		returnArray = new Int64Array(*dynamic_pointer_cast<Int64Array>(toRecast));
+		break;
+	case Array::UByteArrayType:
+		returnArray = new UByteArray(*dynamic_pointer_cast<UByteArray>(toRecast));
+		break;
+	case Array::UShortArrayType:
+		returnArray = new UShortArray(*dynamic_pointer_cast<UShortArray>(toRecast));
+		break;
+	case Array::UIntArrayType:
+		returnArray = new UIntArray(*dynamic_pointer_cast<UIntArray>(toRecast));
+		break;
+	case Array::UInt64ArrayType:
+		returnArray = new UInt64Array(*dynamic_pointer_cast<UInt64Array>(toRecast));
+		break;
+	case Array::FloatArrayType:
+		returnArray = new FloatArray(*dynamic_pointer_cast<FloatArray>(toRecast));
+		break;
+	case Array::DoubleArrayType:
+		returnArray = new DoubleArray(*dynamic_pointer_cast<DoubleArray>(toRecast));
+		break;
+
+	case Array::Vec4dArrayType:
+		returnArray = new DoubleArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4dArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4dArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4ArrayType:
+		returnArray = new FloatArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4Array>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4Array>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4ubArrayType:
+		returnArray = new UByteArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4ubArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4ubArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4usArrayType:
+		returnArray = new UShortArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4usArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4usArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4uiArrayType:
+		returnArray = new UIntArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4uiArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4uiArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4bArrayType:
+		returnArray = new ByteArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4bArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4bArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4sArrayType:
+		returnArray = new ShortArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4sArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4sArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->w());
+		}
+		break;
+	case Array::Vec4iArrayType:
+		returnArray = new IntArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec4iArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec4iArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->z());
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->w());
+		}
+		break;
+
+
+	case Array::Vec3dArrayType:
+		returnArray = new DoubleArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3dArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3dArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3ArrayType:
+		returnArray = new FloatArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3Array>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3Array>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3ubArrayType:
+		returnArray = new UByteArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3ubArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3ubArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3usArrayType:
+		returnArray = new UShortArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3usArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3usArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3uiArrayType:
+		returnArray = new UIntArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3uiArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3uiArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3bArrayType:
+		returnArray = new ByteArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3bArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3bArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3sArrayType:
+		returnArray = new ShortArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3sArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3sArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->z());
+		}
+		break;
+	case Array::Vec3iArrayType:
+		returnArray = new IntArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec3iArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec3iArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->y());
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->z());
+		}
+		break;
+
+
+	case Array::Vec2dArrayType:
+		returnArray = new DoubleArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2dArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2dArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<DoubleArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2ArrayType:
+		returnArray = new FloatArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2Array>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2Array>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<FloatArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2ubArrayType:
+		returnArray = new UByteArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2ubArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2ubArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UByteArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2usArrayType:
+		returnArray = new UShortArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2usArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2usArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UShortArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2uiArrayType:
+		returnArray = new UIntArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2uiArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2uiArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<UIntArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2bArrayType:
+		returnArray = new ByteArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2bArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2bArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<ByteArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2sArrayType:
+		returnArray = new ShortArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2sArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2sArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<ShortArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	case Array::Vec2iArrayType:
+		returnArray = new IntArray();
+		returnArray->reserveArray(toRecast->getNumElements() * toRecast->getDataSize());
+		for (auto it = dynamic_pointer_cast<Vec2iArray>(toRecast)->begin(); it != dynamic_pointer_cast<Vec2iArray>(toRecast)->end(); ++it)
+		{
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->x());
+			dynamic_pointer_cast<IntArray>(returnArray)->push_back(it->y());
+		}
+		break;
+	}
+
+	return returnArray;
+}
+
+
+template <typename T>
+void ParserHelper::decodeDelta(std::vector<T>& t, int e)
+{
+	if (t.empty() || e >= t.size()) return;
+
+	uint32_t r = t[e];
+	for (int a = e + 1; a < t.size(); ++a) {
+		r = t[a] = r + (t[a] >> 1 ^ -static_cast<int>(1 & t[a]));
+	}
+}
+
+template <typename T>
+std::vector<T> ParserHelper::decodeImplicit(const std::vector<T>& t, int n)
+{
+	uint32_t eSize = t[IMPLICIT_HEADER_PRIMITIVE_LENGTH];
+	std::vector<T> e(eSize, 0);
+	uint32_t a = t[IMPLICIT_HEADER_EXPECTED_INDEX];
+	uint32_t s = t[IMPLICIT_HEADER_MASK_LENGTH];
+	uint32_t r = HIGH_WATERMARK;
+	uint32_t u = 32 * s - e.size();
+	uint32_t l = static_cast<uint32_t>(1 << 31);
+	uint32_t h = 0;
+
+	while (h < s) 
+	{
+		uint32_t c = t[h + IMPLICIT_HEADER_LENGTH];
+		uint32_t d = 32;
+		uint32_t p = h * d;
+
+		//if (p >= e.size())
+		//	break;
+
+		uint32_t f = (h == s - 1) ? u : 0;
+		uint32_t g1 = f;
+
+		while (g1 < d) 
+		{
+			//if (n >= t.size())
+			//	break;
+
+			if (c & (l >> g1)) 
+			{
+				e[p] = t[n++];
+			}
+			else 
+			{
+				e[p] = (r) ? a : a++;
+			}
+			++g1;
+			++p;
+		}
+		++h;
+	}
+
+	return e;
+}
+
+template <typename T>
+std::vector<T> ParserHelper::decodeWatermark(const std::vector<T>& t, uint32_t& magic)
+{
+	std::vector<T> e = t;
+	uint32_t n = magic;
+	uint32_t r = t.size();
+
+	for (uint32_t a = 0; a < r; ++a) {
+		uint32_t s = n - static_cast<uint32_t>(t[a]);
+		e[a] = static_cast<T>(s);
+		if (n <= s) {
+			n = s + 1;
+		}
+	}
+
+	magic = n;
+
+	return e;
+}
+
+template <typename T, typename U>
+osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T> indices, const osg::ref_ptr<U> vertices, int itemSize)
+{
+	osg::ref_ptr<U> t = new U(*vertices);
+	if (!indices->empty())
+	{
+		int n = t->size() / itemSize;
+		std::vector<int> r(n, 0);
+		int a = indices->size() - 1;
+
+		r[(*indices)[0]] = 1;
+		r[(*indices)[1]] = 1;
+		r[(*indices)[2]] = 1;
+
+		for (int s = 2; s < a; ++s)
+		{
+			int o = s - 2;
+			unsigned int u = (*indices)[o];
+			unsigned int l = (*indices)[o + 1];
+			unsigned int h = (*indices)[o + 2];
+			unsigned int c = (*indices)[o + 3];
+			if (1 != r[c])
+			{
+				r[c] = 1;
+				u *= itemSize;
+				l *= itemSize;
+				h *= itemSize;
+				c *= itemSize;
+
+				for (int d = 0; d < itemSize; ++d)
+				{
+					(*t)[c + d] = (*t)[c + d] + (*t)[l + d] + (*t)[h + d] - (*t)[u + d];
+				}
+			}
+		}
+	}
+	return t;
+}
+
+template <typename T>
+osg::ref_ptr<osg::Array> ParserHelper::decodeQuantize(const osg::ref_ptr<T> vertices, const std::vector<double>& vtx_bbl,
+	const std::vector<double>& vtx_h, int elementSize)
+{
+	ref_ptr<DoubleArray> x = new DoubleArray();
+	x->resize(vertices->getNumElements());
+
+	int id = 0;
+	for (unsigned int r = 0; r < vertices->getNumElements() / elementSize; ++r)
+	{
+		for (int l = 0; l < elementSize; ++l)
+		{
+			(*x)[id] = static_cast<double>(vtx_bbl[l] + static_cast<double>((*vertices)[id]) * vtx_h[l]);
+			id++;
+		}
+	}
+	return x;
+}
