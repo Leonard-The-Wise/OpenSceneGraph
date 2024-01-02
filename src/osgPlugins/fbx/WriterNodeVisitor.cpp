@@ -482,6 +482,13 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
         unsigned int vertexIndex = it->first.vertexIndex;
         unsigned int normalIndex = it->first.normalIndex;
 
+        osg::Matrix rotateMatrix;
+        if (dynamic_cast<const RigGeometry*>(pGeometry))
+            rotateMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS); // Fix rigged mesh rotation
+
+        if (!pGeometry)
+            continue;
+
         const osg::Array * basevecs = pGeometry->getVertexArray();
         assert(basevecs);
         if (!basevecs || basevecs->getNumElements()==0)
@@ -501,98 +508,35 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
         case osg::Array::Vec4ArrayType:
         {
             const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
         case osg::Array::Vec4dArrayType:
         {
             const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
-        case osg::Array::Vec4uiArrayType:
-        {
-            const osg::Vec4ui& vec = (*static_cast<const osg::Vec4uiArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
-            break;
-        }
-        case osg::Array::Vec4usArrayType:
-        {
-            const osg::Vec4us& vec = (*static_cast<const osg::Vec4usArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
-            break;
-        }
-        case osg::Array::Vec4ubArrayType:
-        {
-            const osg::Vec4ub& vec = (*static_cast<const osg::Vec4ubArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
-            break;
-        }
-        case osg::Array::Vec4sArrayType:
-        {
-            const osg::Vec4s& vec = (*static_cast<const osg::Vec4sArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
-            break;
-        }
-        case osg::Array::Vec4bArrayType:
-        {
-            const osg::Vec4b& vec = (*static_cast<const osg::Vec4bArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z(), vec.w());
-            break;
-        }
-
         case osg::Array::Vec3ArrayType:
         {
             const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
         case osg::Array::Vec3dArrayType:
         {
             const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
-            break;
-        }
-        case osg::Array::Vec3uiArrayType:
-        {
-            const osg::Vec3ui& vec = (*static_cast<const osg::Vec3uiArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
-            break;
-        }
-        case osg::Array::Vec3usArrayType:
-        {
-            const osg::Vec3us& vec = (*static_cast<const osg::Vec3usArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
-            break;
-        }
-        case osg::Array::Vec3ubArrayType:
-        {
-            const osg::Vec3ub& vec = (*static_cast<const osg::Vec3ubArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
-            break;
-        }
-        case osg::Array::Vec3iArrayType:
-        {
-            const osg::Vec3i& vec = (*static_cast<const osg::Vec3iArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
-            break;
-        }
-        case osg::Array::Vec3sArrayType:
-        {
-            const osg::Vec3s& vec = (*static_cast<const osg::Vec3sArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
-            break;
-        }
-        case osg::Array::Vec3bArrayType:
-        {
-            const osg::Vec3b& vec = (*static_cast<const osg::Vec3bArray*>(basevecs))[vertexIndex];
-            vertex.Set(vec.x(), vec.y(), vec.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
         default:
         {
             OSG_NOTIFY(osg::FATAL) << "Error parsing vertex array." << std::endl;
-            throw "FATAL: Vertex array is not Vec3 or Vec3d. Not implemented";
+            throw "FATAL: Vertex array is not Vec4 or Vec3 (floats). Not implemented";
         }
         }
 
@@ -603,167 +547,48 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
         if (basenormals && basenormals->getNumElements()>0)
         {
             FbxVector4 normal;
+            bool failed = false;
 
             switch (basenormals->getType())
             {
             case osg::Array::Vec4ArrayType:
             {
                 const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
+                osg::Vec4 vecf = vec * rotateMatrix;
+                normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
                 break;
             }
             case osg::Array::Vec4dArrayType:
             {
                 const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4uiArrayType:
-            {
-                const osg::Vec4ui& vec = (*static_cast<const osg::Vec4uiArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4usArrayType:
-            {
-                const osg::Vec4us& vec = (*static_cast<const osg::Vec4usArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4ubArrayType:
-            {
-                const osg::Vec4ub& vec = (*static_cast<const osg::Vec4ubArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4iArrayType:
-            {
-                const osg::Vec4i& vec = (*static_cast<const osg::Vec4iArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4sArrayType:
-            {
-                const osg::Vec4s& vec = (*static_cast<const osg::Vec4sArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4bArrayType:
-            {
-                const osg::Vec4b& vec = (*static_cast<const osg::Vec4bArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z(), vec.w());
+                osg::Vec4d vecf = vec * rotateMatrix;
+                normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
                 break;
             }
             case osg::Array::Vec3ArrayType:
             {
                 const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
+                osg::Vec3 vecf = vec * rotateMatrix;
+                normal.Set(vecf.x(), vecf.y(), vecf.z());
                 break;
             }
             case osg::Array::Vec3dArrayType:
             {
                 const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3uiArrayType:
-            {
-                const osg::Vec3ui& vec = (*static_cast<const osg::Vec3uiArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3usArrayType:
-            {
-                const osg::Vec3us& vec = (*static_cast<const osg::Vec3usArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3ubArrayType:
-            {
-                const osg::Vec3ub& vec = (*static_cast<const osg::Vec3ubArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3iArrayType:
-            {
-                const osg::Vec3i& vec = (*static_cast<const osg::Vec3iArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3sArrayType:
-            {
-                const osg::Vec3s& vec = (*static_cast<const osg::Vec3sArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3bArrayType:
-            {
-                const osg::Vec3b& vec = (*static_cast<const osg::Vec3bArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec2ArrayType:
-            {
-                const osg::Vec2& vec = (*static_cast<const osg::Vec2Array*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2dArrayType:
-            {
-                const osg::Vec2d& vec = (*static_cast<const osg::Vec2dArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2uiArrayType:
-            {
-                const osg::Vec2ui& vec = (*static_cast<const osg::Vec2uiArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2usArrayType:
-            {
-                const osg::Vec2us& vec = (*static_cast<const osg::Vec2usArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2ubArrayType:
-            {
-                const osg::Vec2ub& vec = (*static_cast<const osg::Vec2ubArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2iArrayType:
-            {
-                const osg::Vec2i& vec = (*static_cast<const osg::Vec2iArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2sArrayType:
-            {
-                const osg::Vec2s& vec = (*static_cast<const osg::Vec2sArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2bArrayType:
-            {
-                const osg::Vec2b& vec = (*static_cast<const osg::Vec2bArray*>(basenormals))[normalIndex];
-                normal.Set(vec.x(), vec.y(), 0.0);
+                osg::Vec3d vecf = vec * rotateMatrix;
+                normal.Set(vecf.x(), vecf.y(), vecf.z());
                 break;
             }
             default:
             {
-                OSG_NOTIFY(osg::FATAL) << "Error parsing normal array." << std::endl;
-                throw "FATAL: Normal array is not Vec3 or Vec3d. Not implemented";
+                OSG_DEBUG << "DEBUG: Error parsing normal array." << std::endl;
+                failed = true;
+                break;
             }
             }
 
-            //switch (pGeometry->getNormalBinding())
-            //{
-            //case osg::Geometry::BIND_PER_PRIMITIVE_SET:
-            //case osg::Geometry::BIND_PER_VERTEX:
-            //    break;
-            //}
-            lLayerElementNormal->GetDirectArray().SetAt(it->second, normal);
+            if (!failed)
+                lLayerElementNormal->GetDirectArray().SetAt(it->second, normal);
         }
 
         if (texcoords)
@@ -825,7 +650,7 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
                 default:
                 {
                     OSG_NOTIFY(osg::FATAL) << "Error parsing texcoord array." << std::endl;
-                    throw "FATAL: Texture coords array is not Vec2 or Vec2d. Not implemented";
+                    throw "FATAL: Texture coords array is not Vec2. Not implemented";
                 }
                 }
 
@@ -848,6 +673,7 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
         if (tangents && tangents->getNumElements() > 0)
         {
             FbxVector4 tangent;
+            bool failed = false;
 
             switch (tangents->getType())
             {
@@ -863,42 +689,6 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
                 tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
                 break;
             }
-            case osg::Array::Vec4uiArrayType:
-            {
-                const osg::Vec4ui& vec = (*static_cast<const osg::Vec4uiArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4usArrayType:
-            {
-                const osg::Vec4us& vec = (*static_cast<const osg::Vec4usArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4ubArrayType:
-            {
-                const osg::Vec4ub& vec = (*static_cast<const osg::Vec4ubArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4iArrayType:
-            {
-                const osg::Vec4i& vec = (*static_cast<const osg::Vec4iArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4sArrayType:
-            {
-                const osg::Vec4s& vec = (*static_cast<const osg::Vec4sArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
-            case osg::Array::Vec4bArrayType:
-            {
-                const osg::Vec4b& vec = (*static_cast<const osg::Vec4bArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
-                break;
-            }
             case osg::Array::Vec3ArrayType:
             {
                 const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(tangents))[vertexIndex];
@@ -908,42 +698,6 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
             case osg::Array::Vec3dArrayType:
             {
                 const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3uiArrayType:
-            {
-                const osg::Vec3ui& vec = (*static_cast<const osg::Vec3uiArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3usArrayType:
-            {
-                const osg::Vec3us& vec = (*static_cast<const osg::Vec3usArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3ubArrayType:
-            {
-                const osg::Vec3ub& vec = (*static_cast<const osg::Vec3ubArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3iArrayType:
-            {
-                const osg::Vec3i& vec = (*static_cast<const osg::Vec3iArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3sArrayType:
-            {
-                const osg::Vec3s& vec = (*static_cast<const osg::Vec3sArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
-                break;
-            }
-            case osg::Array::Vec3bArrayType:
-            {
-                const osg::Vec3b& vec = (*static_cast<const osg::Vec3bArray*>(tangents))[vertexIndex];
                 tangent.Set(vec.x(), vec.y(), vec.z());
                 break;
             }
@@ -959,50 +713,16 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
                 tangent.Set(vec.x(), vec.y(), 0.0);
                 break;
             }
-            case osg::Array::Vec2uiArrayType:
-            {
-                const osg::Vec2ui& vec = (*static_cast<const osg::Vec2uiArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2usArrayType:
-            {
-                const osg::Vec2us& vec = (*static_cast<const osg::Vec2usArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2ubArrayType:
-            {
-                const osg::Vec2ub& vec = (*static_cast<const osg::Vec2ubArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2iArrayType:
-            {
-                const osg::Vec2i& vec = (*static_cast<const osg::Vec2iArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2sArrayType:
-            {
-                const osg::Vec2s& vec = (*static_cast<const osg::Vec2sArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
-            case osg::Array::Vec2bArrayType:
-            {
-                const osg::Vec2b& vec = (*static_cast<const osg::Vec2bArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), 0.0);
-                break;
-            }
             default:
             {
-                OSG_NOTIFY(osg::FATAL) << "Error parsing tangent array." << std::endl;
-                throw "FATAL: Tangent array is not Vec3 or Vec3d. Not implemented";
+                OSG_DEBUG << "Error parsing tangent array." << std::endl;
+                failed = true;
+                break;
             }
             }
 
-            lTangentLayer->GetDirectArray().SetAt(it->second, tangent);
+            if (!failed)
+                lTangentLayer->GetDirectArray().SetAt(it->second, tangent);
         }
     }
 }
@@ -1091,7 +811,7 @@ void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vi
         skinDeformer->AddCluster(cluster);
 
         osg::Matrixd osgInvBindMatrix = Matrix::inverse(bone->getInvBindMatrixInSkeletonSpace());
-        osgInvBindMatrix *= _firstMatrix;  // Multiplication order matters
+        //osgInvBindMatrix *= _firstMatrix;  // Multiplication order matters
 
         FbxAMatrix fbxInvBindMatrix;
         for (int row = 0; row < 4; ++row) {
@@ -1101,6 +821,7 @@ void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vi
         }
         
         cluster->SetTransformLinkMatrix(fbxInvBindMatrix);
+        //cluster->SetTransformMatrix(fbxInvBindMatrix);
     }
 
     fbxMesh->AddDeformer(skinDeformer);

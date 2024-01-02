@@ -420,7 +420,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
             newObject->setUserValue("firstMatrix", pop);
 
             // Fix rotate
-            matrix.postMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
+            matrix.preMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
             _firstMatrix = false;
         }
 
