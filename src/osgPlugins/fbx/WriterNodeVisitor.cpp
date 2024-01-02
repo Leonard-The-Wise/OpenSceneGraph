@@ -1257,14 +1257,14 @@ void WriterNodeVisitor::apply(osg::MatrixTransform& node)
     ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
 
     if (skeleton)
-        nodeName = node.getName().empty() ? "_rootJoint" : node.getName();
+        nodeName = node.getName().empty() ? "DefaultSkeleton" : node.getName();
     else if (bone)
         nodeName = node.getName().empty() ? "DefaultBone" : node.getName();
     else
         nodeName = node.getName().empty() ? "DefaultTransform" : node.getName();
 
     FbxNode* parent = _curFbxNode;
-    _curFbxNode = FbxNode::Create(_pSdkManager, skeleton ? "MainSkeleton" : nodeName.c_str());
+    _curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
     parent->AddChild(_curFbxNode);
 
     // Get custom parameter on node to first Matrix. If we are the first, also save the current transform
