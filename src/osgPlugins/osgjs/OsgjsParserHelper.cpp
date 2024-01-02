@@ -210,17 +210,16 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 		int readOffset = (*elementsNode).contains("Offset") ? (*elementsNode)["Offset"].get<int>() : 0;
 		int totalElements = itemCount * elementsPerItem;
 		size_t totalBytesSize = static_cast<size_t>(totalElements * elementTypeSize + readOffset);
-		std::vector<uint8_t> elementsBytes;
-		std::ignore = fileCache.getFileBuffer(fileName, elementsBytes);
-		std::vector<uint8_t>* elementsBytesConverted = nullptr;
+		const std::vector<uint8_t>* elementsBytes = fileCache.getFileBuffer(fileName);
+		const std::vector<uint8_t>* elementsBytesConverted = nullptr;
 		
-		if (!elementsBytes.empty())
+		if (!elementsBytes->empty())
 		{
 			// Verify size - only valid for non-compressed items
-			if ((elementsBytes.size() < totalBytesSize) && !(*elementsNode).contains("Encoding"))
+			if ((elementsBytes->size() < totalBytesSize) && !(*elementsNode).contains("Encoding"))
 			{
 				OSG_WARN << "WARNING: Error reading " << fileName << ". " <<
-					"File has incorrect size. [expected = " << totalBytesSize << ", found = " << elementsBytes.size() << "]" << std::endl;
+					"File has incorrect size. [expected = " << totalBytesSize << ", found = " << elementsBytes->size() << "]" << std::endl;
 				return nullptr;
 			}
 
@@ -228,8 +227,8 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			if ((*elementsNode).contains("Encoding") && (*elementsNode)["File"].get<std::string>() != "varint")
 			{
 				isVarintEncoded = true;
-				elementsBytesConverted = decodeVarintVector(elementsBytes, arrayType, static_cast<size_t>(itemCount * elementsPerItem), readOffset);
-				elementsBytes = *elementsBytesConverted;
+				elementsBytesConverted = decodeVarintVector(*elementsBytes, arrayType, static_cast<size_t>(itemCount * elementsPerItem), readOffset);
+				elementsBytes = elementsBytesConverted;
 				readOffset = 0;
 			}
 
@@ -250,9 +249,9 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 					{
 					case Array::UByteArrayType:
 					{
-						std::vector<uint8_t> elementsDecodeCopy = std::vector<uint8_t>(elementsBytes.begin() + readOffset, elementsBytes.end());
+						std::vector<uint8_t> elementsDecodeCopy = std::vector<uint8_t>(elementsBytes->begin() + readOffset, elementsBytes->end());
 						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
-						decodeDelta<uint8_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeDelta<uint8_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeImplicit<uint8_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeWatermark<uint8_t>(elementsDecodeCopy, magic);
 
@@ -264,13 +263,13 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 
 					case Array::UShortArrayType:
 					{
-						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes.data());
+						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes->data());
 						std::vector<uint16_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(shortData[i]);
 
 						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
-						decodeDelta<uint16_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeDelta<uint16_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeImplicit<uint16_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
 
@@ -281,13 +280,13 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 					}
 					case Array::UIntArrayType:
 					{
-						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes.data());
+						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes->data());
 						std::vector<uint32_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(intData[i]);
 
 						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
-						decodeDelta<uint32_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k); 
 						elementsDecodeCopy = decodeImplicit<uint32_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
 
@@ -310,22 +309,27 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 					{
 					case Array::UByteArrayType:
 					{
-						decodeDelta(elementsBytes, k);
-						elementsBytes = decodeWatermark(elementsBytes, magic);
+						const uint8_t* shortData = reinterpret_cast<const uint8_t*>(elementsBytes->data());
+						std::vector<uint8_t> elementsDecodeCopy;
+						for (size_t i = 0; i < totalElements; ++i)
+							elementsDecodeCopy.push_back(shortData[i]);
 
-						for (auto& element : elementsBytes)
+						elementsDecodeCopy = decodeDelta<uint8_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeWatermark<uint8_t>(elementsDecodeCopy, magic);
+
+						for (auto& element : elementsDecodeCopy)
 							dynamic_cast<UByteArray*>(returnArray.get())->push_back(element);
 
 						break;
 					}
 					case Array::UShortArrayType:
 					{
-						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes.data());
+						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes->data());
 						std::vector<uint16_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(shortData[i]);
 
-						decodeDelta<uint16_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeDelta<uint16_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
 
 						for (auto& element : elementsDecodeCopy)
@@ -335,12 +339,12 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 					}
 					case Array::UIntArrayType:
 					{
-						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes.data());
+						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes->data());
 						std::vector<uint32_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(intData[i]);
 
-						decodeDelta<uint32_t>(elementsDecodeCopy, k);
+						elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
 
 						for (auto& element : elementsDecodeCopy)
@@ -368,7 +372,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			{
 			case Array::FloatArrayType:
 			{
-				const float* floatData = reinterpret_cast<const float*>(elementsBytes.data() + readOffset);
+				const float* floatData = reinterpret_cast<const float*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<FloatArray*>(returnArray.get())->push_back(floatData[i]);
 				}
@@ -376,7 +380,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::ByteArrayType:
 			{
-				const int8_t* byteData = reinterpret_cast<const int8_t*>(elementsBytes.data() + readOffset);
+				const int8_t* byteData = reinterpret_cast<const int8_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<ByteArray*>(returnArray.get())->push_back(byteData[i]);
 				}
@@ -384,7 +388,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::UByteArrayType:
 			{
-				const uint8_t* ubyteData = reinterpret_cast<const uint8_t*>(elementsBytes.data() + readOffset);
+				const uint8_t* ubyteData = reinterpret_cast<const uint8_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<UByteArray*>(returnArray.get())->push_back(ubyteData[i]);
 				}
@@ -392,7 +396,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::ShortArrayType:
 			{
-				const int16_t* shortData = reinterpret_cast<const int16_t*>(elementsBytes.data() + readOffset);
+				const int16_t* shortData = reinterpret_cast<const int16_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<ShortArray*>(returnArray.get())->push_back(shortData[i]);
 				}
@@ -400,7 +404,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::UShortArrayType:
 			{
-				const uint16_t* ushortData = reinterpret_cast<const uint16_t*>(elementsBytes.data() + readOffset);
+				const uint16_t* ushortData = reinterpret_cast<const uint16_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<UShortArray*>(returnArray.get())->push_back(ushortData[i]);
 				}
@@ -408,7 +412,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::IntArrayType:
 			{
-				const int32_t* intData = reinterpret_cast<const int32_t*>(elementsBytes.data() + readOffset);
+				const int32_t* intData = reinterpret_cast<const int32_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<IntArray*>(returnArray.get())->push_back(intData[i]);
 				}
@@ -416,7 +420,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::UIntArrayType:
 			{
-				const uint16_t* uintData = reinterpret_cast<const uint16_t*>(elementsBytes.data() + readOffset);
+				const uint16_t* uintData = reinterpret_cast<const uint16_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<UIntArray*>(returnArray.get())->push_back(uintData[i]);
 				}
@@ -1656,14 +1660,19 @@ ref_ptr<Array> ParserHelper::decastVector(const ref_ptr<Array> toRecast)
 
 
 template <typename T>
-void ParserHelper::decodeDelta(std::vector<T>& t, int e)
+std::vector<T> ParserHelper::decodeDelta(const std::vector<T>& input, int e)
 {
-	if (t.empty() || e >= t.size()) return;
+	std::vector<T> t = input;
+	std::vector<T> tEmpty;
+	if (t.empty() || e >= t.size()) 
+		return tEmpty;
 
 	uint32_t r = t[e];
 	for (int a = e + 1; a < t.size(); ++a) {
 		r = t[a] = r + (t[a] >> 1 ^ -static_cast<int>(1 & t[a]));
 	}
+
+	return t;
 }
 
 template <typename T>
@@ -1684,20 +1693,21 @@ std::vector<T> ParserHelper::decodeImplicit(const std::vector<T>& t, int n)
 		uint32_t d = 32;
 		uint32_t p = h * d;
 
-		//if (p >= e.size())
-		//	break;
+		if (p >= e.size())
+		{
+			OSG_FATAL << "FATAL ERROR: While decoding indices - step 2." << std::endl;
+			throw "Exiting...";
+		}
 
 		uint32_t f = (h == s - 1) ? u : 0;
 		uint32_t g1 = f;
 
 		while (g1 < d) 
 		{
-			//if (n >= t.size())
-			//	break;
-
 			if (c & (l >> g1)) 
 			{
-				e[p] = t[n++];
+				e[p] = t[n];
+				n++;
 			}
 			else 
 			{
@@ -1753,6 +1763,13 @@ osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T> indic
 			unsigned int l = (*indices)[o + 1];
 			unsigned int h = (*indices)[o + 2];
 			unsigned int c = (*indices)[o + 3];
+
+			if (c > r.size())
+			{
+				OSG_FATAL << "FATAL ERROR: While decoding vertices." << std::endl;
+				throw "Exiting...";
+			}
+
 			if (1 != r[c])
 			{
 				r[c] = 1;

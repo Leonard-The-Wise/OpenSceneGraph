@@ -157,6 +157,28 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 localOptions.varint = true;
             }
 
+            if (pre_equals == "disableIndexDecompress")
+            {
+                localOptions.disableIndexDecompress = true;
+            }
+
+            if (pre_equals == "rebuildMaterials")
+            {
+                localOptions.rebuildMaterials = true;
+            }
+
+            if (pre_equals == "ignoreGzExtension")
+            {
+                localOptions.ignoreGzExtension = true;
+            }
+
+            if (pre_equals == "additionalSourceDir")
+            {
+                std::string path = post_equals;
+                path.erase(std::remove(path.begin(), path.end(), '\"'), path.end());
+                localOptions.additionalSourceDirs.push_back(path);
+            }
+
             if (pre_equals == "resizeTextureUpToPowerOf2" && post_equals.length() > 0)
             {
                 int value = atoi(post_equals.c_str());
@@ -204,7 +226,7 @@ void ReaderWriterJSON::getModelFiles(const json& value, std::set<std::string>& F
     }
 }
 
-osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input) const
+osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const OptionsStruct& options) const
 {
 
 #ifdef DEBUG
@@ -244,6 +266,9 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input) const
 
         osgJSONParser::FileCache fileCache(files, extraDirSearch);
         nodeParser.setFileCache(fileCache);
+
+        if (options.disableIndexDecompress)
+            nodeParser.setNeedDecodeIndices(false);
 
         osg::notify(osg::ALWAYS) << "[OSGJS] Parsing Object tree..." << std::endl;
         rootNode = nodeParser.parseObjectTree(input["osg.Node"]);
@@ -296,7 +321,9 @@ osgDB::ReaderWriter::ReadResult ReaderWriterJSON::readNode(const std::string& fi
 
         osg::notify(osg::ALWAYS) << "[OSGJS] Reading \"" << fileName << "\"..." << std::endl;
         
-        return parseOsgjs(doc);
+        OptionsStruct _options = parseOptions(options);
+
+        return parseOsgjs(doc, _options);
     }
 
     return ReadResult::FILE_NOT_HANDLED;

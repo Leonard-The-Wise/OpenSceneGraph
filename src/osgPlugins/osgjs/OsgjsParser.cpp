@@ -235,7 +235,15 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
     }
     case UserDataContainerType::UserData:
     {
-        ref_ptr<DefaultUserDataContainer> udc = new DefaultUserDataContainer;
+        const DefaultUserDataContainer* oldUdc = dynamic_cast<DefaultUserDataContainer*>(currentObject->getUserDataContainer());
+        ref_ptr<DefaultUserDataContainer> udc;
+        if (!oldUdc)
+        {
+            udc = new DefaultUserDataContainer;
+        }
+        else
+            udc = new DefaultUserDataContainer(*oldUdc);
+
         if (currentJSONNode.contains("Name"))
             udc->setName(currentJSONNode["Name"]);
 
@@ -402,6 +410,16 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
         // Fix rotate
         if (_firstMatrix)
         {
+            std::stringstream ss;
+            for (int i = 0; i < 16; i++)
+                ss << matrix(i / 4, i % 4) << ",";
+
+            // Add first matrix as user parameter
+            std::string pop = ss.str();
+            pop.pop_back();
+            newObject->setUserValue("firstMatrix", pop);
+
+            // Fix rotate
             matrix.postMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
             _firstMatrix = false;
         }

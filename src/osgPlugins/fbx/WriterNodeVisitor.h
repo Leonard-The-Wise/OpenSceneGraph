@@ -287,6 +287,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
         RiggedMeshMap _riggedMeshMap;
         MorphedMeshMap _MorphedMeshMap;
         BoneNodeMap _boneNodeMap;
+        osg::Matrix _firstMatrix;
 };
 
 // end namespace pluginfbx

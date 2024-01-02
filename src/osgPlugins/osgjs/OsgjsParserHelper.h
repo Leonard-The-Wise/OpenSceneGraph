@@ -55,7 +55,7 @@ namespace osgJSONParser
 		static osg::ref_ptr<osg::Array> decastVector(const osg::ref_ptr<osg::Array> toRecast);
 
 		template <typename T>
-		static void decodeDelta(std::vector<T>& t, int e);
+		static std::vector<T> decodeDelta(const std::vector<T>& input, int e);
 		template <typename T>
 		static std::vector<T> decodeImplicit(const std::vector<T>& t, int n);
 		template <typename T>

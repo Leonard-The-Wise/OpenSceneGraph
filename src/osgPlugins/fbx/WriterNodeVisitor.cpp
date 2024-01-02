@@ -490,6 +490,12 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
         }
         FbxVector4 vertex;
 
+        if (vertexIndex >= basevecs->getNumElements())
+        {
+            OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableIndexDecompress" << std::endl;
+            throw "Exiting without saving.";
+        }
+
         switch (basevecs->getType())
         {
         case osg::Array::Vec4ArrayType:
@@ -1085,7 +1091,7 @@ void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vi
         skinDeformer->AddCluster(cluster);
 
         osg::Matrixd osgInvBindMatrix = Matrix::inverse(bone->getInvBindMatrixInSkeletonSpace());
-        osgInvBindMatrix.postMult(osg::Matrix::rotate(osg::inDegrees(90.0), osg::X_AXIS)); // Fix rotate.
+        osgInvBindMatrix *= _firstMatrix;  // Multiplication order matters
 
         FbxAMatrix fbxInvBindMatrix;
         for (int row = 0; row < 4; ++row) {
@@ -1261,6 +1267,30 @@ void WriterNodeVisitor::apply(osg::MatrixTransform& node)
     _curFbxNode = FbxNode::Create(_pSdkManager, skeleton ? "MainSkeleton" : nodeName.c_str());
     parent->AddChild(_curFbxNode);
 
+    // Get custom parameter on node to first Matrix. If we are the first, also save the current transform
+    // for later (_firstMatrixPostProcess)
+    std::string firstMatrix;
+    const DefaultUserDataContainer* udc = dynamic_cast<DefaultUserDataContainer*>(node.getUserDataContainer());
+    if (udc && udc->getUserValue("firstMatrix", firstMatrix))
+    {
+        std::vector<double> values;
+        std::stringstream ss(firstMatrix);
+        std::string item;
+
+        while (std::getline(ss, item, ',')) {
+            values.push_back(std::stod(item));
+        }
+
+        if (values.size() != 16) {
+            throw std::runtime_error("Incorrect number of elements to osg::Matrix!");
+        }
+
+        for (int i = 0; i < 16; ++i) {
+            _firstMatrix(i / 4, i % 4) = values[i];
+        }
+    }
+
+    // Process Skeleton and Bones
     if (skeleton || bone)
     {
         FbxSkeleton* fbxSkel = FbxSkeleton::Create(_curFbxNode, nodeName.c_str());
@@ -1271,6 +1301,7 @@ void WriterNodeVisitor::apply(osg::MatrixTransform& node)
             _boneNodeMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));
     }
 
+    // Set transforms for node
     osg::Matrix matrix = node.getMatrix();
 
     osg::Vec3d pos, scl;
