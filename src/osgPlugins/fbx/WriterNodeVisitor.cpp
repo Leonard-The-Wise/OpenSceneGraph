@@ -499,12 +499,19 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
 
         if (vertexIndex >= basevecs->getNumElements())
         {
-            OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableIndexDecompress" << std::endl;
+            OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)" << std::endl;
             throw "Exiting without saving.";
         }
 
         switch (basevecs->getType())
         {
+        case osg::Array::Vec4dArrayType:
+        {
+            const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basevecs))[vertexIndex];
+            osg::Vec4d vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            break;
+        }
         case osg::Array::Vec4ArrayType:
         {
             const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basevecs))[vertexIndex];
@@ -512,10 +519,59 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
             vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
-        case osg::Array::Vec4dArrayType:
+        case osg::Array::Vec4ubArrayType:
         {
-            const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basevecs))[vertexIndex];
+            const osg::Vec4ub& vect = (*static_cast<const osg::Vec4ubArray*>(basevecs))[vertexIndex];
+            const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
             osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+            break;
+        }
+        case osg::Array::Vec4usArrayType:
+        {
+            const osg::Vec4us& vect = (*static_cast<const osg::Vec4usArray*>(basevecs))[vertexIndex];
+            const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+            break;
+        }
+        case osg::Array::Vec4uiArrayType:
+        {
+            const osg::Vec4ui& vect = (*static_cast<const osg::Vec4uiArray*>(basevecs))[vertexIndex];
+            const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+            break;
+        }
+        case osg::Array::Vec4bArrayType:
+        {
+            const osg::Vec4b& vect = (*static_cast<const osg::Vec4bArray*>(basevecs))[vertexIndex];
+            const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+            break;
+        }
+        case osg::Array::Vec4sArrayType:
+        {
+            const osg::Vec4s& vect = (*static_cast<const osg::Vec4sArray*>(basevecs))[vertexIndex];
+            const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+            break;
+        }
+        case osg::Array::Vec4iArrayType:
+        {
+            const osg::Vec4i& vect = (*static_cast<const osg::Vec4iArray*>(basevecs))[vertexIndex];
+            const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
+            osg::Vec4 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+            break;
+        }
+
+        case osg::Array::Vec3dArrayType:
+        {
+            const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basevecs))[vertexIndex];
+            osg::Vec3 vecf = vec * rotateMatrix;
             vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
@@ -526,17 +582,58 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
             vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
-        case osg::Array::Vec3dArrayType:
+        case osg::Array::Vec3ubArrayType:
         {
-            const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basevecs))[vertexIndex];
+            const osg::Vec3ub& vect = (*static_cast<const osg::Vec3ubArray*>(basevecs))[vertexIndex];
+            const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
             osg::Vec3 vecf = vec * rotateMatrix;
             vertex.Set(vecf.x(), vecf.y(), vecf.z());
             break;
         }
+        case osg::Array::Vec3usArrayType:
+        {
+            const osg::Vec3us& vect = (*static_cast<const osg::Vec3usArray*>(basevecs))[vertexIndex];
+            const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            break;
+        }
+        case osg::Array::Vec3uiArrayType:
+        {
+            const osg::Vec3ui& vect = (*static_cast<const osg::Vec3uiArray*>(basevecs))[vertexIndex];
+            const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            break;
+        }
+        case osg::Array::Vec3bArrayType:
+        {
+            const osg::Vec3b& vect = (*static_cast<const osg::Vec3bArray*>(basevecs))[vertexIndex];
+            const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            break;
+        }
+        case osg::Array::Vec3sArrayType:
+        {
+            const osg::Vec3s& vect = (*static_cast<const osg::Vec3sArray*>(basevecs))[vertexIndex];
+            const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            break;
+        }
+        case osg::Array::Vec3iArrayType:
+        {
+            const osg::Vec3i& vect = (*static_cast<const osg::Vec3iArray*>(basevecs))[vertexIndex];
+            const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
+            osg::Vec3 vecf = vec * rotateMatrix;
+            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            break;
+        }        
         default:
         {
             OSG_NOTIFY(osg::FATAL) << "Error parsing vertex array." << std::endl;
-            throw "FATAL: Vertex array is not Vec4 or Vec3 (floats). Not implemented";
+            throw "FATAL: Vertex array is not Vec4 or Vec3. Not implemented.";
         }
         }
 

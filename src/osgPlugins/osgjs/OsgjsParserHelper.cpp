@@ -207,11 +207,15 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 	{
 		std::string fileName = (*elementsNode)["File"].get<std::string>();
 		int itemCount = (*elementsNode).contains("Size") ? (*elementsNode)["Size"].get<int>() : 0;
+		if (itemCount == 0)
+			return nullptr;
+
 		int readOffset = (*elementsNode).contains("Offset") ? (*elementsNode)["Offset"].get<int>() : 0;
 		int totalElements = itemCount * elementsPerItem;
 		size_t totalBytesSize = static_cast<size_t>(totalElements * elementTypeSize + readOffset);
 		const std::vector<uint8_t>* elementsBytes = fileCache.getFileBuffer(fileName);
 		const std::vector<uint8_t>* elementsBytesConverted = nullptr;
+
 		
 		if (!elementsBytes->empty())
 		{
@@ -233,9 +237,10 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 
 			// Decode indexes when necessary
-			if (needDecodeIndices)
+			if (needDecodeIndices && !elementsBytes->empty())
 			{
 				int k = 0;
+				bool decodeFail = false;
 
 				switch (drawMode)
 				{
@@ -253,6 +258,11 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
 						elementsDecodeCopy = decodeDelta<uint8_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeImplicit<uint8_t>(elementsDecodeCopy, k);
+						if (elementsDecodeCopy.empty())
+						{
+							decodeFail = true;
+							break;
+						}
 						elementsDecodeCopy = decodeWatermark<uint8_t>(elementsDecodeCopy, magic);
 
 						for (auto& element : elementsDecodeCopy)
@@ -271,6 +281,11 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
 						elementsDecodeCopy = decodeDelta<uint16_t>(elementsDecodeCopy, k);
 						elementsDecodeCopy = decodeImplicit<uint16_t>(elementsDecodeCopy, k);
+						if (elementsDecodeCopy.empty())
+						{
+							decodeFail = true;
+							break;
+						}
 						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
 
 						for (auto& element : elementsDecodeCopy)
@@ -288,6 +303,11 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
 						elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k); 
 						elementsDecodeCopy = decodeImplicit<uint32_t>(elementsDecodeCopy, k);
+						if (elementsDecodeCopy.empty())
+						{
+							decodeFail = true;
+							break;
+						}
 						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
 
 						for (auto& element : elementsDecodeCopy)
@@ -362,7 +382,8 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 				}
 				}
 
-				return returnArray;
+				if (!decodeFail)
+					return recastArray(returnArray, static_cast<DesiredVectorSize>(elementsPerItem));
 			}
 
 			// Read and Copy bytes
@@ -606,6 +627,9 @@ osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Ar
 	default:
 		return nullptr;
 	}
+
+	if (!verticesConverted)
+		return nullptr;
 
 	// Decode Quantize
 	switch (verticesConverted->getType())
@@ -1678,6 +1702,7 @@ std::vector<T> ParserHelper::decodeDelta(const std::vector<T>& input, int e)
 template <typename T>
 std::vector<T> ParserHelper::decodeImplicit(const std::vector<T>& t, int n)
 {
+	std::vector<T> vempty;
 	uint32_t eSize = t[IMPLICIT_HEADER_PRIMITIVE_LENGTH];
 	std::vector<T> e(eSize, 0);
 	uint32_t a = t[IMPLICIT_HEADER_EXPECTED_INDEX];
@@ -1694,10 +1719,7 @@ std::vector<T> ParserHelper::decodeImplicit(const std::vector<T>& t, int n)
 		uint32_t p = h * d;
 
 		if (p >= e.size())
-		{
-			OSG_FATAL << "FATAL ERROR: While decoding indices - step 2." << std::endl;
-			throw "Exiting...";
-		}
+			return vempty;
 
 		uint32_t f = (h == s - 1) ? u : 0;
 		uint32_t g1 = f;
@@ -1752,6 +1774,9 @@ osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T> indic
 		std::vector<int> r(n, 0);
 		int a = indices->size() - 1;
 
+		if ((*indices)[0] > r.size() || (*indices)[1] > r.size() || (*indices)[2] > r.size())
+			return nullptr;
+
 		r[(*indices)[0]] = 1;
 		r[(*indices)[1]] = 1;
 		r[(*indices)[2]] = 1;
@@ -1765,10 +1790,7 @@ osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T> indic
 			unsigned int c = (*indices)[o + 3];
 
 			if (c > r.size())
-			{
-				OSG_FATAL << "FATAL ERROR: While decoding vertices." << std::endl;
-				throw "Exiting...";
-			}
+				return nullptr;
 
 			if (1 != r[c])
 			{
