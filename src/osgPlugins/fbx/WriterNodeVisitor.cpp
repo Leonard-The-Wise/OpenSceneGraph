@@ -1056,7 +1056,7 @@ void WriterNodeVisitor::buildFaces(const std::string& name,
 
 void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh)
 {
-    FbxSkin* skinDeformer = FbxSkin::Create(fbxMesh->GetScene(), "");
+    FbxSkin* skinDeformer = FbxSkin::Create(_pSdkManager, "");
 
     for (const auto& influence : vim) 
     {
@@ -1077,7 +1077,7 @@ void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vi
 
         std::stringstream clusterName;
         clusterName << bone->getName() << "_cluster";
-        FbxCluster* cluster = FbxCluster::Create(fbxMesh->GetScene(), clusterName.str().c_str());
+        FbxCluster* cluster = FbxCluster::Create(_pSdkManager, clusterName.str().c_str());
         cluster->SetLink(fbxBoneNode);
         cluster->SetLinkMode(FbxCluster::eNormalize);
 
