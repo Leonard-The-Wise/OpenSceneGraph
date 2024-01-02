@@ -25,6 +25,8 @@
 #include <osgDB/FileNameUtils>
 #include <osgDB/ReaderWriter>
 #include <osgDB/ExternalFileWriter>
+#include <osgAnimation/RigGeometry>
+#include <osgAnimation/MorphGeometry>
 
 #if defined(_MSC_VER)
 #pragma warning( disable : 4505 )
@@ -208,6 +210,10 @@ class WriterNodeVisitor: public osg::NodeVisitor
                         ListTriangle&       listTriangles,
                         bool                texcoords);
 
+        void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
+
+        void buildMeshSkin();
+
         /// Set the layer for texture and Material in layer 0.
         void setLayerTextureAndMaterial(FbxMesh* mesh);
 
@@ -271,6 +277,16 @@ class WriterNodeVisitor: public osg::NodeVisitor
         ListTriangle _listTriangles;
         bool _texcoords;
         unsigned int _drawableNum;
+
+        ///Maintain rigged geometry information to latter processing
+        typedef std::map<osg::ref_ptr<osgAnimation::RigGeometry>, FbxNode*> RiggedMeshMap;      // Maps OSG Rigged Geometry to FBX meshes
+        typedef std::map<osg::ref_ptr<osgAnimation::MorphGeometry>, FbxNode*> MorphedMeshMap;   // Maps OSG Morphed Geometry to FBX meshes
+        typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
+        typedef std::map<std::string, BonePair> BoneNodeMap;   // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
+
+        RiggedMeshMap _riggedMeshMap;
+        MorphedMeshMap _MorphedMeshMap;
+        BoneNodeMap _boneNodeMap;
 };
 
 // end namespace pluginfbx

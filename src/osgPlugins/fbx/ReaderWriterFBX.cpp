@@ -602,7 +602,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         pScene->GetGlobalSettings().SetAxisSystem(axisSystem);
 
         // Ensure the directory exists or else the FBX SDK will fail
-        if (!osgDB::makeDirectoryForFile(filename)) {
+        if (!osgDB::getFilePath(filename).empty() && !osgDB::fileExists(osgDB::getFilePath(filename)) && !osgDB::makeDirectoryForFile(filename)) {
             OSG_NOTICE << "Can't create directory for file '" << filename << "'. FBX SDK may fail creating the file." << std::endl;
         }
 

@@ -399,11 +399,10 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
             ++index;
         }
 
-        // Fix rotate and scale
+        // Fix rotate
         if (_firstMatrix)
         {
             matrix.postMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
-            // matrix.postMult(osg::Matrix::scale(100.0, 100.0, 100.0)); //FIXME: Make optional?
             _firstMatrix = false;
         }
 
