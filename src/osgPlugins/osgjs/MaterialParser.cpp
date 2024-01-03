@@ -7,7 +7,7 @@
 const std::string COMMENT = R"(^\/\/.+)";
 const std::string MESHNAME = R"(^Mesh \"(?'MeshName'\w+)\" uses material \"(?'MaterialName'\w+)\" and has UniqueID \"(?'UniqueID'\d+)\")";
 const std::string MATERIALNAME = R"(^Material \"(?'MaterialName'\w+)\" has ID (?'ID'[\w-]+))";
-const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|]*)";
+const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|]*))";
 
 const jpcre2::select<char>::Regex commentRegEx(COMMENT, PCRE2_FIRSTLINE, jpcre2::JIT_COMPILE);
 const jpcre2::select<char>::Regex meshNameRegEx(MESHNAME, PCRE2_FIRSTLINE, jpcre2::JIT_COMPILE);
@@ -57,6 +57,8 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 				newMesh.MaterialName = captureGroup[0]["MaterialName"];
 				newMesh.UniqueID = stoi(captureGroup[0]["UniqueID"]);
 
+				Meshes.push_back(newMesh);
+
 				continue;
 			}
 
@@ -91,10 +93,12 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 						}
 						else
 						{
-							OSG_DEBUG << "Found unknown texture parameter: " << captureGroup[0]["TextureLayerName"] << std::endl;
+							OSG_WARN << "WARNING: Found unknown texture parameter: " << captureGroup[0]["TextureLayerName"] << std::endl;
 						}
 					}
 				}
+
+				Materials.push_back(newMaterial);
 			}
 		}
 

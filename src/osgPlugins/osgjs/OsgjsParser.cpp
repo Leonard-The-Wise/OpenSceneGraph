@@ -323,6 +323,49 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
+    ref_ptr<StateSet> stateset = new StateSet;
+
+    if (currentJSONNode.contains("RenderingHint"))
+    {
+        stateset->setRenderingHint(StateSet::TRANSPARENT_BIN);
+    }
+
+
+    if (currentJSONNode.contains("TextureAttributeList") && currentJSONNode["TextureAttributeList"].is_array())
+    {
+        for (const auto& child : currentJSONNode["TextureAttributeList"])
+        {
+            // Find subobjects on children nodes - Must be geometry objects.
+            int i = 0;
+            for (auto itr = child.begin(); itr != child.end(); ++itr)
+            {
+                ref_ptr<Object> childTexture;
+                auto found = processObjects.find(itr.key());
+                if (found != processObjects.end() && itr.value().is_object())
+                {
+                    childTexture = found->second(itr.value(), itr.key());
+                }
+                else if (found != processObjects.end() && !itr.value().is_object())
+                {
+                    OSG_WARN << " found a Object JSON node [" << itr.key() <<
+                        "] that is not an object or is malformed." << ADD_KEY_NAME << std::endl;
+                }
+
+                if (!childTexture || !dynamic_pointer_cast<Texture>(childTexture))
+                {
+                    OSG_WARN << "WARNING: invalid texture." << ADD_KEY_NAME
+                        << "[Subkey: " << itr.key()
+                        << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                        << std::endl;
+                }
+                else
+                {
+                    stateset->setTextureAttribute(i, childTexture);
+                }
+            }
+        }
+    }
+
 }
 
 
