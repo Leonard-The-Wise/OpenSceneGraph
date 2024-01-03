@@ -115,6 +115,9 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
         std::string opt;
         while (iss >> opt)
         {
+            if (options->getDatabasePathList().size() > 0)
+                localOptions.baseFilePath = options->getDatabasePathList()[0];
+
             // split opt into pre= and post=
             std::string pre_equals;
             std::string post_equals;
@@ -176,7 +179,7 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
             {
                 std::string path = post_equals;
                 path.erase(std::remove(path.begin(), path.end(), '\"'), path.end());
-                localOptions.additionalSourceDirs.push_back(path);
+                localOptions.additionalSourceDirs.emplace(path);
             }
 
             if (pre_equals == "resizeTextureUpToPowerOf2" && post_equals.length() > 0)
@@ -257,20 +260,19 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
 
         // Get list of files inside the node to build file cache
         std::set<std::string> files;
-        std::set<std::string> extraDirSearch;
         getModelFiles(input, files);
 
         // Build file cache
         if (files.size() > 0)
             osg::notify(osg::ALWAYS) << "[OSGJS] Building model's file cache..." << std::endl;
 
-        osgJSONParser::FileCache fileCache(files, extraDirSearch);
+        osgJSONParser::FileCache fileCache(files, options.additionalSourceDirs);
         nodeParser.setFileCache(fileCache);
+        nodeParser.setFileBasePath(options.baseFilePath);
 
         if (options.disableIndexDecompress)
             nodeParser.setNeedDecodeIndices(false);
 
-        osg::notify(osg::ALWAYS) << "[OSGJS] Parsing Object tree..." << std::endl;
         rootNode = nodeParser.parseObjectTree(input["osg.Node"]);
 
         if (rootNode)
@@ -302,6 +304,7 @@ osgDB::ReaderWriter::ReadResult ReaderWriterJSON::readNode(const std::string& fi
     if (fin)
     {
         osg::ref_ptr<Options> local_opt = options ? static_cast<Options*>(options->clone(osg::CopyOp::SHALLOW_COPY)) : new Options;
+        std::string filepath = osgDB::getFilePath(fileName);
         local_opt->getDatabasePathList().push_front(osgDB::getFilePath(fileName));
 
         json doc;
@@ -321,7 +324,7 @@ osgDB::ReaderWriter::ReadResult ReaderWriterJSON::readNode(const std::string& fi
 
         osg::notify(osg::ALWAYS) << "[OSGJS] Reading \"" << fileName << "\"..." << std::endl;
         
-        OptionsStruct _options = parseOptions(options);
+        OptionsStruct _options = parseOptions(local_opt);
 
         return parseOsgjs(doc, _options);
     }

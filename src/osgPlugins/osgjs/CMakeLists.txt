@@ -2,6 +2,7 @@ SET(TARGET_SRC
     Animation.cpp
     Base64.cpp
     JSON_Objects.cpp
+    MaterialParser.cpp
     OsgjsFileCache.cpp
     OsgjsParser.cpp
     OsgjsParserHelper.cpp
@@ -17,6 +18,7 @@ SET(TARGET_H
     json.hpp
     JSON_Objects.h
     json_stream.h
+    MaterialParser.h
     OsgjsFileCache.h
     OsgjsParser.h
     OsgjsParserHelper.h

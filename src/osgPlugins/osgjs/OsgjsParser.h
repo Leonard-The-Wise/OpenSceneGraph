@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MaterialParser.h"
+
 namespace osgJSONParser
 {
 
@@ -117,6 +119,11 @@ namespace osgJSONParser
             _needDecodeIndices = need;
         }
 
+        inline void setFileBasePath(const std::string& basePath)
+        {
+            _filesBasePath = basePath;
+        }
+
 		osg::ref_ptr<osg::Group> parseObjectTree(const json& firstOsgNodeJSON);
 
 	private:
@@ -124,10 +131,15 @@ namespace osgJSONParser
 		FileCache _fileCache;
         bool _firstMatrix = true;
         bool _needDecodeIndices = true;
+        std::string _filesBasePath;
+
+        MaterialFile _meshMaterials;
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;
         const std::unordered_set<std::string> drawableNodes;
+
+        void buildMaterialFiles();
 
         void lookForChildren(osg::ref_ptr<osg::Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey);
 

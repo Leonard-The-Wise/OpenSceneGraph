@@ -36,6 +36,7 @@
 #include "OsgjsParser.h"
 #include "OsgjsParserHelper.h"
 
+
 using json = nlohmann::json;
 
 // Callback processing function map
@@ -52,6 +53,9 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 
     rootNode->setName("OSGJS-Imported-Scene");
 
+    buildMaterialFiles();
+
+    osg::notify(osg::ALWAYS) << "[OSGJS] Parsing Object tree..." << std::endl;
     if (parseObject(rootNode, firstOsgNodeJSON, "JSON Root"))
         return rootNode;
     else
@@ -65,6 +69,17 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 #define ADD_NODE_NAME (currentJSONNode.contains("Name") ? ("[Name: " + std::string(currentJSONNode["Name"]) + "]") : std::string(""))
 #define ADD_UNIQUE_ID (currentJSONNode.contains("UniqueID") ? ("[UniqueID: " + std::to_string(currentJSONNode["UniqueID"].get<int>()) + "]") : std::string(""))
 #define ADD_KEY_NAME ADD_NODE_KEY << ADD_NODE_NAME << ADD_UNIQUE_ID
+
+void OsgjsParser::buildMaterialFiles() 
+{
+    std::string materialFile = _filesBasePath + std::string("\\materialInfo.txt");
+
+    if (!_meshMaterials.readMaterialFile(materialFile))
+    {
+        OSG_WARN << "INFO: Could not load " << materialFile << ". Objects will be textureless." << std::endl;
+    }
+
+}
 
 void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey)
 {

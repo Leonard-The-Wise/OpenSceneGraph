@@ -19,8 +19,9 @@ public:
         bool rebuildMaterials;
         bool ignoreGzExtension;
         std::vector<std::string> useSpecificBuffer;
-        std::vector<std::string> additionalSourceDirs;
+        std::set<std::string> additionalSourceDirs;
         std::string baseLodURL;
+        std::string baseFilePath;
         OptionsStruct() {
             resizeTextureUpToPowerOf2 = 0;
             useExternalBinaryArray = false;
