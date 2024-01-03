@@ -466,6 +466,12 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
     lTangentLayer->GetDirectArray().SetCount(index_vert.size());
     mesh->GetLayer(0)->SetTangents(lTangentLayer);
 
+    FbxLayerElementVertexColor* lVertexColorLayer = FbxLayerElementVertexColor::Create(mesh, "VertexColors");
+    lVertexColorLayer->SetMappingMode(FbxLayerElement::eByControlPoint);
+    lVertexColorLayer->SetReferenceMode(FbxLayerElement::eDirect);
+    lVertexColorLayer->GetDirectArray().SetCount(index_vert.size());
+    mesh->GetLayer(0)->SetVertexColors(lVertexColorLayer);
+
     FbxLayerElementUV* lUVDiffuseLayer = FbxLayerElementUV::Create(mesh, "DiffuseUV");
 
     if (texcoords)
@@ -509,14 +515,14 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
         {
             const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basevecs))[vertexIndex];
             osg::Vec4d vecf = vec * rotateMatrix;
-            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
             break;
         }
         case osg::Array::Vec4ArrayType:
         {
             const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basevecs))[vertexIndex];
             osg::Vec4 vecf = vec * rotateMatrix;
-            vertex.Set(vecf.x(), vecf.y(), vecf.z());
+            vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
             break;
         }
         case osg::Array::Vec4ubArrayType:
@@ -777,25 +783,29 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
             case osg::Array::Vec4ArrayType:
             {
                 const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
+                osg::Vec4 vecf = vec * rotateMatrix;
+                tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
                 break;
             }
             case osg::Array::Vec4dArrayType:
             {
                 const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z(), vec.w());
+                osg::Vec4 vecf = vec * rotateMatrix;
+                tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
                 break;
             }
             case osg::Array::Vec3ArrayType:
             {
                 const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
+                osg::Vec3 vecf = vec * rotateMatrix;
+                tangent.Set(vecf.x(), vecf.y(), vecf.z());
                 break;
             }
             case osg::Array::Vec3dArrayType:
             {
                 const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(tangents))[vertexIndex];
-                tangent.Set(vec.x(), vec.y(), vec.z());
+                osg::Vec3 vecf = vec * rotateMatrix;
+                tangent.Set(vecf.x(), vecf.y(), vecf.z());
                 break;
             }
             case osg::Array::Vec2ArrayType:
@@ -821,10 +831,382 @@ WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryLi
             if (!failed)
                 lTangentLayer->GetDirectArray().SetAt(it->second, tangent);
         }
+
+        const osg::Array* basecolors = pGeometry->getColorArray();
+
+        if (basecolors && basecolors->getNumElements() > 0)
+        {
+            FbxVector4 color;
+            bool failed = false;
+
+            switch (basecolors->getType())
+            {
+            case osg::Array::Vec4ArrayType:
+            {
+                const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basecolors))[vertexIndex];
+                color.Set(vec.r(), vec.g(), vec.b(), vec.a());
+                break;
+            }
+            case osg::Array::Vec4dArrayType:
+            {
+                const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basecolors))[vertexIndex];
+                color.Set(vec.r(), vec.g(), vec.b(), vec.a());
+                break;
+            }
+            case osg::Array::Vec4ubArrayType:
+            {
+                const osg::Vec4ub& vec = (*static_cast<const osg::Vec4ubArray*>(basevecs))[vertexIndex];
+                color.Set(vec.r() / 255.0, vec.g() / 255.0, vec.b() / 255.0, vec.a() / 255.0);
+                break;
+            }
+            case osg::Array::Vec4bArrayType:
+            {
+                const osg::Vec4b& vec = (*static_cast<const osg::Vec4bArray*>(basevecs))[vertexIndex];
+                color.Set(vec.r() / 255.0, vec.g() / 255.0, vec.b() / 255.0, vec.a() / 255.0);
+                break;
+            }
+
+            default:
+            {
+                OSG_DEBUG << "DEBUG: Error parsing color array." << std::endl;
+                failed = true;
+                break;
+            }
+            }
+
+            if (!failed)
+                lVertexColorLayer->GetDirectArray().SetAt(it->second, color);
+        }
+
     }
 }
 
-void WriterNodeVisitor::buildFaces(const std::string& name,
+
+void WriterNodeVisitor::createMorphTargets(const osgAnimation::MorphGeometry* morphGeometry, FbxMesh* mesh, const osg::Matrix& rotateMatrix)
+{
+    FbxBlendShape* fbxBlendShape = FbxBlendShape::Create(_pSdkManager, morphGeometry->getName().c_str());
+    mesh->AddDeformer(fbxBlendShape);
+
+    for (unsigned int i = 0; i < morphGeometry->getMorphTargetList().size(); ++i)
+    {
+        const osg::Geometry* osgMorphTarget = morphGeometry->getMorphTarget(i).getGeometry();
+        FbxBlendShapeChannel* fbxChannel = FbxBlendShapeChannel::Create(_pSdkManager, osgMorphTarget->getName().c_str());
+
+        std::stringstream ss;
+        ss << osgMorphTarget->getName().c_str() << "_" << i;
+        FbxShape* fbxShape = FbxShape::Create(_pSdkManager, ss.str().c_str());
+        fbxChannel->AddTargetShape(fbxShape);
+
+        // Create vertices
+        const osg::Array* vertices = osgMorphTarget->getVertexArray();
+        if (!vertices)
+            continue;
+
+        fbxShape->InitControlPoints(vertices->getNumElements());
+        FbxVector4* fbxControlPoints = fbxShape->GetControlPoints();
+
+        for (unsigned int j = 0; j < vertices->getNumElements(); j++)
+        {            
+            switch (vertices->getType())
+            {
+            case Array::Vec4dArrayType:
+            {
+                osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(vertices)->at(j);
+                osg::Vec4d vecf = vec * rotateMatrix;
+                fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+                break;
+            }
+            case Array::Vec4ArrayType:
+            {
+                osg::Vec4 vec = dynamic_cast<const Vec4Array*>(vertices)->at(j);
+                osg::Vec4d vecf = vec * rotateMatrix;
+                fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+                break;
+            }
+            case Array::Vec3dArrayType:
+            {
+                osg::Vec3d vec = dynamic_cast<const Vec3dArray*>(vertices)->at(j);
+                osg::Vec3d vecf = vec * rotateMatrix;
+                fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z());
+                break;
+            }
+            case Array::Vec3ArrayType:
+            {
+                osg::Vec3 vec = dynamic_cast<const Vec3Array*>(vertices)->at(j);
+                osg::Vec3d vecf = vec * rotateMatrix;
+                fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z());
+                break;
+            }
+            default:
+            {
+                OSG_FATAL << "Error creating morph target for FbxMesh " << mesh->GetName() << std::endl;
+                throw "Exiting...";
+            }
+            }
+        }
+
+        // Create Normals
+        const osg::Array* normals = osgMorphTarget->getNormalArray();
+
+        if (normals)
+        {
+            FbxLayer* layer = fbxShape->GetLayer(0);
+            int layerNum(0);
+            if (!layer) {
+                layerNum = fbxShape->CreateLayer();
+                layer = fbxShape->GetLayer(0);
+            }
+
+            FbxLayerElementNormal* layerElementNormal = FbxLayerElementNormal::Create(fbxShape, "Normals");
+            layerElementNormal->SetMappingMode(FbxLayerElement::eByControlPoint);
+            layerElementNormal->SetReferenceMode(FbxLayerElement::eDirect);
+            layerElementNormal->GetDirectArray().SetCount(normals->getNumElements());
+
+            for (unsigned int j = 0; j < normals->getNumElements(); ++j)
+            {
+                switch (normals->getType())
+                {
+                case Array::Vec4dArrayType:
+                {
+                    osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(normals)->at(j);
+                    osg::Vec4d vecf = vec * rotateMatrix;
+                    layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
+                    break;
+                }
+                case Array::Vec4ArrayType:
+                {
+                    osg::Vec4 vec = dynamic_cast<const Vec4Array*>(normals)->at(j);
+                    osg::Vec4 vecf = vec * rotateMatrix;
+                    layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
+                    break;
+                }
+                case Array::Vec3dArrayType:
+                {
+                    osg::Vec3d vec = dynamic_cast<const Vec3dArray*>(normals)->at(j);
+                    osg::Vec3 vecf = vec * rotateMatrix;
+                    layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
+                    break;
+                }
+                case Array::Vec3ArrayType:
+                {
+                    osg::Vec3 vec = dynamic_cast<const Vec3Array*>(normals)->at(j);
+                    osg::Vec3 vecf = vec * rotateMatrix;
+                    layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
+                    break;
+                }
+                }
+            }
+
+            layer->SetNormals(layerElementNormal);
+        }
+
+        // Create Colors
+        const osg::Array* colors = osgMorphTarget->getColorArray();
+
+        if (colors)
+        {
+            FbxLayer* layer = fbxShape->GetLayer(0);
+            int layerNum(0);
+            if (!layer) {
+                layerNum = fbxShape->CreateLayer();
+                layer = fbxShape->GetLayer(0);
+            }
+
+            FbxLayerElementVertexColor* layerVertexColors = FbxLayerElementVertexColor::Create(fbxShape, "VertexColors");
+            layerVertexColors->SetMappingMode(FbxLayerElement::eByControlPoint);
+            layerVertexColors->SetReferenceMode(FbxLayerElement::eDirect);
+            layerVertexColors->GetDirectArray().SetCount(colors->getNumElements());
+
+            for (unsigned int j = 0; j < colors->getNumElements(); ++j)
+            {
+                switch (colors->getType())
+                {
+                case Array::Vec4dArrayType:
+                {
+                    osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(colors)->at(j);
+                    layerVertexColors->GetDirectArray().SetAt(j, FbxVector4(vec.r(), vec.g(), vec.b(), vec.a()));
+                    break;
+                }
+                case Array::Vec4ArrayType:
+                {
+                    osg::Vec4 vec = dynamic_cast<const Vec4Array*>(colors)->at(j);
+                    layerVertexColors->GetDirectArray().SetAt(j, FbxVector4(vec.r(), vec.g(), vec.b(), vec.a()));
+                    break;
+                }
+                case Array::Vec4ubArrayType:
+                {
+                    osg::Vec4ub vec = dynamic_cast<const Vec4ubArray*>(colors)->at(j);
+                    layerVertexColors->GetDirectArray().SetAt(j, FbxVector4(vec.r() / 255.0, vec.g() / 255.0, vec.b() / 255.0, vec.a() / 255.0));
+                    break;
+                }
+                case Array::Vec4bArrayType:
+                {
+                    osg::Vec4b vec = dynamic_cast<const Vec4bArray*>(colors)->at(j);
+                    layerVertexColors->GetDirectArray().SetAt(j, FbxVector4(vec.r() / 255.0, vec.g() / 255.0, vec.b() / 255.0, vec.a() / 255.0));
+                    break;
+                }
+                }
+            }
+
+            layer->SetVertexColors(layerVertexColors);
+        }
+
+        // Create tangents
+        const osg::Array* tangents = nullptr;
+        for (auto& attrib : osgMorphTarget->getVertexAttribArrayList())
+        {
+            bool isTangent = false;
+            if (attrib->getUserValue("tangent", isTangent))
+                if (isTangent)
+                {
+                    tangents = attrib;
+                    break;
+                }
+        }
+
+        if (tangents)
+        {
+            FbxLayer* layer = fbxShape->GetLayer(0);
+            int layerNum(0);
+            if (!layer) {
+                layerNum = fbxShape->CreateLayer();
+                layer = fbxShape->GetLayer(0);
+            }
+
+            FbxLayerElementTangent* layerTangents = FbxLayerElementTangent::Create(fbxShape, "Tangents");
+            layerTangents->SetMappingMode(FbxLayerElement::eByControlPoint);
+            layerTangents->SetReferenceMode(FbxLayerElement::eDirect);
+            layerTangents->GetDirectArray().SetCount(tangents->getNumElements());
+
+            for (unsigned int j = 0; j < tangents->getNumElements(); ++j)
+            {
+                switch (tangents->getType())
+                {
+                case Array::Vec4dArrayType:
+                {
+                    osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(tangents)->at(j);
+                    osg::Vec4d vecf = vec * rotateMatrix;
+                    layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
+                    break;
+                }
+                case Array::Vec4ArrayType:
+                {
+                    osg::Vec4 vec = dynamic_cast<const Vec4Array*>(tangents)->at(j);
+                    osg::Vec4 vecf = vec * rotateMatrix;
+                    layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
+                    break;
+                }
+                case Array::Vec3dArrayType:
+                {
+                    osg::Vec3d vec = dynamic_cast<const Vec3dArray*>(tangents)->at(j);
+                    osg::Vec3d vecf = vec * rotateMatrix;
+                    layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
+                    break;
+                }
+                case Array::Vec3ArrayType:
+                {
+                    osg::Vec3 vec = dynamic_cast<const Vec3Array*>(tangents)->at(j);
+                    osg::Vec3 vecf = vec * rotateMatrix;
+                    layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
+                    break;
+                }
+                case Array::Vec2dArrayType:
+                {
+                    osg::Vec2d vec = dynamic_cast<const Vec2dArray*>(tangents)->at(j);
+                    layerTangents->GetDirectArray().SetAt(j, FbxVector4(vec.x(), vec.y(), 0.0));
+                    break;
+                }
+                case Array::Vec2ArrayType:
+                {
+                    osg::Vec2 vec = dynamic_cast<const Vec2Array*>(tangents)->at(j);
+                    layerTangents->GetDirectArray().SetAt(j, FbxVector4(vec.x(), vec.y(), 0.0));
+                    break;
+                }
+                }
+            }
+
+            layer->SetTangents(layerTangents);
+        }
+
+        // Create TexCoords
+        const osg::Array* texCoord = osgMorphTarget->getTexCoordArray(0);
+
+        if (texCoord)
+        {
+            FbxLayer* layer = fbxShape->GetLayer(0);
+            int layerNum(0);
+            if (!layer) {
+                layerNum = fbxShape->CreateLayer();
+                layer = fbxShape->GetLayer(0);
+            }
+
+            FbxLayerElementUV* layerDiffuseUV = FbxLayerElementUV::Create(fbxShape, "UVDiffuse");
+            layerDiffuseUV->SetMappingMode(FbxLayerElement::eByControlPoint);
+            layerDiffuseUV->SetReferenceMode(FbxLayerElement::eDirect);
+            layerDiffuseUV->GetDirectArray().SetCount(texCoord->getNumElements());
+
+            for (unsigned int j = 0; j < texCoord->getNumElements(); ++j)
+            {
+                switch (texCoord->getType())
+                {
+                case Array::Vec2dArrayType:
+                {
+                    osg::Vec2d vec = dynamic_cast<const Vec2dArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2ArrayType:
+                {
+                    osg::Vec2 vec = dynamic_cast<const Vec2Array*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2ubArrayType:
+                {
+                    osg::Vec2ub vec = dynamic_cast<const Vec2ubArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2usArrayType:
+                {
+                    osg::Vec2us vec = dynamic_cast<const Vec2usArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2uiArrayType:
+                {
+                    osg::Vec2ui vec = dynamic_cast<const Vec2uiArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2bArrayType:
+                {
+                    osg::Vec2b vec = dynamic_cast<const Vec2bArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2sArrayType:
+                {
+                    osg::Vec2s vec = dynamic_cast<const Vec2sArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                case Array::Vec2iArrayType:
+                {
+                    osg::Vec2i vec = dynamic_cast<const Vec2iArray*>(texCoord)->at(j);
+                    layerDiffuseUV->GetDirectArray().SetAt(j, FbxVector2(vec.x(), vec.y()));
+                    break;
+                }
+                }
+            }
+
+            layer->SetUVs(layerDiffuseUV);
+        }
+
+    }
+}
+
+void WriterNodeVisitor::buildMesh(const std::string& name,
                                    const GeometryList& geometryList,
                                    ListTriangle&     listTriangles,
                                    bool              texcoords)
@@ -860,6 +1242,23 @@ void WriterNodeVisitor::buildFaces(const std::string& name,
         mesh->EndPolygon();
     }
     setControlPointAndNormalsAndUV(geometryList, index_vert, texcoords, mesh);
+
+    // Since we changed our geometryList to contain only 1 geometry (or Rig or Morph), we can safely pick the first Morph and process
+    // Might need to change this approach in the future.
+    osg::Matrix rotateMatrix;
+    const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(geometryList[0]);
+    if (morph)
+        createMorphTargets(morph, mesh, rotateMatrix);
+
+    // Look for morph geometries inside rig
+    const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(geometryList[0]);
+    if (rig)
+    {
+        const osgAnimation::MorphGeometry* rigMorph = dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry());
+        rotateMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS); // Fix rigged mesh rotation
+        if (rigMorph)
+            createMorphTargets(rigMorph, mesh, rotateMatrix);
+    }
 
 	_geometryList.clear();
 	_listTriangles.clear();
@@ -1020,7 +1419,7 @@ void WriterNodeVisitor::apply(osg::Geometry& geometry)
         _curFbxNode->AddChild(nodeFBX);
         _curFbxNode = nodeFBX;
 
-        buildFaces(geometry.getName(), _geometryList, _listTriangles, _texcoords);
+        buildMesh(geometry.getName(), _geometryList, _listTriangles, _texcoords);
 
         if (rigGeometry)
             _riggedMeshMap.emplace(rigGeometry, nodeFBX);
@@ -1051,7 +1450,7 @@ void WriterNodeVisitor::apply(osg::Group& node)
 
         if (_listTriangles.size() > 0)
         {
-            buildFaces(node.getName(), _geometryList, _listTriangles, _texcoords);
+            buildMesh(node.getName(), _geometryList, _listTriangles, _texcoords);
         }
 
         _curFbxNode = parent;

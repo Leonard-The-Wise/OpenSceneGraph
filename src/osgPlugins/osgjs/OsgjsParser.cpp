@@ -502,7 +502,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     if (currentJSONNode.contains("Name"))
         newGeometry->setName(currentJSONNode["Name"]);
 
-    const json* vertexAttributeList = &currentJSONNode["VertexAttributeList"];
+    const json* vertexAttributeList = currentJSONNode.contains("VertexAttributeList") ? &currentJSONNode["VertexAttributeList"] : nullptr;
     const json* vertexNode = nullptr;
     const json* normalNode = nullptr;
     const json* colorNode = nullptr;
@@ -767,12 +767,16 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                     }
 
                     if (!childGeometry || !dynamic_pointer_cast<Geometry>(childGeometry))
+                    {
                         OSG_WARN << "WARNING: invalid geometry for MorphTargets." << ADD_KEY_NAME
-                        << "[Subkey: " << itr.key()
-                        << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
-                        << std::endl;
+                            << "[Subkey: " << itr.key()
+                            << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                            << std::endl;
+                    }
                     else
+                    {
                         morphGeometry->addMorphTarget(dynamic_pointer_cast<Geometry>(childGeometry));
+                    }
                 }
             }
         }
@@ -918,7 +922,7 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
 
         if (!verticesConverted)
         {
-            OSG_WARN << "WARNING: Failed to decode vertex array!" << std::endl;
+            OSG_WARN << "WARNING: Failed to decode vertex array! Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)" << std::endl;
             return;
         }
         

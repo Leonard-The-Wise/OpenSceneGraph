@@ -198,6 +198,8 @@ class WriterNodeVisitor: public osg::NodeVisitor
 
     private:
 
+        void createMorphTargets(const osgAnimation::MorphGeometry* morphGeom, FbxMesh* mesh, const osg::Matrix& rotateMatrix);
+
         /**
         *  Fill the faces field of the mesh and call buildMesh().
         *  \param name the name to assign to the Fbx Mesh
@@ -205,7 +207,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
         *  \param listTriangles contain all the mesh's faces.
         *  \param texcoords tell us if we have to handle texture coordinates.
         */
-        void buildFaces(const std::string& name,
+        void buildMesh(const std::string& name,
                         const GeometryList& geometryList,
                         ListTriangle&       listTriangles,
                         bool                texcoords);
