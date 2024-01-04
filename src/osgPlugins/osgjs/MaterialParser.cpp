@@ -101,8 +101,6 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 				Materials.push_back(newMaterial);
 			}
 		}
-
-		ifs.close();
 	}
 	else
 	{

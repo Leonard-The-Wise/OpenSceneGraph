@@ -40,6 +40,8 @@ namespace osgJSONParser
 
 		static osg::Texture::WrapMode getWrapModeFromString(const std::string& filterMode);
 
+		static osg::CullFace::Mode getCullFaceModeFromString(const std::string& cullFaceMode);
+
 		static osgText::Text::AlignmentType getTextAlignmentFromString(const std::string& textAlignment);
 
 	private:

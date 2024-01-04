@@ -70,6 +70,8 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 #define ADD_UNIQUE_ID (currentJSONNode.contains("UniqueID") ? ("[UniqueID: " + std::to_string(currentJSONNode["UniqueID"].get<int>()) + "]") : std::string(""))
 #define ADD_KEY_NAME ADD_NODE_KEY << ADD_NODE_NAME << ADD_UNIQUE_ID
 
+constexpr auto MODELINFO_FILE = "model_info.json";
+
 void OsgjsParser::buildMaterialFiles() 
 {
     std::string materialFile = _filesBasePath + std::string("\\materialInfo.txt");
@@ -78,7 +80,6 @@ void OsgjsParser::buildMaterialFiles()
     {
         OSG_WARN << "INFO: Could not load " << materialFile << ". Objects will be textureless." << std::endl;
     }
-
 }
 
 void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey)
@@ -106,7 +107,7 @@ void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSO
 
     // Get object state set
     if (currentJSONNode.contains("StateSet"))
-        parseStateSet(object, currentJSONNode["StateSet"], nodeKey);
+        parseStateSet(object, currentJSONNode["StateSet"]["osg.StateSet"], "osg.StateSet");
 
     // Get UpdateCallbacks for animations
     if (currentJSONNode.contains("UpdateCallbacks") && currentJSONNode["UpdateCallbacks"].is_array())
@@ -330,42 +331,101 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
         stateset->setRenderingHint(StateSet::TRANSPARENT_BIN);
     }
 
-
+    // Parse texture attributes
     if (currentJSONNode.contains("TextureAttributeList") && currentJSONNode["TextureAttributeList"].is_array())
     {
         for (const auto& child : currentJSONNode["TextureAttributeList"])
+        {
+            if (child.is_array()) // TextureAttributeList use double arrays, but with 1 object each subarray.
+            {
+                int i = 0;
+                for (const auto& childChild : child)
+                {
+                    // Find subobjects on children nodes - Must be geometry objects.
+                    for (auto itr = childChild.begin(); itr != childChild.end(); ++itr)
+                    {
+                        ref_ptr<Object> childTexture;
+                        auto found = processObjects.find(itr.key());
+                        if (found != processObjects.end() && itr.value().is_object())
+                        {
+                            childTexture = found->second(itr.value(), itr.key());
+                        }
+                        else if (found != processObjects.end() && !itr.value().is_object())
+                        {
+                            OSG_WARN << " found a Object JSON node [" << itr.key() <<
+                                "] that is not an object or is malformed." << ADD_KEY_NAME << std::endl;
+                        }
+
+                        if (childTexture && !dynamic_pointer_cast<Texture>(childTexture))
+                        {
+                            OSG_WARN << "WARNING: invalid texture. " << ADD_KEY_NAME
+                                << "[Subkey: " << itr.key()
+                                << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                                << std::endl;
+                        }
+                        else if (childTexture)
+                        {
+                            stateset->setTextureAttribute(i, dynamic_pointer_cast<Texture>(childTexture));
+                        }
+                    }
+                }
+                ++i;
+            }
+        }
+    }
+
+    // Parse other attributes. Currently: osg.Material, osg.BlendFunc, osg.CullFace, osg.BlendColor, 
+    if (currentJSONNode.contains("AttributeList") && currentJSONNode["AttributeList"].is_array())
+    {
+        for (const auto& child : currentJSONNode["AttributeList"])
         {
             // Find subobjects on children nodes - Must be geometry objects.
             int i = 0;
             for (auto itr = child.begin(); itr != child.end(); ++itr)
             {
-                ref_ptr<Object> childTexture;
+                ref_ptr<Object> childState;
                 auto found = processObjects.find(itr.key());
                 if (found != processObjects.end() && itr.value().is_object())
                 {
-                    childTexture = found->second(itr.value(), itr.key());
+                    childState = found->second(itr.value(), itr.key());
                 }
                 else if (found != processObjects.end() && !itr.value().is_object())
                 {
                     OSG_WARN << " found a Object JSON node [" << itr.key() <<
-                        "] that is not an object or is malformed." << ADD_KEY_NAME << std::endl;
+                        "] that is not an object or is malformed. " << ADD_KEY_NAME << std::endl;
                 }
 
-                if (!childTexture || !dynamic_pointer_cast<Texture>(childTexture))
+                if (childState && !dynamic_pointer_cast<StateAttribute>(childState))
                 {
-                    OSG_WARN << "WARNING: invalid texture." << ADD_KEY_NAME
+                    OSG_WARN << "WARNING: invalid StateAttribute. " << ADD_KEY_NAME
                         << "[Subkey: " << itr.key()
                         << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
                         << std::endl;
                 }
-                else
+                else if (childState)
                 {
-                    stateset->setTextureAttribute(i, childTexture);
+                    if (dynamic_pointer_cast<Material>(childState))
+                        stateset->setAttribute(dynamic_pointer_cast<Material>(childState), StateAttribute::MATERIAL);
+                    else if (dynamic_pointer_cast<BlendFunc>(childState))
+                        stateset->setAttribute(dynamic_pointer_cast<BlendFunc>(childState), StateAttribute::BLENDFUNC);
+                    else if (dynamic_pointer_cast<BlendColor>(childState))
+                        stateset->setAttribute(dynamic_pointer_cast<BlendColor>(childState), StateAttribute::BLENDCOLOR);
+                    else if (dynamic_pointer_cast<CullFace>(childState))
+                        stateset->setAttribute(dynamic_pointer_cast<CullFace>(childState), StateAttribute::CULLFACE);
                 }
+                ++i;
             }
         }
     }
 
+    // Custom step: try to get textures from MaterialInfo and set on User Values of materials
+    postProcessStateSet(stateset);
+
+    // Apply stateset.
+    if (dynamic_pointer_cast<Node>(currentObject))
+        dynamic_pointer_cast<Node>(currentObject)->setStateSet(stateset);
+    else
+        OSG_WARN << "WARNING: Object has stateset but isn't subclass of Node. " << ADD_KEY_NAME << std::endl;
 }
 
 
@@ -465,7 +525,6 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
             ++index;
         }
 
-        // Fix rotate
         if (_firstMatrix)
         {
             std::stringstream ss;
@@ -480,6 +539,13 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
             // Fix rotate
             matrix.preMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
             _firstMatrix = false;
+
+            // Add model info to mesh
+            std::string modelName = getModelName();
+            if (!modelName.empty())
+            {
+                newObject->setName(modelName);
+            }
         }
 
         newObject->setMatrix(matrix);
@@ -929,6 +995,27 @@ ref_ptr<Object> OsgjsParser::parseComputeBoundingBoxCallback(const json& current
     return nullptr;
 }
 
+std::string OsgjsParser::getModelName() const
+{
+    std::string fileName = osgDB::findDataFile(MODELINFO_FILE);
+    if (fileName.empty()) 
+        return "";
+
+    osgDB::ifstream fin(fileName.c_str());
+    json doc;
+
+    std::string modelName;
+    if (fin.is_open())
+    {
+        fin >> doc;
+
+        modelName = doc["name"].get<std::string>();
+        OSG_ALWAYS << "INFO: Found model_info.json. Model name is \"" << modelName << "\"" << std::endl;
+    }
+
+    return modelName;
+}
+
 void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
 {
 #ifdef DEBUG
@@ -1027,7 +1114,27 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
 
 }
 
+void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
+{
+    // Try to get material from stateset
+    osg::Material* material = dynamic_cast<osg::Material*>(stateset->getAttribute(osg::StateAttribute::MATERIAL));
 
+    if (!material)
+        return;
+
+    std::string materialName = material->getName();
+    for (auto& materialInfo : _meshMaterials.getMaterials())
+    {
+        if (materialInfo.Name == materialName)
+        {
+            for (auto& knownLayer : materialInfo.KnownLayerNames)
+            {
+                material->setUserValue(knownLayer.first, knownLayer.second);
+            }
+            break;
+        }
+    }
+}
 
 ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const std::string& nodeKey)
 {
@@ -1038,7 +1145,44 @@ ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<Material> newMaterial = new Material;
+    Vec4 ambient, diffuse, specular, emission;
+    float shininess;
+
+    newMaterial->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    newMaterial->setUserValue("UniqueID", currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : -1);
+
+    if (currentJSONNode.contains("Ambient") && currentJSONNode["Ambient"].is_array())
+    {
+        ambient.set(currentJSONNode["Ambient"][0].get<float>(), currentJSONNode["Ambient"][1].get<float>(),
+            currentJSONNode["Ambient"][2].get<float>(), currentJSONNode["Ambient"][3].get<float>());
+        newMaterial->setAmbient(Material::FRONT, ambient);
+    }
+    if (currentJSONNode.contains("Diffuse") && currentJSONNode["Diffuse"].is_array())
+    {
+        diffuse.set(currentJSONNode["Diffuse"][0].get<float>(), currentJSONNode["Diffuse"][1].get<float>(),
+            currentJSONNode["Diffuse"][2].get<float>(), currentJSONNode["Diffuse"][3].get<float>());
+        newMaterial->setDiffuse(Material::FRONT, diffuse);
+    }
+    if (currentJSONNode.contains("Emission") && currentJSONNode["Emission"].is_array())
+    {
+        emission.set(currentJSONNode["Emission"][0].get<float>(), currentJSONNode["Emission"][1].get<float>(),
+            currentJSONNode["Emission"][2].get<float>(), currentJSONNode["Emission"][3].get<float>());
+        newMaterial->setEmission(Material::FRONT, emission);
+    }
+    if (currentJSONNode.contains("Specular") && currentJSONNode["Specular"].is_array())
+    {
+        specular.set(currentJSONNode["Specular"][0].get<float>(), currentJSONNode["Specular"][1].get<float>(),
+            currentJSONNode["Specular"][2].get<float>(), currentJSONNode["Specular"][3].get<float>());
+        newMaterial->setSpecular(Material::FRONT, specular);
+    }
+    if (currentJSONNode.contains("Shininess"))
+    {
+        shininess = currentJSONNode["Shininess"].get<float>();
+        newMaterial->setShininess(Material::FRONT, shininess);
+    }
+
+    return newMaterial;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const std::string& nodeKey)
@@ -1050,7 +1194,41 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<Texture2D> newTexture = nullptr;
+    std::string fileName = currentJSONNode.contains("File") ? currentJSONNode["File"].get<std::string>() : "";
+
+    if (osgDB::fileExists(fileName))
+    {
+        osg::ref_ptr<osg::Image> image = osgDB::readImageFile(fileName);
+        if (!image)
+        {
+            OSG_WARN << "Unsuported texture format: " << fileName << std::endl;
+            return nullptr;
+        }
+
+        newTexture = new Texture2D;
+        newTexture->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+        newTexture->setImage(image.get());
+
+        if (currentJSONNode.contains("MagFilter"))
+        {
+            newTexture->setFilter(Texture::MAG_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MagFilter"].get<std::string>()));
+        }
+        if (currentJSONNode.contains("MinFilter"))
+        {
+            newTexture->setFilter(Texture::MIN_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MinFilter"].get<std::string>()));
+        }
+        if (currentJSONNode.contains("WrapS"))
+        {
+            newTexture->setWrap(Texture::WRAP_S, ParserHelper::getWrapModeFromString(currentJSONNode["WrapS"].get<std::string>()));
+        }
+        if (currentJSONNode.contains("WrapT"))
+        {
+            newTexture->setWrap(Texture::WRAP_T, ParserHelper::getWrapModeFromString(currentJSONNode["WrapT"].get<std::string>()));
+        }
+    }
+
+    return newTexture;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgBlendFunc(const json& currentJSONNode, const std::string& nodeKey)
@@ -1062,7 +1240,18 @@ ref_ptr<Object> OsgjsParser::parseOsgBlendFunc(const json& currentJSONNode, cons
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<BlendFunc> newBlend = new BlendFunc;
+
+    if (currentJSONNode.contains("SourceRGB"))
+        newBlend->setSource(ParserHelper::getBlendFuncFromString(currentJSONNode["SourceRGB"]));
+    if (currentJSONNode.contains("DestinationRGB"))
+        newBlend->setDestination(ParserHelper::getBlendFuncFromString(currentJSONNode["DestinationRGB"]));
+    if (currentJSONNode.contains("SourceAlpha"))
+        newBlend->setSourceAlpha(ParserHelper::getBlendFuncFromString(currentJSONNode["SourceAlpha"]));
+    if (currentJSONNode.contains("DestinationAlpha"))
+        newBlend->setDestinationAlpha(ParserHelper::getBlendFuncFromString(currentJSONNode["DestinationAlpha"]));
+
+    return newBlend;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgBlendColor(const json& currentJSONNode, const std::string& nodeKey)
@@ -1074,7 +1263,17 @@ ref_ptr<Object> OsgjsParser::parseOsgBlendColor(const json& currentJSONNode, con
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<BlendColor> newBlend = new BlendColor;
+
+    if (currentJSONNode.contains("ConstantColor") && currentJSONNode["ConstantColor"].is_array())
+    {
+        Vec4 colorVec(currentJSONNode["ConstantColor"][0].get<double>(), currentJSONNode["ConstantColor"][1].get<double>(),
+            currentJSONNode["ConstantColor"][2].get<double>(), currentJSONNode["ConstantColor"][3].get<double>());
+
+        newBlend->setConstantColor(colorVec);
+    }
+
+    return newBlend;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgCullFace(const json& currentJSONNode, const std::string& nodeKey)
@@ -1085,6 +1284,14 @@ ref_ptr<Object> OsgjsParser::parseOsgCullFace(const json& currentJSONNode, const
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
+
+    if (currentJSONNode.contains("Mode") && currentJSONNode["Mode"].get<std::string>() == "DISABLE")
+        return nullptr;
+
+    ref_ptr<CullFace> newCullFace = new CullFace;
+
+    if (currentJSONNode.contains("Mode"))
+        newCullFace->setMode(ParserHelper::getCullFaceModeFromString(currentJSONNode["Mode"].get<std::string>()));
 
     return nullptr;
 }

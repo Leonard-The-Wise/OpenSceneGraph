@@ -28,6 +28,7 @@
 #include <osg/Types>
 #include <osg/Material>
 #include <osg/BlendFunc>
+#include <osg/BlendColor>
 
 #include <osgText/Text>
 

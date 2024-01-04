@@ -15,7 +15,8 @@ constexpr auto IMPLICIT_HEADER_PRIMITIVE_LENGTH = 0;
 constexpr auto IMPLICIT_HEADER_EXPECTED_INDEX = 2;
 constexpr auto HIGH_WATERMARK = 2;
 
-const std::unordered_map<std::string, PrimitiveSet::Type> primitiveTypeMap {
+const std::unordered_map<std::string, PrimitiveSet::Type> primitiveTypeMap 
+{
 	{"DrawElementsUShort", PrimitiveSet::DrawArraysPrimitiveType},
 	{"DrawArrays", PrimitiveSet::DrawArraysPrimitiveType},
 	{"DrawElementsUInt", PrimitiveSet::DrawElementsUIntPrimitiveType},
@@ -760,7 +761,16 @@ Texture::WrapMode ParserHelper::getWrapModeFromString(const std::string& wrapMod
 	if (wrapMode == "REPEAT") return Texture::WrapMode::REPEAT;
 	if (wrapMode == "MIRROR") return Texture::WrapMode::MIRROR;
 
-	return Texture::WrapMode::CLAMP_TO_EDGE;
+	return Texture::WrapMode::REPEAT;
+}
+
+CullFace::Mode ParserHelper::getCullFaceModeFromString(const std::string& cullFaceMode)
+{
+	if (cullFaceMode == "FRONT") return CullFace::Mode::FRONT;
+	if (cullFaceMode == "BACK") return CullFace::Mode::BACK;
+	if (cullFaceMode == "FRONT_AND_BACK") return CullFace::Mode::FRONT_AND_BACK;
+
+	return CullFace::Mode::FRONT_AND_BACK;
 }
 
 osgText::Text::AlignmentType ParserHelper::getTextAlignmentFromString(const std::string& textAlignment)

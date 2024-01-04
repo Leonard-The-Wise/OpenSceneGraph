@@ -106,7 +106,8 @@ bool FileCache::getFileContent(const std::string& fileName, std::vector<uint8_t>
     ifs.seekg(0, std::ios::beg);
 
     outFileContent.resize(static_cast<size_t>(size));
-    if (ifs.read(reinterpret_cast<char*>(outFileContent.data()), size)) {
+    if (ifs.read(reinterpret_cast<char*>(outFileContent.data()), size)) 
+    {
         return true;
     }
 

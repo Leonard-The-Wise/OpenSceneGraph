@@ -110,7 +110,8 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
 
     if (options)
     {
-        osg::notify(osg::NOTICE) << "options " << options->getOptionString() << std::endl;
+        if (!options->getOptionString().empty())
+            osg::notify(osg::NOTICE) << "Parsing options: " << options->getOptionString() << std::endl;
         std::istringstream iss(options->getOptionString());
         std::string opt;
         while (iss >> opt)
@@ -214,9 +215,14 @@ void ReaderWriterJSON::getModelFiles(const json& value, std::set<std::string>& F
 {
     if (value.is_object()) {
         for (auto itr = value.begin(); itr != value.end(); ++itr) {
-            if (itr.key() == "File") {
-                osg::notify(osg::DEBUG_INFO) << "Found Model Dependency: " << itr.value() << std::endl;
-                FileNames.insert(itr.value().get<std::string>());
+            if (itr.key() == "File") 
+            {
+                std::string ext = osgDB::getLowerCaseFileExtension(itr.value());
+                if (ext == "bin" || ext == "bin.gz" || ext == "binz")
+                {
+                    osg::notify(osg::DEBUG_INFO) << "Found Model Dependency: " << itr.value() << std::endl;
+                    FileNames.insert(itr.value().get<std::string>());
+                }
             }
 
             getModelFiles(itr.value(), FileNames);
@@ -310,6 +316,7 @@ osgDB::ReaderWriter::ReadResult ReaderWriterJSON::readNode(const std::string& fi
         json doc;
         try {
             fin >> doc;
+            fin.close();
         }
         catch (json::parse_error&) {
             osg::notify(osg::FATAL) << file << " has an invalid format!" << std::endl;
