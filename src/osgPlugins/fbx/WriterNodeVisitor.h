@@ -85,7 +85,6 @@ class WriterNodeVisitor: public osg::NodeVisitor
             _pScene(pScene),
             _curFbxNode(pScene->GetRootNode()),
             _currentStateSet(new osg::StateSet()),
-            _lastMaterialIndex(0),
             _lastMeshIndex(0),
             _options(options),
             _externalWriter(srcDirectory, osgDB::getFilePath(fileName), true, 0),
@@ -105,43 +104,14 @@ class WriterNodeVisitor: public osg::NodeVisitor
 
         void traverse (osg::Node& node)
         {
-            pushStateSet(node.getStateSet());
             osg::NodeVisitor::traverse(node);
-            popStateSet(node.getStateSet());
         }
 
-        void pushStateSet(const osg::StateSet* ss)
-        {
-            if (ss)
-            {
-                // Save our current stateset
-                _stateSetStack.push(_currentStateSet.get());
-
-                // merge with node stateset
-                _currentStateSet = static_cast<osg::StateSet*>(
-                    _currentStateSet->clone(osg::CopyOp::SHALLOW_COPY));
-                _currentStateSet->merge(*ss);
-            }
-        }
-
-
-        void popStateSet(const osg::StateSet* ss)
-        {
-            if (ss)
-            {
-                // restore the previous stateset
-                _currentStateSet = _stateSetStack.top();
-                _stateSetStack.pop();
-            }
-        }
-
-        /// Copy the texture file in current path.
-        void copyTexture();
         typedef std::map<const osg::Image*, std::string> ImageSet;
         typedef std::set<std::string> ImageFilenameSet;        // Sub-optimal because strings are doubled (in ImageSet). Moreover, an unordered_set (= hashset) would be more efficient (Waiting for unordered_set to be included in C++ standard ;) ).
 
-        ///\todo Add support for 2nd texture, opacity_map, bump_map, specular_map, shininess_map, self_illum_map, reflection_map.
-        class Material
+
+        class MaterialParser
         {
         public:
 
@@ -150,7 +120,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
             };
 
             ///Create a KfbxMaterial and KfbxTexture from osg::Texture and osg::Material.
-            Material(WriterNodeVisitor&   writerNodeVisitor,
+            MaterialParser(WriterNodeVisitor&   writerNodeVisitor,
                      osgDB::ExternalFileWriter & externalWriter,
                      const osg::StateSet* stateset,
                      const osg::Material* mat,
@@ -159,38 +129,15 @@ class WriterNodeVisitor: public osg::NodeVisitor
                      const osgDB::ReaderWriter::Options * options,
                      int                  index = -1);
 
-            FbxFileTexture* getFbxTexture() const
-            {
-                return _fbxTexture;
-            }
-
-            FbxSurfaceMaterial* getFbxMaterial() const
+            FbxSurfacePhong* getFbxMaterial() const
             {
                 return _fbxMaterial;
             }
 
-            const osg::Image* getOsgImage() const
-            {
-                return _osgImage;
-            }
-
-            const int getIndex() const
-            {
-                return _index;
-            }
-
-            void setIndex(int index)
-            {
-                _index = index;
-            }
-
         private:
             FbxSurfacePhong*  _fbxMaterial;
-            FbxFileTexture*   _fbxTexture;
-            int                _index;///< Index in the Map
-            const osg::Image*  _osgImage;
 
-            std::set<std::string, std::string> KnownLayerNames =
+            std::set<std::string> KnownLayerNames =
             {
                 {"Albedo"},
                 {"AO"},
@@ -239,7 +186,8 @@ class WriterNodeVisitor: public osg::NodeVisitor
         void buildMesh(const std::string& name,
                         const GeometryList& geometryList,
                         ListTriangle&       listTriangles,
-                        bool                texcoords);
+                        bool                texcoords,
+                        const MaterialParser& materialParser);
 
         void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
 
@@ -266,11 +214,11 @@ class WriterNodeVisitor: public osg::NodeVisitor
                                 bool&                texcoords,
                                 unsigned int         drawable_n);
 
-        ///Store the material of the stateset in the MaterialMap.
-        int processStateSet(const osg::StateSet* stateset);
+        ///Return a material from StateSet
+        WriterNodeVisitor::MaterialParser processStateSet(const osg::StateSet* stateset);
 
         typedef std::stack<osg::ref_ptr<osg::StateSet> > StateSetStack;
-        typedef std::map<osg::ref_ptr<const osg::StateSet>, Material, CompareStateSet> MaterialMap;
+        typedef std::map<osg::ref_ptr<const osg::StateSet>, MaterialParser, CompareStateSet> MaterialMap;
 
         ///We need this for every new Node we create.
         FbxManager* _pSdkManager;
@@ -290,15 +238,10 @@ class WriterNodeVisitor: public osg::NodeVisitor
         ///The current Fbx Node.
         FbxNode* _curFbxNode;
 
-        ///The Stack of different stateSet.
-        StateSetStack _stateSetStack;
-
         ///The current stateSet.
         osg::ref_ptr<osg::StateSet> _currentStateSet;
 
         ///We store the fbx Materials and Textures in this map.
-        MaterialMap                         _materialMap;
-        unsigned int                        _lastMaterialIndex;
         unsigned int                        _lastMeshIndex;
         const osgDB::ReaderWriter::Options* _options;
         osgDB::ExternalFileWriter           _externalWriter;

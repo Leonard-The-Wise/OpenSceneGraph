@@ -1693,7 +1693,7 @@ void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
     }
 
     // First, search for pre-created textures on StateSet
-    for (unsigned int i = 0; i < 32; i++)
+    for (unsigned int i = 0; i < stateset->getNumTextureAttributeLists(); i++)
     {
         const Texture* tex = dynamic_cast<const Texture*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
         if (tex)

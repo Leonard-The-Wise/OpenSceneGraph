@@ -39,8 +39,7 @@ namespace pluginfbx
 	public:
 		PrimitiveIndexWriter(const osg::Geometry* geo,
 			ListTriangle& listTriangles,
-			unsigned int         drawable_n,
-			unsigned int         material) :
+			unsigned int         drawable_n) :
 			_drawable_n(drawable_n),
 			_listTriangles(listTriangles),
 			_modeCache(0),
@@ -48,7 +47,6 @@ namespace pluginfbx
 			_hasTexCoords(geo->getTexCoordArray(0) != NULL),
 			_geo(geo),
 			_lastFaceIndex(0),
-			_material(material),
 			_curNormalIndex(0),
 			_normalBinding(osg::Geometry::BIND_OFF),
 			_mesh(0)
@@ -94,7 +92,6 @@ namespace pluginfbx
 				triangle.normalIndex2 = _curNormalIndex;
 				triangle.normalIndex3 = _curNormalIndex;
 			}
-			triangle.material = _material;
 			_listTriangles.push_back(std::make_pair(triangle, _drawable_n));
 		}
 
@@ -217,7 +214,6 @@ namespace pluginfbx
 		bool                 _hasNormalCoords, _hasTexCoords;
 		const osg::Geometry* _geo;
 		unsigned int         _lastFaceIndex;
-		int                  _material;
 		unsigned int         _curNormalIndex;
 		osg::Geometry::AttributeBinding _normalBinding;
 		FbxMesh* _mesh;
@@ -274,7 +270,7 @@ namespace pluginfbx
 		if (_normalBinding == osg::Geometry::BIND_PER_PRIMITIVE_SET) ++_curNormalIndex;
 	}
 
-	WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
+	WriterNodeVisitor::MaterialParser::MaterialParser(WriterNodeVisitor& writerNodeVisitor,
 		osgDB::ExternalFileWriter& externalWriter,
 		const osg::StateSet* stateset,
 		const osg::Material* mat,
@@ -282,10 +278,7 @@ namespace pluginfbx
 		FbxManager* pSdkManager,
 		const osgDB::ReaderWriter::Options* options,
 		int index) :
-		_fbxMaterial(NULL),
-		_fbxTexture(NULL),
-		_index(index),
-		_osgImage(NULL)
+		_fbxMaterial(NULL)
 	{
 		osg::Vec4 diffuse(1, 1, 1, 1),
 			ambient(0.2, 0.2, 0.2, 1),
@@ -364,8 +357,9 @@ namespace pluginfbx
 				else
 					relativePath = tex->getImage(0)->getFileName();
 
-				_fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
-				_fbxTexture->SetFileName(relativePath.c_str());
+				FbxFileTexture* fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
+				fbxTexture->SetFileName(relativePath.c_str());
+				fbxTexture->SetMappingType(FbxTexture::eUV);
 
 				// Create a FBX material if needed
 				if (!_fbxMaterial)
@@ -379,31 +373,31 @@ namespace pluginfbx
 					switch (textureLayer)
 					{
 					case MaterialSurfaceLayer::Ambient:
-						_fbxMaterial->Ambient.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->Ambient.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Diffuse:
-						_fbxMaterial->Diffuse.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->Diffuse.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::DisplacementColor:
-						_fbxMaterial->DisplacementColor.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->DisplacementColor.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Emissive:
-						_fbxMaterial->Emissive.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->Emissive.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::NormalMap:
-						_fbxMaterial->NormalMap.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->NormalMap.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Reflection:
-						_fbxMaterial->Reflection.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->Reflection.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Shininess:
-						_fbxMaterial->Shininess.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->Shininess.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Specular:
-						_fbxMaterial->Specular.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->Specular.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Transparency:
-						_fbxMaterial->TransparencyFactor.ConnectSrcObject(_fbxTexture);
+						_fbxMaterial->TransparencyFactor.ConnectSrcObject(fbxTexture);
 						break;
 					}
 				}
@@ -412,7 +406,7 @@ namespace pluginfbx
 	}
 
 	// Get texture's material property from UserData if applies
-	WriterNodeVisitor::Material::MaterialSurfaceLayer WriterNodeVisitor::Material::getTexMaterialLayer(const osg::Material* material, const osg::Texture* texture)
+	WriterNodeVisitor::MaterialParser::MaterialSurfaceLayer WriterNodeVisitor::MaterialParser::getTexMaterialLayer(const osg::Material* material, const osg::Texture* texture)
 	{
 		std::string textureFile = texture->getImage(0)->getFileName();
 		std::string layerName;
@@ -445,16 +439,8 @@ namespace pluginfbx
 		return MaterialSurfaceLayer::Diffuse;
 	}
 
-	int WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
+	WriterNodeVisitor::MaterialParser WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
 	{
-		MaterialMap::iterator itr = _materialMap.find(MaterialMap::key_type(ss));
-		if (itr != _materialMap.end())
-		{
-			if (itr->second.getIndex() < 0)
-				itr->second.setIndex(_lastMaterialIndex++);
-			return itr->second.getIndex();
-		}
-
 		const osg::Material* mat = dynamic_cast<const osg::Material*>(ss->getAttribute(osg::StateAttribute::MATERIAL));
 		std::vector<const osg::Texture*> texArray;
 
@@ -463,15 +449,9 @@ namespace pluginfbx
 			texArray.push_back(dynamic_cast<const osg::Texture*>(ss->getTextureAttribute(i, osg::StateAttribute::TEXTURE)));
 		}
 
-		if (mat || texArray.size() > 0)
-		{
-			int matNum = _lastMaterialIndex;
-			_materialMap.insert(MaterialMap::value_type(MaterialMap::key_type(ss),
-				Material(*this, _externalWriter, ss, mat, texArray, _pSdkManager, _options, matNum)));
-			++_lastMaterialIndex;
-			return matNum;
-		}
-		return -1;
+		MaterialParser stateMaterial(*this, _externalWriter, ss, mat, texArray, _pSdkManager, _options);
+
+		return stateMaterial;
 	}
 
 	unsigned int addPolygon(MapIndices& index_vert, unsigned int vertIndex, unsigned int normIndex, unsigned int drawableNum)
@@ -495,36 +475,7 @@ namespace pluginfbx
 	}
 
 
-	void
-		WriterNodeVisitor::setLayerTextureAndMaterial(FbxMesh* mesh)
-	{
-		FbxLayerElementTexture* lTextureDiffuseLayer = FbxLayerElementTexture::Create(mesh, "Diffuse");
-		lTextureDiffuseLayer->SetMappingMode(FbxLayerElement::eByPolygon);
-		lTextureDiffuseLayer->SetReferenceMode(FbxLayerElement::eIndexToDirect);
-
-		FbxLayerElementMaterial* lMaterialLayer = FbxLayerElementMaterial::Create(mesh, "materialLayer");
-		lMaterialLayer->SetMappingMode(FbxLayerElement::eByPolygon);
-		lMaterialLayer->SetReferenceMode(FbxLayerElement::eIndexToDirect);
-
-		lTextureDiffuseLayer->GetDirectArray().SetCount(_lastMaterialIndex);
-		lMaterialLayer->mDirectArray->SetCount(_lastMaterialIndex);
-
-		for (MaterialMap::iterator it = _materialMap.begin(); it != _materialMap.end(); ++it)
-		{
-			if (it->second.getIndex() != -1)
-			{
-				FbxSurfaceMaterial* lMaterial = it->second.getFbxMaterial();
-				FbxFileTexture* lTexture = it->second.getFbxTexture();
-				lTextureDiffuseLayer->GetDirectArray().SetAt(it->second.getIndex(), lTexture);
-				lMaterialLayer->mDirectArray->SetAt(it->second.getIndex(), lMaterial);
-			}
-		}
-		mesh->GetLayer(0)->SetMaterials(lMaterialLayer);
-		mesh->GetLayer(0)->SetTextures(FbxLayerElement::eTextureDiffuse, lTextureDiffuseLayer);
-	}
-
-	void
-		WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryList,
+	void WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryList,
 			MapIndices& index_vert,
 			bool              texcoords,
 			FbxMesh* mesh)
@@ -958,7 +909,6 @@ namespace pluginfbx
 		}
 	}
 
-
 	void WriterNodeVisitor::createMorphTargets(const osgAnimation::MorphGeometry* morphGeometry, FbxMesh* mesh, const osg::Matrix& rotateMatrix)
 	{
 		FbxBlendShape* fbxBlendShape = FbxBlendShape::Create(_pSdkManager, morphGeometry->getName().c_str());
@@ -1286,7 +1236,8 @@ namespace pluginfbx
 	void WriterNodeVisitor::buildMesh(const std::string& name,
 		const GeometryList& geometryList,
 		ListTriangle& listTriangles,
-		bool              texcoords)
+		bool              texcoords,
+		const MaterialParser& materialParser)
 	{
 		MapIndices index_vert;
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, name.c_str());
@@ -1298,27 +1249,19 @@ namespace pluginfbx
 			mesh->CreateLayer();
 			lLayer = mesh->GetLayer(0);
 		}
-		setLayerTextureAndMaterial(mesh);
-		lLayer->GetTextures(FbxLayerElement::eTextureDiffuse)->GetIndexArray().SetCount(listTriangles.size());
-		lLayer->GetMaterials()->GetIndexArray().SetCount(listTriangles.size());
 
 		unsigned int i = 0;
 		for (ListTriangle::iterator it = listTriangles.begin(); it != listTriangles.end(); ++it, ++i) //Go through the triangle list to define meshs
 		{
-			if (it->first.material == -1)
-			{
-				mesh->BeginPolygon();
-			}
-			else
-			{
-				mesh->BeginPolygon(i);
-				lLayer->GetTextures(FbxLayerElement::eTextureDiffuse)->GetIndexArray().SetAt(i, it->first.material);
-				lLayer->GetMaterials()->GetIndexArray().SetAt(i, it->first.material);
-			}
+			mesh->BeginPolygon();
 			addPolygon(mesh, index_vert, it->first, it->second);
 			mesh->EndPolygon();
 		}
 		setControlPointAndNormalsAndUV(geometryList, index_vert, texcoords, mesh);
+
+		// setLayerTextureAndMaterial(mesh);
+		FbxSurfacePhong* meshMaterial = materialParser.getFbxMaterial();
+		_curFbxNode->AddMaterial(meshMaterial);
 
 		// Since we changed our geometryList to contain only 1 geometry (or Rig or Morph), we can safely pick the first Morph and process
 		// Might need to change this approach in the future.
@@ -1341,9 +1284,6 @@ namespace pluginfbx
 		_listTriangles.clear();
 		_texcoords = false;
 		_drawableNum = 0;
-		for (MaterialMap::iterator it = _materialMap.begin(); it != _materialMap.end(); ++it)
-			it->second.setIndex(-1);
-		_lastMaterialIndex = 0;
 	}
 
 
@@ -1453,9 +1393,7 @@ namespace pluginfbx
 
 		if (nbVertices == 0) return;
 
-		int material = processStateSet(_currentStateSet.get());
-
-		PrimitiveIndexWriter pif(geo, listTriangles, drawable_n, material);
+		PrimitiveIndexWriter pif(geo, listTriangles, drawable_n);
 		for (unsigned int iPrimSet = 0; iPrimSet < geo->getNumPrimitiveSets(); ++iPrimSet) //Fill the Triangle List
 		{
 			const osg::PrimitiveSet* ps = geo->getPrimitiveSet(iPrimSet);
@@ -1479,10 +1417,7 @@ namespace pluginfbx
 
 		// retrieved from the geometry.
 		_geometryList.push_back(&geometry);
-
-		pushStateSet(geometry.getStateSet());
 		createListTriangle(&geometry, _listTriangles, _texcoords, _drawableNum++);
-		popStateSet(geometry.getStateSet());
 
 		osg::NodeVisitor::traverse(geometry);
 
@@ -1494,7 +1429,9 @@ namespace pluginfbx
 			_curFbxNode->AddChild(nodeFBX);
 			_curFbxNode = nodeFBX;
 
-			buildMesh(geometry.getName(), _geometryList, _listTriangles, _texcoords);
+			MaterialParser materialParser = processStateSet(geometry.getStateSet());
+
+			buildMesh(geometry.getName(), _geometryList, _listTriangles, _texcoords, materialParser);
 
 			if (rigGeometry)
 				_riggedMeshMap.emplace(rigGeometry, nodeFBX);
@@ -1522,11 +1459,6 @@ namespace pluginfbx
 			_curFbxNode = nodeFBX;
 
 			traverse(node);
-
-			if (_listTriangles.size() > 0)
-			{
-				buildMesh(node.getName(), _geometryList, _listTriangles, _texcoords);
-			}
 
 			_curFbxNode = parent;
 		}
