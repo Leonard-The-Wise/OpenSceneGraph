@@ -1681,7 +1681,7 @@ void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
                             filename = fileNameChanged;
                         }
 
-                        material->setUserValue(std::string("texture_") + knownLayer.first, filename);
+                        material->setUserValue(std::string("textureLayer_") + knownLayer.first, filename);
                         unfoundTextures.emplace(filename);
                     }
                     else

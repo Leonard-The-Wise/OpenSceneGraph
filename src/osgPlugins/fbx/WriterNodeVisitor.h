@@ -15,6 +15,7 @@
 #ifndef _FBX_WRITER_NODE_VISITOR_HEADER__
 #define _FBX_WRITER_NODE_VISITOR_HEADER__
 
+#include <unordered_map>
 #include <map>
 #include <set>
 #include <stack>
@@ -143,12 +144,17 @@ class WriterNodeVisitor: public osg::NodeVisitor
         class Material
         {
         public:
+
+            enum class MaterialSurfaceLayer {
+                Ambient, Diffuse, DisplacementColor, Emissive, NormalMap, Reflection, Specular, Shininess, Transparency
+            };
+
             ///Create a KfbxMaterial and KfbxTexture from osg::Texture and osg::Material.
             Material(WriterNodeVisitor&   writerNodeVisitor,
                      osgDB::ExternalFileWriter & externalWriter,
                      const osg::StateSet* stateset,
                      const osg::Material* mat,
-                     const osg::Texture*  tex,
+                     const std::vector<const osg::Texture*>& texArray,
                      FbxManager*      pSdkManager,
                      const osgDB::ReaderWriter::Options * options,
                      int                  index = -1);
@@ -183,6 +189,29 @@ class WriterNodeVisitor: public osg::NodeVisitor
             FbxFileTexture*   _fbxTexture;
             int                _index;///< Index in the Map
             const osg::Image*  _osgImage;
+
+            std::set<std::string, std::string> KnownLayerNames =
+            {
+                {"Albedo"},
+                {"AO"},
+                {"Opacity"},
+                {"Emission"},
+                {"Normal"},
+                {"Diffuse"},
+                {"SpecularPBR"},
+                {"Specular F0"},
+                {"Displacement"},
+                {"Metalness"},
+                {"Diffuse colour"},
+                {"Glossiness"},
+                {"Specular colour"},
+                {"Diffuse intensity"},
+                {"Specular hardness"},
+                {"Clear coat normal"},
+                {"Clear coat roughness"},
+            };
+
+            MaterialSurfaceLayer getTexMaterialLayer(const osg::Material* material, const osg::Texture* texture);
         };
 
     protected:
