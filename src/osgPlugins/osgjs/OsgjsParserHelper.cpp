@@ -794,6 +794,17 @@ osgText::Text::AlignmentType ParserHelper::getTextAlignmentFromString(const std:
 	return osgText::Text::AlignmentType::LEFT_TOP;
 }
 
+std::string osgJSONParser::ParserHelper::stripAllExtensions(const std::string& filename)
+{
+	std::string finalName = filename;
+	while (!osgDB::getFileExtension(finalName).empty())
+	{
+		finalName = osgDB::getStrippedName(finalName);
+	}
+
+	return finalName;
+}
+
 
 
 

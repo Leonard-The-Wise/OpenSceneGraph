@@ -194,10 +194,11 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Callback> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
 
         std::string getModelName() const;
+        osg::ref_ptr<osg::Image> createImage(const std::string& fileName, std::string& outFileRenamed);
 
         void postProcessGeometry(osg::ref_ptr<osg::Geometry> geometry);
-
         void postProcessStateSet(osg::ref_ptr<osg::StateSet> stateset);
+
 
 	};
 

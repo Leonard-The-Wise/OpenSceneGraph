@@ -7,12 +7,12 @@
 const std::string COMMENT = R"(^\/\/.+)";
 const std::string MESHNAME = R"(^Mesh \"(?'MeshName'\w+)\" uses material \"(?'MaterialName'\w+)\" and has UniqueID \"(?'UniqueID'\d+)\")";
 const std::string MATERIALNAME = R"(^Material \"(?'MaterialName'\w+)\" has ID (?'ID'[\w-]+))";
-const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|]*))";
+const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'FlipAxis'Flipped\s*\w+)\)))?(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|]*))";
 
-const jpcre2::select<char>::Regex commentRegEx(COMMENT, PCRE2_FIRSTLINE, jpcre2::JIT_COMPILE);
-const jpcre2::select<char>::Regex meshNameRegEx(MESHNAME, PCRE2_FIRSTLINE, jpcre2::JIT_COMPILE);
-const jpcre2::select<char>::Regex materialNameRegEx(MATERIALNAME, PCRE2_FIRSTLINE, jpcre2::JIT_COMPILE);
-const jpcre2::select<char>::Regex materialLineRegEx(MATERIALLINE, PCRE2_FIRSTLINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex commentRegEx(COMMENT, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex meshNameRegEx(MESHNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex materialNameRegEx(MATERIALNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex materialLineRegEx(MATERIALLINE, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
 
 typedef jpcre2::select<char> pcre2;
 

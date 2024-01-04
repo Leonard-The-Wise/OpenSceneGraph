@@ -334,14 +334,14 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
     // Parse texture attributes
     if (currentJSONNode.contains("TextureAttributeList") && currentJSONNode["TextureAttributeList"].is_array())
     {
+        int i = 0;
         for (const auto& child : currentJSONNode["TextureAttributeList"])
         {
             if (child.is_array()) // TextureAttributeList use double arrays, but with 1 object each subarray.
             {
-                int i = 0;
                 for (const auto& childChild : child)
                 {
-                    // Find subobjects on children nodes - Must be geometry objects.
+                    // Find subobjects on children nodes - Must be texture objects.
                     for (auto itr = childChild.begin(); itr != childChild.end(); ++itr)
                     {
                         ref_ptr<Object> childTexture;
@@ -365,11 +365,11 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
                         }
                         else if (childTexture)
                         {
-                            stateset->setTextureAttribute(i, dynamic_pointer_cast<Texture>(childTexture));
+                            stateset->setTextureAttribute(i, dynamic_pointer_cast<Texture>(childTexture), StateAttribute::TEXTURE);
                         }
+                        ++i;
                     }
                 }
-                ++i;
             }
         }
     }
@@ -995,146 +995,7 @@ ref_ptr<Object> OsgjsParser::parseComputeBoundingBoxCallback(const json& current
     return nullptr;
 }
 
-std::string OsgjsParser::getModelName() const
-{
-    std::string fileName = osgDB::findDataFile(MODELINFO_FILE);
-    if (fileName.empty()) 
-        return "";
 
-    osgDB::ifstream fin(fileName.c_str());
-    json doc;
-
-    std::string modelName;
-    if (fin.is_open())
-    {
-        fin >> doc;
-
-        modelName = doc["name"].get<std::string>();
-        OSG_ALWAYS << "INFO: Found model_info.json. Model name is \"" << modelName << "\"" << std::endl;
-    }
-
-    return modelName;
-}
-
-void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
-{
-#ifdef DEBUG
-    std::string geometryName = geometry->getName();
-    ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
-#endif // DEBUG
-
-    // Check for user data
-    ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(geometry->getUserData());
-    if (!shapeAttrList)
-        return;
-
-    ref_ptr<Array> indices;
-    osg::PrimitiveSet* firstPrimitive = geometry->getPrimitiveSet(0);
-
-    // Convert primitive sets into indices array.
-    DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(firstPrimitive);
-    DrawElementsUShort* des = dynamic_cast<DrawElementsUShort*>(firstPrimitive);
-    DrawElementsUByte* deb = dynamic_cast<DrawElementsUByte*>(firstPrimitive);
-
-    if (dei)
-        indices = new UIntArray(dei->begin(), dei->end());
-    else if (des)
-        indices = new UShortArray(dei->begin(), dei->end());
-    else if (deb)
-        indices = new UByteArray(dei->begin(), dei->end());
-    else
-    {
-        OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
-        return;
-    }
-
-    // Get Vertex Shape Attributes
-    std::vector<double> vtx_bbl(3, 0);
-    std::vector<double> vtx_h(3, 0);
-    std::vector<bool> success(10, false);
-
-    success[0] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_x", vtx_bbl[0]);
-    success[1] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_y", vtx_bbl[1]);
-    success[2] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_z", vtx_bbl[2]);
-    success[3] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_x", vtx_h[0]);
-    success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
-    success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
-
-
-    if (success[0] && success[3])
-    {
-        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(indices, geometry->getVertexArray(), vtx_bbl, vtx_h);
-
-        if (!verticesConverted)
-        {
-            OSG_WARN << "WARNING: Failed to decode vertex array! Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)" << std::endl;
-            return;
-        }
-        
-        geometry->setVertexArray(verticesConverted);
-    }
-    else
-    {
-        return;
-    }
-
-    // Get UV's Shape Attributes
-    std::vector<double> uv_bbl(2, 0);
-    std::vector<double> uv_h(2, 0);
-
-    int i = 0;
-    for (auto& texCoord : geometry->getTexCoordArrayList())
-    {
-        std::stringstream uvbblx, uvbbly, uvhx, uvhy;
-        uvbblx << "uv_" << i << "_bbl_x";
-        uvbbly << "uv_" << i << "_bbl_y";
-        uvhx << "uv_" << i << "_h_x";
-        uvhy << "uv_" << i << "_h_y";
-
-        success[6] = ParserHelper::getShapeAttribute(shapeAttrList, uvbblx.str(), uv_bbl[0]);
-        success[7] = ParserHelper::getShapeAttribute(shapeAttrList, uvbbly.str(), uv_bbl[1]);
-        success[8] = ParserHelper::getShapeAttribute(shapeAttrList, uvhx.str(), uv_h[0]);
-        success[9] = ParserHelper::getShapeAttribute(shapeAttrList, uvhy.str(), uv_h[1]);
-
-        if (success[6] && success[8])
-        {
-            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(indices, texCoord, uv_bbl, uv_h);
-
-            if (!texCoordConverted)
-            {
-                OSG_WARN << "WARNING: Failed to decode texCoord array!" << std::endl;
-                continue;
-            }
-
-            geometry->setTexCoordArray(i, texCoordConverted);
-        }
-
-        i++;
-    }
-
-}
-
-void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
-{
-    // Try to get material from stateset
-    osg::Material* material = dynamic_cast<osg::Material*>(stateset->getAttribute(osg::StateAttribute::MATERIAL));
-
-    if (!material)
-        return;
-
-    std::string materialName = material->getName();
-    for (auto& materialInfo : _meshMaterials.getMaterials())
-    {
-        if (materialInfo.Name == materialName)
-        {
-            for (auto& knownLayer : materialInfo.KnownLayerNames)
-            {
-                material->setUserValue(knownLayer.first, knownLayer.second);
-            }
-            break;
-        }
-    }
-}
 
 ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const std::string& nodeKey)
 {
@@ -1194,39 +1055,34 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    ref_ptr<Texture2D> newTexture = nullptr;
     std::string fileName = currentJSONNode.contains("File") ? currentJSONNode["File"].get<std::string>() : "";
+    std::string fileRenamed;
+    ref_ptr<Image> image = createImage(fileName, fileRenamed);
 
-    if (osgDB::fileExists(fileName))
+    if (!image)
+        return nullptr;
+
+    ref_ptr<Texture2D> newTexture = new Texture2D;
+    newTexture->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    newTexture->setImage(image);
+
+    if (currentJSONNode.contains("MagFilter"))
     {
-        osg::ref_ptr<osg::Image> image = osgDB::readImageFile(fileName);
-        if (!image)
-        {
-            OSG_WARN << "Unsuported texture format: " << fileName << std::endl;
-            return nullptr;
-        }
-
-        newTexture = new Texture2D;
-        newTexture->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
-        newTexture->setImage(image.get());
-
-        if (currentJSONNode.contains("MagFilter"))
-        {
-            newTexture->setFilter(Texture::MAG_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MagFilter"].get<std::string>()));
-        }
-        if (currentJSONNode.contains("MinFilter"))
-        {
-            newTexture->setFilter(Texture::MIN_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MinFilter"].get<std::string>()));
-        }
-        if (currentJSONNode.contains("WrapS"))
-        {
-            newTexture->setWrap(Texture::WRAP_S, ParserHelper::getWrapModeFromString(currentJSONNode["WrapS"].get<std::string>()));
-        }
-        if (currentJSONNode.contains("WrapT"))
-        {
-            newTexture->setWrap(Texture::WRAP_T, ParserHelper::getWrapModeFromString(currentJSONNode["WrapT"].get<std::string>()));
-        }
+        newTexture->setFilter(Texture::MAG_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MagFilter"].get<std::string>()));
     }
+    if (currentJSONNode.contains("MinFilter"))
+    {
+        newTexture->setFilter(Texture::MIN_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MinFilter"].get<std::string>()));
+    }
+    if (currentJSONNode.contains("WrapS"))
+    {
+        newTexture->setWrap(Texture::WRAP_S, ParserHelper::getWrapModeFromString(currentJSONNode["WrapS"].get<std::string>()));
+    }
+    if (currentJSONNode.contains("WrapT"))
+    {
+        newTexture->setWrap(Texture::WRAP_T, ParserHelper::getWrapModeFromString(currentJSONNode["WrapT"].get<std::string>()));
+    }
+
 
     return newTexture;
 }
@@ -1584,6 +1440,292 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const jso
 
 
 
+std::string OsgjsParser::getModelName() const
+{
+    std::string fileName = osgDB::findDataFile(MODELINFO_FILE);
+    if (fileName.empty())
+        return "";
+
+    osgDB::ifstream fin(fileName.c_str());
+    json doc;
+
+    std::string modelName;
+    if (fin.is_open())
+    {
+        fin >> doc;
+
+        modelName = doc["name"].get<std::string>();
+        OSG_ALWAYS << "INFO: Found model_info.json. Model name is \"" << modelName << "\"" << std::endl;
+    }
+
+    return modelName;
+}
+
+ref_ptr<Image> OsgjsParser::createImage(const std::string& fileName, std::string& outFileRenamed)
+{
+    osg::ref_ptr<osg::Image> image;
+
+    std::string fileNameOrig = fileName;
+    std::string fileNameChanged = fileName;
+    if (osgDB::fileExists(fileNameOrig))
+    {
+        // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
+        std::string origExt = osgDB::getLowerCaseFileExtension(fileNameOrig);
+        fileNameChanged = ParserHelper::stripAllExtensions(fileNameOrig) + std::string(".") + origExt;
+        if (std::rename(fileNameOrig.c_str(), fileNameChanged.c_str()) == 0)
+        {
+            fileNameOrig = fileNameChanged;
+        }
+
+        // First try to read original file name. If unsuccessfull, then retry as .png
+        // (need to temporarily rename file. If success, then rename becomes permanent)
+        image = osgDB::readImageFile(fileNameOrig);
+        if (!image)
+        {
+            std::string fileExt = osgDB::getLowerCaseFileExtension(fileNameOrig);
+
+            if (fileExt == "png")
+            {
+                OSG_WARN << "Unsuported texture format: " << fileNameOrig << std::endl;
+                return nullptr;
+            }
+            else // if (fileExt == "tga" || fileExt == "tiff" || fileExt == "jpg" || fileExt == "jpeg")
+            {
+                fileNameChanged = ParserHelper::stripAllExtensions(fileNameOrig) + std::string(".png");
+
+                if (std::rename(fileNameOrig.c_str(), fileNameChanged.c_str()) != 0)
+                {
+                    OSG_WARN << "Could not process file: " << fileNameOrig << std::endl;
+                    return nullptr;
+                }
+
+                if (osgDB::fileExists(fileNameChanged))
+                {
+                    image = osgDB::readImageFile(fileNameChanged);
+                }
+
+                if (!image)
+                {
+                    OSG_WARN << "Unsuported texture format: " << fileNameOrig << std::endl;
+                    std::ignore = std::rename(fileNameChanged.c_str(), fileNameOrig.c_str());
+                    return nullptr;
+                }
+                else
+                {
+                    OSG_NOTICE << "INFO: Texture " << fileNameOrig << " was actually a PNG image. Renamed to " << fileNameChanged << std::endl;
+                    outFileRenamed = fileNameChanged;
+                }
+            }
+        }
+    }
+    else if (osgDB::getLowerCaseFileExtension(fileNameOrig) != "png")
+    {
+        fileNameChanged = ParserHelper::stripAllExtensions(fileNameOrig) + std::string(".png");
+
+        if (!osgDB::fileExists(fileNameChanged))
+        {
+            OSG_WARN << "WARNING: Could not find either " << fileNameOrig << " or " << fileNameChanged << " on model's path." << std::endl;
+            return nullptr;
+        }
+        else
+        {
+            image = osgDB::readImageFile(fileNameChanged);
+
+            if (!image)
+            {
+                OSG_WARN << "Unsuported texture format: " << fileNameChanged << std::endl;
+                return nullptr;
+            }
+
+            outFileRenamed = fileNameChanged;
+        }
+    }
+
+    return image;
+}
+
+
+void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
+{
+#ifdef DEBUG
+    std::string geometryName = geometry->getName();
+    ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
+#endif // DEBUG
+
+    // Check for user data
+    ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(geometry->getUserData());
+    if (!shapeAttrList)
+        return;
+
+    ref_ptr<Array> indices;
+    osg::PrimitiveSet* firstPrimitive = geometry->getPrimitiveSet(0);
+
+    // Convert primitive sets into indices array.
+    DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(firstPrimitive);
+    DrawElementsUShort* des = dynamic_cast<DrawElementsUShort*>(firstPrimitive);
+    DrawElementsUByte* deb = dynamic_cast<DrawElementsUByte*>(firstPrimitive);
+
+    if (dei)
+        indices = new UIntArray(dei->begin(), dei->end());
+    else if (des)
+        indices = new UShortArray(dei->begin(), dei->end());
+    else if (deb)
+        indices = new UByteArray(dei->begin(), dei->end());
+    else
+    {
+        OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
+        return;
+    }
+
+    // Get Vertex Shape Attributes
+    std::vector<double> vtx_bbl(3, 0);
+    std::vector<double> vtx_h(3, 0);
+    std::vector<bool> success(10, false);
+
+    success[0] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_x", vtx_bbl[0]);
+    success[1] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_y", vtx_bbl[1]);
+    success[2] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_z", vtx_bbl[2]);
+    success[3] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_x", vtx_h[0]);
+    success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
+    success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
+
+
+    if (success[0] && success[3])
+    {
+        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(indices, geometry->getVertexArray(), vtx_bbl, vtx_h);
+
+        if (!verticesConverted)
+        {
+            OSG_WARN << "WARNING: Failed to decode vertex array! Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)" << std::endl;
+            return;
+        }
+
+        geometry->setVertexArray(verticesConverted);
+    }
+    else
+    {
+        return;
+    }
+
+    // Get UV's Shape Attributes
+    std::vector<double> uv_bbl(2, 0);
+    std::vector<double> uv_h(2, 0);
+
+    int i = 0;
+    for (auto& texCoord : geometry->getTexCoordArrayList())
+    {
+        std::stringstream uvbblx, uvbbly, uvhx, uvhy;
+        uvbblx << "uv_" << i << "_bbl_x";
+        uvbbly << "uv_" << i << "_bbl_y";
+        uvhx << "uv_" << i << "_h_x";
+        uvhy << "uv_" << i << "_h_y";
+
+        success[6] = ParserHelper::getShapeAttribute(shapeAttrList, uvbblx.str(), uv_bbl[0]);
+        success[7] = ParserHelper::getShapeAttribute(shapeAttrList, uvbbly.str(), uv_bbl[1]);
+        success[8] = ParserHelper::getShapeAttribute(shapeAttrList, uvhx.str(), uv_h[0]);
+        success[9] = ParserHelper::getShapeAttribute(shapeAttrList, uvhy.str(), uv_h[1]);
+
+        if (success[6] && success[8])
+        {
+            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(indices, texCoord, uv_bbl, uv_h);
+
+            if (!texCoordConverted)
+            {
+                OSG_WARN << "WARNING: Failed to decode texCoord array!" << std::endl;
+                continue;
+            }
+
+            geometry->setTexCoordArray(i, texCoordConverted);
+        }
+
+        i++;
+    }
+
+}
+
+void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
+{
+    // Try to get textures for material from stateset and model_info.txt
+    osg::Material* material = dynamic_cast<osg::Material*>(stateset->getAttribute(osg::StateAttribute::MATERIAL));
+
+    if (!material)
+        return;
+
+    // Fill up supported textures
+    std::string materialName = material->getName();
+    std::unordered_set<std::string> unfoundTextures;
+    for (auto& materialInfo : _meshMaterials.getMaterials())
+    {
+        if (materialInfo.Name == materialName)
+        {
+            for (auto& knownLayer : materialInfo.KnownLayerNames)
+            {
+                if (!knownLayer.second.empty())
+                {
+                    // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
+                    // because they may be incorrectly renamed from Sketchfab
+                    std::string filename = knownLayer.second;
+                    if (!osgDB::fileExists(filename))
+                    {
+                        filename = ParserHelper::stripAllExtensions(filename) + std::string(".png");
+                    }
+
+                    if (osgDB::fileExists(filename))
+                    {
+                        // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
+                        std::string origExt = osgDB::getLowerCaseFileExtension(filename);
+                        std::string fileNameChanged = ParserHelper::stripAllExtensions(filename) + std::string(".") + origExt;
+                        if (filename != fileNameChanged && std::rename(filename.c_str(), fileNameChanged.c_str()) == 0)
+                        {
+                            OSG_NOTICE << "INFO: Texture " << filename << " renamed to " << fileNameChanged << std::endl;
+                            filename = fileNameChanged;
+                        }
+
+                        material->setUserValue(std::string("texture_") + knownLayer.first, filename);
+                        unfoundTextures.emplace(filename);
+                    }
+                    else
+                        OSG_WARN << "WARNING: Could not find " << filename << " from model_info.txt" << std::endl;
+                }
+            }
+            break;
+        }
+    }
+
+    // First, search for pre-created textures on StateSet
+    for (unsigned int i = 0; i < 32; i++)
+    {
+        const Texture* tex = dynamic_cast<const Texture*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
+        if (tex)
+        {
+            // Remove found textures from unfound set
+            const Image* texImage = tex->getImage(0);
+            std::string imageName = texImage->getFileName();
+            unfoundTextures.erase(imageName);
+        }
+    }
+    
+    // Next, create all missing textures with default parameters
+    int j = stateset->getNumTextureAttributeLists();
+    for (auto& unfoundTexture : unfoundTextures)
+    {
+        std::string ignored; // We already checked for file name
+        ref_ptr<Image> image = createImage(unfoundTexture, ignored);
+
+        if (!image)
+            continue;
+
+        ref_ptr<Texture2D> texture = new Texture2D;
+
+        texture->setImage(image);
+        texture->setFilter(Texture::MAG_FILTER, Texture::LINEAR);
+        texture->setFilter(Texture::MIN_FILTER, Texture::LINEAR);
+        texture->setWrap(Texture::WRAP_S, Texture::REPEAT);
+        texture->setWrap(Texture::WRAP_T, Texture::REPEAT);
+
+        stateset->setTextureAttribute(j++, texture, StateAttribute::TEXTURE);
+    }
+}
 
 
 

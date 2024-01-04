@@ -6,6 +6,7 @@
  * Copyright (C) 2009
  *
  * Writing support added 2009 by Thibault Caporal and Sukender (Benoit Neil - http://sukender.free.fr)
+ * Writing improvements added 2024 by Leonardo Silva (https://github.com/Leonard-The-Wise/)
  *
  * The Open Scene Graph (OSG) is a cross platform C++/OpenGL library for
  * real-time rendering of large 3D photo-realistic models.
@@ -374,7 +375,6 @@ WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
 
 int WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
 {
-    //OSG_ALWAYS << "Trying Adding " << ss->getAttribute(osg::StateAttribute::MATERIAL)->getName() << std::endl;
     MaterialMap::iterator itr = _materialMap.find(MaterialMap::key_type(ss));
     if (itr != _materialMap.end())
     {
@@ -1307,7 +1307,6 @@ void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vi
         skinDeformer->AddCluster(cluster);
 
         osg::Matrixd osgInvBindMatrix = Matrix::inverse(bone->getInvBindMatrixInSkeletonSpace());
-        //osgInvBindMatrix *= _firstMatrix;  // Multiplication order matters
 
         FbxAMatrix fbxInvBindMatrix;
         for (int row = 0; row < 4; ++row) {
@@ -1317,7 +1316,6 @@ void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vi
         }
         
         cluster->SetTransformLinkMatrix(fbxInvBindMatrix);
-        //cluster->SetTransformMatrix(fbxInvBindMatrix);
     }
 
     fbxMesh->AddDeformer(skinDeformer);

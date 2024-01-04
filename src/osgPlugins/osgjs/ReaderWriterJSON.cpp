@@ -1,4 +1,5 @@
 //    copyright: 'Cedric Pinson cedric@plopbyte.com'
+//    readNode written by Leonardo Silva - https://github.com/Leonard-The-Wise/
 
 #include "pch.h"
 
