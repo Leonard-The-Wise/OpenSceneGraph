@@ -11,6 +11,10 @@ namespace osgJSONParser
 	{
 	public:
 
+		enum class KeyDecodeMode {
+			Vec2Compressed, Vec3Compressed, QuatCompressed
+		};
+
 		using json = nlohmann::json;
 
 		ParserHelper() = default;
@@ -22,15 +26,18 @@ namespace osgJSONParser
 		static osg::ref_ptr<osg::Array> parseJSONArray(const json& currentJSONNode, int itemSize, const FileCache& fileCache, 
 			bool& isVarintEncoded, uint32_t& magic, bool needDecodeIndices = false, GLenum drawMode = 0);
 
-		static void makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const osg::ref_ptr<osg::Array> bones, const osg::ref_ptr<osg::Array> weights,
+		static void makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const osg::ref_ptr<osg::Array>& bones, const osg::ref_ptr<osg::Array>& weights,
 			const std::map<int, std::string>& boneIndexes);
 
-		static osg::ref_ptr<osg::Array> decodeVertices(const osg::ref_ptr<osg::Array> indices, const osg::ref_ptr<osg::Array> vertices,
+		static osg::ref_ptr<osg::Array> decodeVertices(const osg::ref_ptr<osg::Array>& indices, const osg::ref_ptr<osg::Array>& vertices,
 			const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h);
 
-		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, double& value);
-		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, int& value);
-		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, std::string& value);
+		static osg::ref_ptr<osg::Array> decompressArray(const osg::ref_ptr<osg::Array>& keys, const osg::UserDataContainer* udc,
+			KeyDecodeMode mode);
+
+		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, double& value);
+		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, int& value);
+		static bool getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, std::string& value);
 
 		static GLenum getModeFromString(const std::string& mode);
 
@@ -55,8 +62,8 @@ namespace osgJSONParser
 		static std::vector<uint8_t>* decodeVarintVector(const std::vector<uint8_t>& input, osg::Array::Type inputType, size_t itemCount, size_t offSet);
 		static osg::Array* getVertexAttribArray(osgAnimation::RigGeometry& rigGeometry, const std::string arrayName);
 
-		static osg::ref_ptr<osg::Array> recastArray(const osg::ref_ptr<osg::Array> toRecast, DesiredVectorSize vecSize);
-		static osg::ref_ptr<osg::Array> decastVector(const osg::ref_ptr<osg::Array> toRecast);
+		static osg::ref_ptr<osg::Array> recastArray(const osg::ref_ptr<osg::Array>& toRecast, DesiredVectorSize vecSize);
+		static osg::ref_ptr<osg::Array> decastVector(const osg::ref_ptr<osg::Array>& toRecast);
 
 		template <typename T>
 		static std::vector<T> decodeDelta(const std::vector<T>& input, int e);
@@ -65,10 +72,24 @@ namespace osgJSONParser
 		template <typename T>
 		static std::vector<T> decodeWatermark(const std::vector<T>& t, uint32_t& magic);
 		template<typename T, typename U>
-		static osg::ref_ptr<osg::Array> decodePredict(const osg::ref_ptr<T> indices, const osg::ref_ptr<U> vertices, int itemSize);
+		static osg::ref_ptr<osg::Array> decodePredict(const osg::ref_ptr<T>& indices, const osg::ref_ptr<U>& vertices, int itemSize);
 		template <typename T>
-		static osg::ref_ptr<osg::Array> decodeQuantize(const osg::ref_ptr<T> vertices, const std::vector<double>& vtx_bbl,
+		static osg::ref_ptr<osg::Array> decodeQuantize(const osg::ref_ptr<T>& vertices, const std::vector<double>& vtx_bbl,
 			const std::vector<double>& vtx_h, int elementSize);
 
+		template <typename T>
+		static osg::ref_ptr<T> deInterleaveKeys(const osg::ref_ptr<T>& input, unsigned int itemSize);
+
+		template <typename T>
+		static osg::ref_ptr<osg::DoubleArray> inflateKeys1(const osg::ref_ptr<T>& input, unsigned int itemSize,
+			const std::vector<double>& attrB, const std::vector<double>& attrH);
+
+		static osg::ref_ptr<osg::DoubleArray> inflateKeys2(const osg::ref_ptr<osg::DoubleArray>& input, unsigned int itemSize);
+
+		template <typename T>
+		static osg::ref_ptr<osg::DoubleArray> inflateKeysQuat(const osg::ref_ptr<T>& input);
+
+		template <typename T>
+		static osg::ref_ptr<osg::DoubleArray> int3ToFloat4(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
 	};
 }

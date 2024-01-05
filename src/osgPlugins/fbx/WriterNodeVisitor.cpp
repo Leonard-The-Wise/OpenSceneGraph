@@ -359,7 +359,7 @@ namespace pluginfbx
 
 				FbxFileTexture* fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
 				fbxTexture->SetFileName(relativePath.c_str());
-				fbxTexture->SetMappingType(FbxTexture::eUV);
+				fbxTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
 
 				// Create a FBX material if needed
 				if (!_fbxMaterial)
@@ -370,33 +370,41 @@ namespace pluginfbx
 				// Connect texture to material's appropriate channel
 				if (_fbxMaterial)
 				{
+					FbxProperty customProperty;
 					switch (textureLayer)
 					{
 					case MaterialSurfaceLayer::Ambient:
 						_fbxMaterial->Ambient.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Diffuse:
+						fbxTexture->SetTextureUse(FbxTexture::eStandard);
 						_fbxMaterial->Diffuse.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::DisplacementColor:
+						fbxTexture->SetTextureUse(FbxTexture::eStandard);
 						_fbxMaterial->DisplacementColor.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Emissive:
+						fbxTexture->SetTextureUse(FbxTexture::eLightMap);
 						_fbxMaterial->Emissive.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::NormalMap:
+						fbxTexture->SetTextureUse(FbxTexture::eBumpNormalMap);
 						_fbxMaterial->NormalMap.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Reflection:
+						fbxTexture->SetTextureUse(FbxTexture::eSphericalReflectionMap);
 						_fbxMaterial->Reflection.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Shininess:
 						_fbxMaterial->Shininess.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Specular:
+						fbxTexture->SetTextureUse(FbxTexture::eLightMap);
 						_fbxMaterial->Specular.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Transparency:
+						fbxTexture->SetTextureUse(FbxTexture::eStandard);
 						_fbxMaterial->TransparencyFactor.ConnectSrcObject(fbxTexture);
 						break;
 					}

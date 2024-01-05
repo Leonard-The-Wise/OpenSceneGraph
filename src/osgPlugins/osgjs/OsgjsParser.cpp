@@ -55,7 +55,7 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 
     buildMaterialFiles();
 
-    osg::notify(osg::ALWAYS) << "[OSGJS] Parsing Object tree..." << std::endl;
+    osg::notify(osg::ALWAYS) << "[OSGJS] Parsing Scene tree [models, textures, animations]..." << std::endl;
     if (parseObject(rootNode, firstOsgNodeJSON, "JSON Root"))
         return rootNode;
     else
@@ -195,9 +195,6 @@ bool OsgjsParser::parseCallback(ref_ptr<Callback> currentCallback, const json& c
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    // FIXME: Implement.
-    return true;
-
     if (currentJSONNode.is_object())
     {
         // Create a new node to accomodate the object
@@ -206,6 +203,12 @@ bool OsgjsParser::parseCallback(ref_ptr<Callback> currentCallback, const json& c
         // Lookup current node vertically, searching for JSON Callbacks to process
         for (auto itr = currentJSONNode.begin(); itr != currentJSONNode.end(); ++itr)
         {
+#ifdef DEBUG
+            std::string debugNodeKey = itr.key();
+            std::string debugNodeValue = itr.value().dump();
+            int debugNodeUniqueID = itr.value().contains("UniqueID") ? itr.value()["UniqueID"].get<int>() : -1;
+            debugNodeUniqueID = debugNodeUniqueID;
+#endif
             auto found = processCallbacks.find(itr.key());
             if (found != processCallbacks.end() && itr.value().is_object())
             {
@@ -1164,7 +1167,10 @@ ref_ptr<Object> OsgjsParser::parseOsgTextText(const json& currentJSONNode, const
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    OSG_WARN << "WARNING: Scene contains TEXT and FBX Export don't support it. Skipping..." << std::endl;
+
+    ref_ptr<Node> dummy = new Node;
+    return dummy;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgProjection(const json& currentJSONNode, const std::string& nodeKey)
@@ -1176,7 +1182,10 @@ ref_ptr<Object> OsgjsParser::parseOsgProjection(const json& currentJSONNode, con
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    OSG_WARN << "WARNING: Scene contains PROJECTIONS and FBX Export don't support it. Skipping..." << std::endl;
+
+    ref_ptr<Node> dummy = new Node;
+    return dummy;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgLight(const json& currentJSONNode, const std::string& nodeKey)
@@ -1188,7 +1197,10 @@ ref_ptr<Object> OsgjsParser::parseOsgLight(const json& currentJSONNode, const st
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    OSG_WARN << "WARNING: Scene contains LIGHTS and this plugin don't export lights. Skipping..." << std::endl;
+
+    ref_ptr<Node> dummy = new Node;
+    return dummy;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgLightSource(const json& currentJSONNode, const std::string& nodeKey)
@@ -1200,7 +1212,10 @@ ref_ptr<Object> OsgjsParser::parseOsgLightSource(const json& currentJSONNode, co
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    OSG_WARN << "WARNING: Scene contains LIGHT SOURCE and this plugin don't export light sources. Skipping..." << std::endl;
+
+    ref_ptr<Node> dummy = new Node;
+    return dummy;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgPagedLOD(const json& currentJSONNode, const std::string& nodeKey)
@@ -1212,7 +1227,10 @@ ref_ptr<Object> OsgjsParser::parseOsgPagedLOD(const json& currentJSONNode, const
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    OSG_WARN << "WARNING: Scene contains PAGE LoD's and this plugin don't export LoD's. Skipping..." << std::endl;
+
+    ref_ptr<Node> dummy = new Node;
+    return dummy;
 }
 
 
@@ -1226,22 +1244,45 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationBasicAnimationManager(const json
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
+    ref_ptr<BasicAnimationManager> bam = new BasicAnimationManager;
+    bam->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
 
-    return nullptr;
+    if (currentJSONNode.contains("Animations") && currentJSONNode["Animations"].is_array())
+    {
+        for (const auto& child : currentJSONNode["Animations"])
+        {
+            // Find subobjects on children nodes - Must be Animation objects.
+            for (auto itr = child.begin(); itr != child.end(); ++itr)
+            {
+                ref_ptr<Object> childAnimation;
+                auto found = processObjects.find(itr.key());
+                if (found != processObjects.end() && itr.value().is_object())
+                {
+                    childAnimation = found->second(itr.value(), itr.key());
+                }
+                else if (found != processObjects.end() && !itr.value().is_object())
+                {
+                    OSG_WARN << " found a Object JSON node [" << itr.key() <<
+                        "] that is not an object or is malformed. " << ADD_KEY_NAME << std::endl;
+                }
+
+                if (childAnimation && !dynamic_pointer_cast<Animation>(childAnimation))
+                {
+                    OSG_WARN << "WARNING: invalid Animation. " << ADD_KEY_NAME
+                        << "[Subkey: " << itr.key()
+                        << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                        << std::endl;
+                }
+                else if (childAnimation)
+                {
+                    bam->getAnimationList().push_back(dynamic_pointer_cast<Animation>(childAnimation));
+                }
+            }
+        }
+    }
+
+    return bam;
 }
-
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONNode, const std::string& nodeKey)
-{
-#ifdef DEBUG
-    std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
-    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
-    UniqueID = UniqueID; // Bypass compilation warning
-#endif
-
-    return nullptr;
-}
-
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateBone(const json& currentJSONNode, const std::string& nodeKey)
 {
@@ -1252,7 +1293,46 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateBone(const json& currentJS
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<UpdateBone> updateBone = new UpdateBone;
+    updateBone->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    // Parse other attributes. Currently: osgAnimation.StackedTranslate, osgAnimation.StackedQuaternion, 
+    // osgAnimation.StackedRotateAxis, osgAnimation.StackedMatrix, osgAnimation.StackedScale
+    if (currentJSONNode.contains("StackedTransforms") && currentJSONNode["StackedTransforms"].is_array())
+    {
+        for (const auto& child : currentJSONNode["StackedTransforms"])
+        {
+            // Find subobjects on children nodes - Must be StackedTransform objects.
+            for (auto itr = child.begin(); itr != child.end(); ++itr)
+            {
+                ref_ptr<Object> childTransform;
+                auto found = processObjects.find(itr.key());
+                if (found != processObjects.end() && itr.value().is_object())
+                {
+                    childTransform = found->second(itr.value(), itr.key());
+                }
+                else if (found != processObjects.end() && !itr.value().is_object())
+                {
+                    OSG_WARN << " found a Object JSON node [" << itr.key() <<
+                        "] that is not an object or is malformed. " << ADD_KEY_NAME << std::endl;
+                }
+
+                if (childTransform && !dynamic_pointer_cast<StackedTransformElement>(childTransform))
+                {
+                    OSG_WARN << "WARNING: invalid StackedTransform. " << ADD_KEY_NAME
+                        << "[Subkey: " << itr.key()
+                        << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                        << std::endl;
+                }
+                else if (childTransform)
+                {
+                    updateBone->getStackedTransforms().push_back(dynamic_pointer_cast<StackedTransformElement>(childTransform));
+                }
+            }
+        }
+    }
+
+    return updateBone;
 }
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateSkeleton(const json& currentJSONNode, const std::string& nodeKey)
@@ -1264,7 +1344,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateSkeleton(const json& curre
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    return nullptr; // Update Skeleton is a dummy node
 }
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMorph(const json& currentJSONNode, const std::string& nodeKey)
@@ -1276,7 +1356,29 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMorph(const json& currentJ
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<UpdateMorph> updateMorph = new UpdateMorph;
+    updateMorph->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (currentJSONNode.contains("TargetMap") && currentJSONNode["TargetMap"].is_object())
+    {
+        UpdateMorph::TargetNames targets;
+        std::map<int, std::string> targetMap; // Needed for sorted map
+        for (auto& element : currentJSONNode["TargetMap"].items())
+        {
+            int key(0);
+            if (ParserHelper::getSafeInteger(element.key(), key))
+                targetMap[key] = element.value();
+        }
+
+        for (auto element = targetMap.begin(); element != targetMap.end(); ++element)
+        {
+            targets.push_back(element->second);
+        }
+
+        updateMorph->setTargetNames(targets);
+    }
+
+    return updateMorph;
 }
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMatrixTransform(const json& currentJSONNode, const std::string& nodeKey)
@@ -1288,11 +1390,50 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMatrixTransform(const json
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<UpdateMatrixTransform> updateMatrix = new UpdateMatrixTransform;
+    updateMatrix->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    // Parse other attributes. Currently: osgAnimation.StackedTranslate, osgAnimation.StackedQuaternion, 
+    // osgAnimation.StackedRotateAxis, osgAnimation.StackedMatrix, osgAnimation.StackedScale
+    if (currentJSONNode.contains("StackedTransforms") && currentJSONNode["StackedTransforms"].is_array())
+    {
+        for (const auto& child : currentJSONNode["StackedTransforms"])
+        {
+            // Find subobjects on children nodes - Must be StackedTransform objects.
+            for (auto itr = child.begin(); itr != child.end(); ++itr)
+            {
+                ref_ptr<Object> childTransform;
+                auto found = processObjects.find(itr.key());
+                if (found != processObjects.end() && itr.value().is_object())
+                {
+                    childTransform = found->second(itr.value(), itr.key());
+                }
+                else if (found != processObjects.end() && !itr.value().is_object())
+                {
+                    OSG_WARN << " found a Object JSON node [" << itr.key() <<
+                        "] that is not an object or is malformed. " << ADD_KEY_NAME << std::endl;
+                }
+
+                if (childTransform && !dynamic_pointer_cast<StackedTransformElement>(childTransform))
+                {
+                    OSG_WARN << "WARNING: invalid StackedTransform. " << ADD_KEY_NAME
+                        << "[Subkey: " << itr.key()
+                        << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                        << std::endl;
+                }
+                else if (childTransform)
+                {
+                    updateMatrix->getStackedTransforms().push_back(dynamic_pointer_cast<StackedTransformElement>(childTransform));
+                }
+            }
+        }
+    }
+
+    return updateMatrix;
 }
 
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedTranslate(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1301,10 +1442,52 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedTranslate(const json& cur
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<Animation> animation = new Animation;
+    animation->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    // Get UserDataContainer early
+    lookForChildren(animation, currentJSONNode, UserDataContainerType::UserData, "osgAnimation.Animation");
+
+    if (currentJSONNode.contains("Channels") && currentJSONNode["Channels"].is_array())
+    {
+        for (const auto& child : currentJSONNode["Channels"])
+        {
+            // Find subobjects on children nodes - Must be Animation objects.
+            for (auto itr = child.begin(); itr != child.end(); ++itr)
+            {
+                ref_ptr<Object> childChannel;
+                const UserDataContainer* udc = animation->getUserDataContainer();
+                auto found = processChannels.find(itr.key());
+                if (found != processChannels.end() && itr.value().is_object())
+                {
+                    childChannel = found->second(itr.value(), itr.key(), udc);
+                }
+                else if (found != processChannels.end() && !itr.value().is_object())
+                {
+                    OSG_WARN << " found a Object JSON node [" << itr.key() <<
+                        "] that is not an object or is malformed. " << ADD_KEY_NAME << std::endl;
+                }
+
+                if (childChannel && !dynamic_pointer_cast<Channel>(childChannel))
+                {
+                    OSG_WARN << "WARNING: invalid Channel. " << ADD_KEY_NAME
+                        << "[Subkey: " << itr.key()
+                        << (itr.value().contains("Name") ? ("[Name: " + itr.value()["Name"].get<std::string>() + "]") : "")
+                        << std::endl;
+                }
+                else if (childChannel)
+                {
+                    animation->getChannels().push_back(dynamic_pointer_cast<Channel>(childChannel));
+                }
+            }
+        }
+    }
+
+    return animation;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedQuaternion(const json& currentJSONNode, const std::string& nodeKey)
+
+ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedTranslate(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1313,10 +1496,19 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedQuaternion(const json& cu
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<StackedTranslateElement> stackedElement = new StackedTranslateElement;
+    stackedElement->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (currentJSONNode.contains("Translate") && currentJSONNode["Translate"].is_array())
+    {
+        Vec3 vec(currentJSONNode["Translate"][0].get<float>(), currentJSONNode["Translate"][1].get<float>(), currentJSONNode["Translate"][2].get<float>());
+        stackedElement->setTranslate(vec);
+    }
+
+    return stackedElement;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedRotateAxis(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedQuaternion(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1325,10 +1517,20 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedRotateAxis(const json& cu
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<StackedQuaternionElement> stackedElement = new StackedQuaternionElement;
+    stackedElement->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (currentJSONNode.contains("Quaternion") && currentJSONNode["Quaternion"].is_array())
+    {
+        Vec4 vec(currentJSONNode["Quaternion"][0].get<float>(), currentJSONNode["Quaternion"][1].get<float>(), 
+            currentJSONNode["Quaternion"][2].get<float>(), currentJSONNode["Quaternion"][3].get<float>());
+        stackedElement->setQuaternion(vec);
+    }
+
+    return stackedElement;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedScale(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedRotateAxis(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1337,10 +1539,23 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedScale(const json& current
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<StackedRotateAxisElement> stackedElement = new StackedRotateAxisElement;
+    stackedElement->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (currentJSONNode.contains("Axis") && currentJSONNode["Axis"].is_array())
+    {
+        Vec3 vec(currentJSONNode["Axis"][0].get<float>(), currentJSONNode["Axis"][1].get<float>(), currentJSONNode["Axis"][2].get<float>());
+        stackedElement->setAxis(vec);
+    }
+    if (currentJSONNode.contains("Angle"))
+    {
+        stackedElement->setAngle(currentJSONNode["Axis"][1].get<double>());
+    }
+
+    return stackedElement;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedMatrix(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedScale(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1349,11 +1564,19 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationStackedMatrix(const json& curren
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<StackedScaleElement> stackedElement = new StackedScaleElement;
+    stackedElement->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (currentJSONNode.contains("Scale") && currentJSONNode["Scale"].is_array())
+    {
+        Vec3 vec(currentJSONNode["Scale"][0].get<float>(), currentJSONNode["Scale"][1].get<float>(), currentJSONNode["Scale"][2].get<float>());
+        stackedElement->setScale(vec);
+    }
+
+    return stackedElement;
 }
 
-
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedMatrix(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1362,10 +1585,26 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curr
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<StackedMatrixElement> stackedElement = new StackedMatrixElement;
+    stackedElement->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (currentJSONNode.contains("Matrix") && currentJSONNode["Matrix"].is_array())
+    {
+        Matrix matrix;
+        for (int i = 0; i < 16; i++)
+        {
+            matrix(i / 4, i % 4) = currentJSONNode["Matrix"][i];
+        }
+        
+        stackedElement->setMatrix(matrix);
+    }
+
+    return stackedElement;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& currentJSONNode, const std::string& nodeKey)
+
+ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey, 
+    const UserDataContainer* udc)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1374,10 +1613,69 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& cur
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<Vec3LinearChannel> channel = new Vec3LinearChannel;
+    channel->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
+
+    ref_ptr<Array> keysArray, timesArray;
+    bool isKeyEncoded(false), isTimeEncoded(false); // dummy
+    uint32_t magic(0); // dummy
+
+    if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
+    {
+        // Process Time and Key objects
+        const json& keyFrames = currentJSONNode["KeyFrames"];
+
+        if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
+        {
+            const json& time = keyFrames["Time"];
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+        }
+
+        if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
+        {
+            const json& key = keyFrames["Key"];
+            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isKeyEncoded, magic);
+        }
+
+        // Try to decompress arrays
+        if (nodeKey == "osgAnimation.Vec3LerpChannelCompressedPacked")
+        {
+            keysArray = ParserHelper::decompressArray(keysArray, udc, ParserHelper::KeyDecodeMode::Vec3Compressed);
+        }
+
+        if ((dynamic_pointer_cast<Vec3Array>(keysArray) || dynamic_pointer_cast<Vec3dArray>(keysArray))
+            && dynamic_pointer_cast<FloatArray>(timesArray))
+        {
+            for (unsigned int i = 0; i < keysArray->getNumElements(); ++i)
+            {
+                Vec3Keyframe f;
+                Vec3 vec;
+                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                switch (keysArray->getType())
+                {
+                case Array::Vec3dArrayType:
+                    vec = Vec3((*dynamic_pointer_cast<Vec3dArray>(keysArray))[i].x(),
+                        (*dynamic_pointer_cast<Vec3dArray>(keysArray))[i].y(),
+                        (*dynamic_pointer_cast<Vec3dArray>(keysArray))[i].z());
+                    break;
+                case Array::Vec3ArrayType:
+                    vec = Vec3((*dynamic_pointer_cast<Vec3Array>(keysArray))[i].x(),
+                        (*dynamic_pointer_cast<Vec3Array>(keysArray))[i].y(),
+                        (*dynamic_pointer_cast<Vec3Array>(keysArray))[i].z());
+                    break;
+                }
+                f.setValue(vec);
+                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+            }
+        }
+    }
+
+    return channel;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationVec3LerpChannelCompressedPack(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& currentJSONNode, const std::string& nodeKey, 
+    const UserDataContainer* udc)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1386,10 +1684,71 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationVec3LerpChannelCompressedPack(co
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<QuatSphericalLinearChannel> channel = new QuatSphericalLinearChannel;
+    channel->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
+
+    ref_ptr<Array> keysArray, timesArray;
+    bool isKeyEncoded(false), isTimeEncoded(false); // dummy
+    uint32_t magic(0); // dummy
+
+    if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
+    {
+        // Process Time and Key objects
+        const json& keyFrames = currentJSONNode["KeyFrames"];
+
+        if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
+        {
+            const json& time = keyFrames["Time"];
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+        }
+
+        if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
+        {
+            const json& key = keyFrames["Key"];
+            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isKeyEncoded, magic);
+        }
+
+        // Try to decompress arrays
+        if (nodeKey == "osgAnimation.QuatSlerpChannelCompressedPacked")
+        {
+            keysArray = ParserHelper::decompressArray(keysArray, udc, ParserHelper::KeyDecodeMode::QuatCompressed);
+        }
+
+        if ((dynamic_pointer_cast<Vec4dArray>(keysArray) || dynamic_pointer_cast<Vec4Array>(keysArray))
+            && dynamic_pointer_cast<FloatArray>(timesArray))
+        {
+            for (unsigned int i = 0; i < keysArray->getNumElements(); ++i)
+            {
+                QuatKeyframe f;
+                Quat vec;
+                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                switch (keysArray->getType())
+                {
+                case Array::Vec4dArrayType:
+                    vec = Quat((*dynamic_pointer_cast<Vec4dArray>(keysArray))[i].x(),
+                        (*dynamic_pointer_cast<Vec4dArray>(keysArray))[i].y(),
+                        (*dynamic_pointer_cast<Vec4dArray>(keysArray))[i].z(),
+                        (*dynamic_pointer_cast<Vec4dArray>(keysArray))[i].w());
+                    break;
+                case Array::Vec4ArrayType:
+                    vec = Quat((*dynamic_pointer_cast<Vec4Array>(keysArray))[i].x(),
+                        (*dynamic_pointer_cast<Vec4Array>(keysArray))[i].y(),
+                        (*dynamic_pointer_cast<Vec4Array>(keysArray))[i].z(),
+                        (*dynamic_pointer_cast<Vec4Array>(keysArray))[i].w());
+                    break;
+                }
+                f.setValue(vec);
+                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+            }
+        }
+    }
+
+    return channel;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationQuatSLerpChannelCompressedPack(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey, 
+    const UserDataContainer* udc)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1398,11 +1757,48 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationQuatSLerpChannelCompressedPack(c
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<FloatLinearChannel> channel = new FloatLinearChannel;
+    channel->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
+
+    ref_ptr<Array> keysArray, timesArray;
+    bool isKeyEncoded(false), isTimeEncoded(false); // dummy
+    uint32_t magic(0); // dummy
+
+    if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
+    {
+        // Process Time and Key objects
+        const json& keyFrames = currentJSONNode["KeyFrames"];
+
+        if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
+        {
+            const json& time = keyFrames["Time"];
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+        }
+
+        if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
+        {
+            const json& key = keyFrames["Key"];
+            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isKeyEncoded, magic);
+        }
+
+        if (dynamic_pointer_cast<FloatArray>(keysArray) && dynamic_pointer_cast<FloatArray>(timesArray))
+        {
+            for (unsigned int i = 0; i < keysArray->getNumElements(); ++i)
+            {
+                FloatKeyframe f;
+                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                f.setValue((*dynamic_pointer_cast<FloatArray>(keysArray))[i]);
+                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+            }
+        }
+    }
+
+    return channel;
 }
 
-
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey, 
+    const UserDataContainer* udc)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1411,10 +1807,63 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& cur
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
+    ref_ptr<FloatCubicBezierChannel> channel = new FloatCubicBezierChannel;
+    channel->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
+
+    ref_ptr<Array> positionArray, timesArray, controlPointInArray, controlPointOutArray;
+    bool isPosEncoded(false), isTimeEncoded(false), isCPInEncoded, isCPOutEncoded; // dummy
+    uint32_t magic(0); // dummy
+
+    if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
+    {
+        // Process Key and Time objects
+        const json& keyFrames = currentJSONNode["KeyFrames"];
+
+        if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
+        {
+            const json& time = keyFrames["Time"];
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+        }
+
+        if (keyFrames.contains("Position") && keyFrames["Position"].is_object())
+        {
+            const json& key = keyFrames["Position"];
+            positionArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isPosEncoded, magic);
+        }
+
+        if (keyFrames.contains("ControlPointIn") && keyFrames["ControlPointIn"].is_object())
+        {
+            const json& cpoint = keyFrames["ControlPointIn"];
+            controlPointInArray = ParserHelper::parseJSONArray(cpoint["Array"], cpoint["ItemSize"], _fileCache, isCPInEncoded, magic);
+        }
+
+        if (keyFrames.contains("ControlPointOut") && keyFrames["ControlPointOut"].is_object())
+        {
+            const json& cpoint = keyFrames["ControlPointOut"];
+            controlPointOutArray = ParserHelper::parseJSONArray(cpoint["Array"], cpoint["ItemSize"], _fileCache, isCPOutEncoded, magic);
+        }
+
+
+        if (dynamic_pointer_cast<FloatArray>(positionArray) && dynamic_pointer_cast<FloatArray>(timesArray)
+            && dynamic_pointer_cast<FloatArray>(controlPointInArray) && dynamic_pointer_cast<FloatArray>(controlPointOutArray))
+        {
+            for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
+            {
+                FloatCubicBezierKeyframe f;
+                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                f.setValue(FloatCubicBezier((*dynamic_pointer_cast<FloatArray>(positionArray))[i], (*dynamic_pointer_cast<FloatArray>(controlPointInArray))[i],
+                    (*dynamic_pointer_cast<FloatArray>(controlPointOutArray))[i]));
+                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+            }
+        }
+    }
+
+    return channel;
 }
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey, 
+    const UserDataContainer* udc)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1423,19 +1872,85 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const js
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr;
-}
+    ref_ptr<Vec3CubicBezierChannel> channel = new Vec3CubicBezierChannel;
+    channel->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
 
-ref_ptr<Callback> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey)
-{
-#ifdef DEBUG
-    std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
-    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
-    UniqueID = UniqueID; // Bypass compilation warning
-#endif
+    ref_ptr<Array> timesArray, 
+        positionArrayX, 
+        positionArrayY, 
+        positionArrayZ,
+        controlPointInArrayX,
+        controlPointInArrayY, 
+        controlPointInArrayZ, 
+        controlPointOutArrayX,
+        controlPointOutArrayY,
+        controlPointOutArrayZ;
 
-    return nullptr;
+    bool isPosEncoded(false), isTimeEncoded(false), isCPInEncoded, isCPOutEncoded; // dummy
+    uint32_t magic(0); // dummy
+
+    if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
+    {
+        // Process Time and Position objects
+        const json& keyFrames = currentJSONNode["KeyFrames"];
+
+        if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
+        {
+            const json& time = keyFrames["Time"];
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+        }
+
+        if (keyFrames.contains("Position") && keyFrames["Position"].is_object())
+        {
+            const json& key = keyFrames["Position"];
+            positionArrayX = ParserHelper::parseJSONArray(key[0]["Array"], key[0]["ItemSize"], _fileCache, isPosEncoded, magic);
+            positionArrayY = ParserHelper::parseJSONArray(key[1]["Array"], key[1]["ItemSize"], _fileCache, isPosEncoded, magic);
+            positionArrayZ = ParserHelper::parseJSONArray(key[2]["Array"], key[2]["ItemSize"], _fileCache, isPosEncoded, magic);
+        }
+
+        if (keyFrames.contains("ControlPointIn") && keyFrames["ControlPointIn"].is_object())
+        {
+            const json& cpoint = keyFrames["ControlPointIn"];
+            controlPointInArrayX = ParserHelper::parseJSONArray(cpoint[0]["Array"], cpoint[0]["ItemSize"], _fileCache, isCPInEncoded, magic);
+            controlPointInArrayY = ParserHelper::parseJSONArray(cpoint[1]["Array"], cpoint[1]["ItemSize"], _fileCache, isCPInEncoded, magic);
+            controlPointInArrayZ = ParserHelper::parseJSONArray(cpoint[2]["Array"], cpoint[2]["ItemSize"], _fileCache, isCPInEncoded, magic);
+        }
+
+        if (keyFrames.contains("ControlPointOut") && keyFrames["ControlPointOut"].is_object())
+        {
+            const json& cpoint = keyFrames["ControlPointOut"];
+            controlPointOutArrayX = ParserHelper::parseJSONArray(cpoint[0]["Array"], cpoint[0]["ItemSize"], _fileCache, isCPOutEncoded, magic);
+            controlPointOutArrayY = ParserHelper::parseJSONArray(cpoint[1]["Array"], cpoint[1]["ItemSize"], _fileCache, isCPOutEncoded, magic);
+            controlPointOutArrayZ = ParserHelper::parseJSONArray(cpoint[2]["Array"], cpoint[2]["ItemSize"], _fileCache, isCPOutEncoded, magic);
+        }
+
+        if (dynamic_pointer_cast<FloatArray>(timesArray) 
+            && dynamic_pointer_cast<FloatArray>(controlPointInArrayX) && dynamic_pointer_cast<FloatArray>(controlPointInArrayY) && dynamic_pointer_cast<FloatArray>(controlPointInArrayZ)
+            && dynamic_pointer_cast<FloatArray>(controlPointOutArrayX) && dynamic_pointer_cast<FloatArray>(controlPointOutArrayY) && dynamic_pointer_cast<FloatArray>(controlPointOutArrayZ))
+        {
+            for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
+            {
+                Vec3CubicBezierKeyframe f;
+                Vec3CubicBezier vec;
+                vec.setPosition(Vec3((*dynamic_pointer_cast<FloatArray>(positionArrayX))[i], 
+                    (*dynamic_pointer_cast<FloatArray>(positionArrayY))[i], 
+                    (*dynamic_pointer_cast<FloatArray>(positionArrayZ))[i]));
+                vec.setControlPointIn(Vec3((*dynamic_pointer_cast<FloatArray>(controlPointInArrayX))[i],
+                    (*dynamic_pointer_cast<FloatArray>(controlPointInArrayY))[i],
+                    (*dynamic_pointer_cast<FloatArray>(controlPointInArrayZ))[i]));
+                vec.setControlPointOut(Vec3((*dynamic_pointer_cast<FloatArray>(controlPointOutArrayX))[i],
+                    (*dynamic_pointer_cast<FloatArray>(controlPointOutArrayY))[i],
+                    (*dynamic_pointer_cast<FloatArray>(controlPointOutArrayZ))[i]));
+
+                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                f.setValue(vec);
+                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+            }
+        }
+    }
+
+    return channel;
 }
 
 

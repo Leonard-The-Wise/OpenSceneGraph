@@ -97,7 +97,8 @@ static bool addJSONChannelFloat(osgAnimation::FloatLinearChannel* channel, JSONO
         osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
         osg::ref_ptr<osg::FloatArray> keysArray = new osg::FloatArray;
 
-        for (unsigned int i = 0; i < keys->size(); i++) {
+        for (unsigned int i = 0; i < keys->size(); i++) 
+        {
             timesArray->push_back((*keys)[i].getTime());
             keysArray->push_back((*keys)[i].getValue());
         }

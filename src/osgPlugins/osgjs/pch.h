@@ -49,11 +49,13 @@
 #include <osgAnimation/MorphGeometry>
 #include <osgAnimation/Sampler>
 #include <osgAnimation/UpdateMatrixTransform>
+#include <osgAnimation/UpdateBone>
 #include <osgAnimation/StackedTranslateElement>
 #include <osgAnimation/StackedQuaternionElement>
 #include <osgAnimation/StackedRotateAxisElement>
 #include <osgAnimation/StackedMatrixElement>
 #include <osgAnimation/StackedScaleElement>
+#include <osgAnimation/BasicAnimationManager>
 
 #include <osgAnimation/RigTransformHardware>
 #include <osgAnimation/RigTransformSoftware>

@@ -468,13 +468,12 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 	if (returnArray && elementsPerItem > 1)
 	{
 		returnArray = recastArray(returnArray, static_cast<DesiredVectorSize>(elementsPerItem));
-		
 	}
 
 	return returnArray;
 }
 
-void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const ref_ptr<Array> bones, const ref_ptr<Array> weights,
+void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const ref_ptr<Array>& bones, const ref_ptr<Array>& weights,
 	const std::map<int, std::string>& boneIndexes)
 {
 	ref_ptr<osgAnimation::VertexInfluenceMap> influenceMap = new osgAnimation::VertexInfluenceMap;
@@ -540,7 +539,7 @@ void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, cons
 	rigGeometry->setInfluenceMap(influenceMap);
 }
 
-osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Array> indices, const osg::ref_ptr<osg::Array> vertices,
+osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Array>& indices, const osg::ref_ptr<osg::Array>& vertices,
 	const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h)
 {
 	// Decast vertices to array.
@@ -663,8 +662,160 @@ osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Ar
 	return verticesConverted;
 }
 
+osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::Array>& keys, const UserDataContainer* udc,
+	KeyDecodeMode mode)
+{
+	std::vector<double> o(4), b(3), h(3);
+	std::vector<std::string> valuesO(4), valuesB(3), valuesH(3);
+	double epsilon(0.0), nphi(0.0);
 
-bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, double& value)
+	std::ignore = udc->getUserValue("ox", valuesO[0]);
+	std::ignore = udc->getUserValue("oy", valuesO[1]);
+	std::ignore = udc->getUserValue("oz", valuesO[2]);
+	std::ignore = udc->getUserValue("ow", valuesO[3]);
+
+	std::ignore = udc->getUserValue("bx", valuesB[0]);
+	std::ignore = udc->getUserValue("by", valuesB[1]);
+	std::ignore = udc->getUserValue("bz", valuesB[2]);
+
+	std::ignore = udc->getUserValue("hx", valuesH[0]);
+	std::ignore = udc->getUserValue("hy", valuesH[1]);
+	std::ignore = udc->getUserValue("hz", valuesH[2]);
+
+	std::ignore = udc->getUserValue("epsilon", epsilon);
+	std::ignore = udc->getUserValue("nphi", nphi);
+
+
+	if (!valuesO[0].empty())
+		getSafeDouble(valuesO[0], o[0]);
+	if (!valuesO[1].empty())
+		getSafeDouble(valuesO[1], o[1]);
+	if (!valuesO[2].empty())
+		getSafeDouble(valuesO[2], o[2]);
+	if (!valuesO[3].empty())
+		getSafeDouble(valuesO[3], o[3]);
+
+	if (!valuesB[0].empty())
+		getSafeDouble(valuesB[0], b[0]);
+	if (!valuesB[1].empty())
+		getSafeDouble(valuesB[1], b[1]);
+	if (!valuesB[2].empty())
+		getSafeDouble(valuesB[2], b[2]);
+
+	if (!valuesH[0].empty())
+		getSafeDouble(valuesH[0], h[0]);
+	if (!valuesH[1].empty())
+		getSafeDouble(valuesH[1], h[1]);
+	if (!valuesH[2].empty())
+		getSafeDouble(valuesH[2], h[2]);
+
+	osg::ref_ptr<osg::Array> keysConverted = ParserHelper::recastArray(keys, DesiredVectorSize::Array);
+	osg::ref_ptr<osg::DoubleArray> keysInflated1;
+	osg::ref_ptr<osg::DoubleArray> keysInflated2;
+	osg::ref_ptr<osg::DoubleArray> keysFloat;
+	unsigned int elementSize = keys->getDataSize();
+
+	switch (keysConverted->getType())
+	{
+	case Array::UIntArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<UIntArray>(keysConverted), elementSize);
+		break;
+	case Array::UShortArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<UShortArray>(keysConverted), elementSize);
+		break;
+	case Array::UByteArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<UByteArray>(keysConverted), elementSize);
+		break;
+	case Array::IntArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<IntArray>(keysConverted), elementSize);
+		break;
+	case Array::ShortArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<ShortArray>(keysConverted), elementSize);
+		break;
+	case Array::ByteArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<ByteArray>(keysConverted), elementSize);
+		break;
+	default:
+		OSG_WARN << "WARNING: Unsupported Array to decompress." << std::endl;
+		return nullptr;
+	}
+
+	if (mode == KeyDecodeMode::Vec3Compressed)
+	{
+		switch (keysConverted->getType())
+		{
+		case Array::UIntArrayType:
+			keysInflated1 = inflateKeys1<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), elementSize, b, h);
+			break;
+		case Array::UShortArrayType:
+			keysInflated1 = inflateKeys1<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), elementSize, b, h);
+			break;
+		case Array::UByteArrayType:
+			keysInflated1 = inflateKeys1<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), elementSize, b, h);
+			break;
+		case Array::IntArrayType:
+			keysInflated1 = inflateKeys1<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), elementSize, b, h);
+			break;
+		case Array::ShortArrayType:
+			keysInflated1 = inflateKeys1<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), elementSize, b, h);
+			break;
+		case Array::ByteArrayType:
+			keysInflated1 = inflateKeys1<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), elementSize, b, h);
+			break;
+		}
+
+		keysInflated2->reserveArray(keysInflated1->getNumElements() + 3);
+		keysInflated2->push_back(o[0]);
+		keysInflated2->push_back(o[1]);
+		keysInflated2->push_back(o[2]);
+		keysInflated2->insert(keysInflated2->begin() + 3, keysInflated1->begin(), keysInflated1->end());
+
+		keysConverted = inflateKeys2(keysInflated2, elementSize);
+	
+		// Recast Array
+		keysConverted = recastArray(keysConverted, static_cast<DesiredVectorSize>(elementSize));
+	}
+	else if (mode == KeyDecodeMode::QuatCompressed)
+	{
+		switch (keysConverted->getType())
+		{
+		case Array::UIntArrayType:
+			keysInflated1 = int3ToFloat4<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), epsilon, nphi, elementSize);
+			break;
+		case Array::UShortArrayType:
+			keysInflated1 = int3ToFloat4<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), epsilon, nphi, elementSize);
+			break;
+		case Array::UByteArrayType:
+			keysInflated1 = int3ToFloat4<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), epsilon, nphi, elementSize);
+			break;
+		case Array::IntArrayType:
+			keysInflated1 = int3ToFloat4<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), epsilon, nphi, elementSize);
+			break;
+		case Array::ShortArrayType:
+			keysInflated1 = int3ToFloat4<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), epsilon, nphi, elementSize);
+			break;
+		case Array::ByteArrayType:
+			keysInflated1 = int3ToFloat4<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), epsilon, nphi, elementSize);
+			break;
+		}
+
+		keysInflated2->reserveArray(keysInflated1->getNumElements() + 4);
+		keysInflated2->push_back(o[0]);
+		keysInflated2->push_back(o[1]);
+		keysInflated2->push_back(o[2]);
+		keysInflated2->push_back(o[3]);
+		keysInflated2->insert(keysInflated2->begin() + 4, keysInflated1->begin(), keysInflated1->end());
+
+		keysConverted = inflateKeysQuat(keysInflated2);
+
+		// Recast Array
+		keysConverted = recastArray(keysConverted, static_cast<DesiredVectorSize>(elementSize + 1));
+	}
+
+	return keysConverted;
+}
+
+bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, double& value)
 {
 	for (const osgSim::ShapeAttribute& attr : *shapeAttrList) 
 	{
@@ -682,7 +833,7 @@ bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeLi
 	return false;
 }
 
-bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, int& value)
+bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, int& value)
 {
 	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
 	{
@@ -695,7 +846,7 @@ bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeLi
 	return false;
 }
 
-bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList> shapeAttrList, const std::string name, std::string& value)
+bool ParserHelper::getShapeAttribute(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, std::string& value)
 {
 	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
 	{
@@ -926,7 +1077,7 @@ Array* ParserHelper::getVertexAttribArray(osgAnimation::RigGeometry& rigGeometry
 }
 
 
-ref_ptr<Array> ParserHelper::recastArray(const ref_ptr<Array> toRecast, DesiredVectorSize vecSize)
+ref_ptr<Array> ParserHelper::recastArray(const ref_ptr<Array>& toRecast, DesiredVectorSize vecSize)
 {
 	if (!toRecast)
 		return nullptr;
@@ -1414,7 +1565,7 @@ ref_ptr<Array> ParserHelper::recastArray(const ref_ptr<Array> toRecast, DesiredV
 	return returnArray;
 }
 
-ref_ptr<Array> ParserHelper::decastVector(const ref_ptr<Array> toRecast)
+ref_ptr<Array> ParserHelper::decastVector(const ref_ptr<Array>& toRecast)
 {
 	if (!toRecast)
 		return nullptr;
@@ -1786,7 +1937,7 @@ std::vector<T> ParserHelper::decodeWatermark(const std::vector<T>& t, uint32_t& 
 }
 
 template <typename T, typename U>
-osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T> indices, const osg::ref_ptr<U> vertices, int itemSize)
+osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T>& indices, const osg::ref_ptr<U>& vertices, int itemSize)
 {
 	osg::ref_ptr<U> t = new U(*vertices);
 	if (!indices->empty())
@@ -1832,7 +1983,7 @@ osg::ref_ptr<osg::Array> ParserHelper::decodePredict(const osg::ref_ptr<T> indic
 }
 
 template <typename T>
-osg::ref_ptr<osg::Array> ParserHelper::decodeQuantize(const osg::ref_ptr<T> vertices, const std::vector<double>& vtx_bbl,
+osg::ref_ptr<osg::Array> ParserHelper::decodeQuantize(const osg::ref_ptr<T>& vertices, const std::vector<double>& vtx_bbl,
 	const std::vector<double>& vtx_h, int elementSize)
 {
 	ref_ptr<DoubleArray> x = new DoubleArray();
@@ -1848,4 +1999,175 @@ osg::ref_ptr<osg::Array> ParserHelper::decodeQuantize(const osg::ref_ptr<T> vert
 		}
 	}
 	return x;
+}
+
+// Etap1
+template <typename T>
+osg::ref_ptr<T> ParserHelper::deInterleaveKeys(const osg::ref_ptr<T>& input, unsigned int itemSize)
+{
+	unsigned int n = input->getNumElements() / itemSize;
+	unsigned int r = 0;
+	osg::ref_ptr<T> output = new T(input->getNumElements());
+
+	while (r < n) 
+	{
+		unsigned int a = r * itemSize;
+		unsigned int s = 0;
+		while (s < itemSize) 
+		{
+			(*output)[static_cast<size_t>(a) + s] = (*input)[r + static_cast<size_t>(n) * s];
+			s += 1;
+		}
+		r += 1;
+	}
+	return output;
+}
+
+// Etap2
+template <typename T>
+osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeys1(const osg::ref_ptr<T>& input, unsigned int itemSize,
+	const std::vector<double>& attrB, const std::vector<double>& attrH)
+{
+	std::vector<double> i = { attrB[0], attrB[1], attrB[2] }; // bx, by, bz
+	std::vector<double> n = { attrH[0], attrH[1], attrH[2] }; // hx, hy, hz
+
+	unsigned int a = input->getNumElements() / itemSize;
+	osg::ref_ptr<osg::DoubleArray> output = new osg::DoubleArray(input->getNumElements());
+	unsigned int s = 0;
+
+	while (s < a) {
+		unsigned int o = s * itemSize;
+		unsigned int u = 0;
+		while (u < itemSize) {
+			(*output)[static_cast<size_t>(o) + u] = static_cast<float>(i[u] + (*input)[static_cast<size_t>(o) + u] * n[u]);
+			u += 1;
+		}
+		s += 1;
+	}
+
+	return output;
+}
+
+// Etap3
+osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeys2(const osg::ref_ptr<osg::DoubleArray>& input, unsigned int itemSize)
+{
+	osg::ref_ptr<osg::DoubleArray> output = new DoubleArray(*input);
+	unsigned int i = itemSize | 1; 
+	unsigned int n = 1;
+	unsigned int r = output->size() / i;
+
+	while (n < r) {
+		unsigned int a = (n - 1) * i;
+		unsigned int s = n * i;
+		unsigned int o = 0;
+		while (o < i) {
+			(*output)[static_cast<size_t>(s) + o] += (*output)[static_cast<size_t>(a) + o];
+			o += 1;
+		}
+		n += 1;
+	}
+
+	return output;
+}
+
+// Etap4
+template <typename T>
+osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysQuat(const osg::ref_ptr<T>& input)
+{
+	osg::ref_ptr<osg::DoubleArray> output = new DoubleArray(input->begin(), input->end());
+
+	unsigned int e = 1;
+	unsigned int i = output->getNumElements() / 4;
+
+	while (e < i) {
+		unsigned int n = 4 * (e - 1);
+		unsigned int r = 4 * e;
+
+		float a = (*output)[n];
+		float s = (*output)[static_cast<size_t>(n) + 1];
+		float o = (*output)[static_cast<size_t>(n) + 2];
+		float u = (*output)[static_cast<size_t>(n) + 3];
+		float l = (*output)[r];
+		float h = (*output)[static_cast<size_t>(n) + 1];
+		float c = (*output)[static_cast<size_t>(n) + 2];
+		float d = (*output)[static_cast<size_t>(n) + 3];
+
+		(*output)[r] = a * d + s * c - o * h + u * l;
+		(*output)[static_cast<size_t>(n) + 1] = -a * c + s * d + o * l + u * h;
+		(*output)[static_cast<size_t>(n) + 2] = a * h - s * l + o * d + u * c;
+		(*output)[static_cast<size_t>(n) + 3] = -a * l - s * h - o * c + u * d;
+
+		++e;
+	}
+	
+	return output;
+}
+
+template <typename T>
+osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize)
+{
+	int c = 4;
+	double d = epsilon != 0 ? epsilon : 0.25;
+	int p = static_cast<int>(nphi != 0 ? nphi : 720);
+	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray(input->getNumElements() * 4, 0);
+
+	double i = 1.57079632679;
+	double n = 6.28318530718;
+	double r = 3.14159265359;
+	double a = 0.01745329251;
+	int u = 832;
+	double l = 47938362584151635e-21;
+	std::vector<double> _;
+
+	int v = (p + 1) * (u + 1) * 3;
+	_.resize(v, 0);
+
+	double b = r / static_cast<double>(p - 1);
+	double x = i / static_cast<double>(p - 1);
+
+	int y = 3;
+
+	int m = 0;
+	int v_length = input->getNumElements() / y;
+	while (m < v_length) 
+	{
+		int A = m * c;
+		int S = m * y;
+		int C = (*input)[S];
+		int w = (*input)[S + 1];
+		double M(0.0), T(0.0), E(0.0);
+		int I = 3 * (C + p * w);
+
+		M = _[I];
+		if (M == 0) 
+		{  
+			double N = C * b;
+			double k = std::cos(N);
+			double F = std::sin(N);
+			N += x;
+			double D = (std::cos(d * a) - k * std::cos(N)) / std::max(1e-5, F * std::sin(N));
+			D = std::max(-1.0, std::min(D, 1.0));
+
+			double P = w * n / std::ceil(r / std::max(1e-5, std::acos(D)));
+			M = _[I] = F * std::cos(P);
+			T = _[static_cast<size_t>(I) + 1] = F * std::sin(P);
+			E = _[static_cast<size_t>(I) + 2] = k;
+		}
+		else 
+		{
+			T = _[static_cast<size_t>(I) + 1];
+			E = _[static_cast<size_t>(I) + 2];
+		}
+
+		double R = (*input)[S + 2] * l;
+		double O = std::sin(R);
+		(*e)[A] = O * M;
+		(*e)[static_cast<size_t>(A) + 1] = O * T;
+		(*e)[static_cast<size_t>(A) + 2] = O * E;
+		(*e)[static_cast<size_t>(A) + 3] = std::cos(R);
+
+		++m;
+	}
+
+	return e;
 }
