@@ -86,7 +86,15 @@ namespace osgJSONParser
                 { "osgAnimation.StackedRotateAxis", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationStackedRotateAxis(json, nodeKey); }},
                 { "osgAnimation.StackedMatrix", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationStackedMatrix(json, nodeKey); }},
                 { "osgAnimation.StackedScale", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationStackedScale(json, nodeKey); }},
-            },
+
+                { "osgAnimation.Vec3LerpChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationVec3LerpChannel(json, nodeKey); }},
+                { "osgAnimation.QuatSlerpChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationQuatSlerpChannel(json, nodeKey); }},
+                { "osgAnimation.Vec3LerpChannelCompressedPacked", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationVec3LerpChannel(json, nodeKey); }},
+                { "osgAnimation.QuatSlerpChannelCompressedPacked", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationQuatSlerpChannel(json, nodeKey); }},
+                { "osgAnimation.FloatLerpChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationFloatLerpChannel(json, nodeKey); }},
+                { "osgAnimation.FloatCubicBezierChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationFloatCubicBezierChannel(json, nodeKey); }},
+                { "osgAnimation.Vec3CubicBezierChannel", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationVec3CubicBezierChannel(json, nodeKey); }},
+        },
             processCallbacks {
                 { "osgAnimation.BasicAnimationManager", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Callback> {return this->parseOsgAnimationBasicAnimationManager(json, nodeKey); }},
                 { "osgAnimation.UpdateBone", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Callback> {return this->parseOsgAnimationUpdateBone(json, nodeKey); }},
@@ -94,15 +102,6 @@ namespace osgJSONParser
                 { "osgAnimation.UpdateMorph", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Callback> {return this->parseOsgAnimationUpdateMorph(json, nodeKey); }},
                 { "osgAnimation.UpdateMatrixTransform", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Callback> {return this->parseOsgAnimationUpdateMatrixTransform(json, nodeKey); }},
             }, 
-            processChannels {
-                { "osgAnimation.Vec3LerpChannel", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationVec3LerpChannel(json, nodeKey, udc); }},
-                { "osgAnimation.QuatSLerpChannel", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationQuatSLerpChannel(json, nodeKey, udc); }},
-                { "osgAnimation.Vec3LerpChannelCompressedPacked", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationVec3LerpChannel(json, nodeKey, udc); }},
-                { "osgAnimation.QuatSlerpChannelCompressedPacked", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationQuatSLerpChannel(json, nodeKey, udc); }},
-                { "osgAnimation.FloatLerpChannel", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationFloatLerpChannel(json, nodeKey, udc); }},
-                { "osgAnimation.FloatCubicBezierChannel", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationFloatCubicBezierChannel(json, nodeKey, udc); }},
-                { "osgAnimation.Vec3CubicBezierChannel", [this](const json& json, const std::string& nodeKey, const osg::UserDataContainer* udc) -> osg::ref_ptr<osg::Object> {return this->parseOsgAnimationVec3CubicBezierChannel(json, nodeKey, udc); }},
-            },
             drawableNodes{
                 "osg.Geometry",
                 "osgAnimation.RigGeometry",
@@ -137,8 +136,6 @@ namespace osgJSONParser
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;
-        const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey,
-            const osg::UserDataContainer* udc)>> processChannels;
         const std::unordered_set<std::string> drawableNodes;
 
         void buildMaterialFiles();
@@ -186,11 +183,11 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Object> parseOsgAnimationStackedMatrix(const json& currentJSONNode, const std::string& nodeKey);
         osg::ref_ptr<osg::Object> parseOsgAnimationStackedScale(const json& currentJSONNode, const std::string& nodeKey);
 
-        osg::ref_ptr<osg::Object> parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey, const osg::UserDataContainer* udc);
-        osg::ref_ptr<osg::Object> parseOsgAnimationQuatSLerpChannel(const json& currentJSONNode, const std::string& nodeKey, const osg::UserDataContainer* udc);
-        osg::ref_ptr<osg::Object> parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey, const osg::UserDataContainer* udc);
-        osg::ref_ptr<osg::Object> parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey, const osg::UserDataContainer* udc);
-        osg::ref_ptr<osg::Object> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey, const osg::UserDataContainer* udc);
+        osg::ref_ptr<osg::Object> parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey);
+        osg::ref_ptr<osg::Object> parseOsgAnimationQuatSlerpChannel(const json& currentJSONNode, const std::string& nodeKey);
+        osg::ref_ptr<osg::Object> parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey);
+        osg::ref_ptr<osg::Object> parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
+        osg::ref_ptr<osg::Object> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
 
         std::string getModelName() const;
         osg::ref_ptr<osg::Image> createImage(const std::string& fileName, std::string& outFileRenamed);

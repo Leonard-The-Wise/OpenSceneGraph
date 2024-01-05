@@ -711,7 +711,7 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 
 	osg::ref_ptr<osg::Array> keysConverted = ParserHelper::recastArray(keys, DesiredVectorSize::Array);
 	osg::ref_ptr<osg::DoubleArray> keysInflated1;
-	osg::ref_ptr<osg::DoubleArray> keysInflated2;
+	osg::ref_ptr<osg::DoubleArray> keysInflated2 = new DoubleArray;
 	osg::ref_ptr<osg::DoubleArray> keysFloat;
 	unsigned int elementSize = keys->getDataSize();
 
@@ -1986,7 +1986,7 @@ template <typename T>
 osg::ref_ptr<osg::Array> ParserHelper::decodeQuantize(const osg::ref_ptr<T>& vertices, const std::vector<double>& vtx_bbl,
 	const std::vector<double>& vtx_h, int elementSize)
 {
-	ref_ptr<DoubleArray> x = new DoubleArray();
+	ref_ptr<DoubleArray> x = new DoubleArray;
 	x->resize(vertices->getNumElements());
 
 	int id = 0;
@@ -2083,19 +2083,19 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysQuat(const osg::ref_ptr<
 		unsigned int n = 4 * (e - 1);
 		unsigned int r = 4 * e;
 
-		float a = (*output)[n];
-		float s = (*output)[static_cast<size_t>(n) + 1];
-		float o = (*output)[static_cast<size_t>(n) + 2];
-		float u = (*output)[static_cast<size_t>(n) + 3];
-		float l = (*output)[r];
-		float h = (*output)[static_cast<size_t>(n) + 1];
-		float c = (*output)[static_cast<size_t>(n) + 2];
-		float d = (*output)[static_cast<size_t>(n) + 3];
+		double a = (*output)[n];
+		double s = (*output)[static_cast<size_t>(n) + 1];
+		double o = (*output)[static_cast<size_t>(n) + 2];
+		double u = (*output)[static_cast<size_t>(n) + 3];
+		double l = (*output)[r];
+		double h = (*output)[static_cast<size_t>(r) + 1];
+		double c = (*output)[static_cast<size_t>(r) + 2];
+		double d = (*output)[static_cast<size_t>(r) + 3];
 
 		(*output)[r] = a * d + s * c - o * h + u * l;
-		(*output)[static_cast<size_t>(n) + 1] = -a * c + s * d + o * l + u * h;
-		(*output)[static_cast<size_t>(n) + 2] = a * h - s * l + o * d + u * c;
-		(*output)[static_cast<size_t>(n) + 3] = -a * l - s * h - o * c + u * d;
+		(*output)[static_cast<size_t>(r) + 1] = -a * c + s * d + o * l + u * h;
+		(*output)[static_cast<size_t>(r) + 2] = a * h - s * l + o * d + u * c;
+		(*output)[static_cast<size_t>(r) + 3] = -a * l - s * h - o * c + u * d;
 
 		++e;
 	}
@@ -2109,7 +2109,8 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4(const osg::ref_ptr<T>&
 	int c = 4;
 	double d = epsilon != 0 ? epsilon : 0.25;
 	int p = static_cast<int>(nphi != 0 ? nphi : 720);
-	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray(input->getNumElements() * 4, 0);
+	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray();
+	e->resizeArray(input->getNumElements() * 4);
 
 	double i = 1.57079632679;
 	double n = 6.28318530718;

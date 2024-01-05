@@ -1281,6 +1281,8 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationBasicAnimationManager(const json
         }
     }
 
+    lookForChildren(bam, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return bam;
 }
 
@@ -1332,6 +1334,8 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateBone(const json& currentJS
         }
     }
 
+    lookForChildren(updateBone, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return updateBone;
 }
 
@@ -1344,7 +1348,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateSkeleton(const json& curre
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    return nullptr; // Update Skeleton is a dummy node
+    return new Callback; // Update Skeleton is a dummy node
 }
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMorph(const json& currentJSONNode, const std::string& nodeKey)
@@ -1377,6 +1381,8 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMorph(const json& currentJ
 
         updateMorph->setTargetNames(targets);
     }
+
+    lookForChildren(updateMorph, currentJSONNode, UserDataContainerType::UserData, nodeKey);
 
     return updateMorph;
 }
@@ -1429,6 +1435,8 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMatrixTransform(const json
         }
     }
 
+    lookForChildren(updateMatrix, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return updateMatrix;
 }
 
@@ -1445,9 +1453,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONN
     ref_ptr<Animation> animation = new Animation;
     animation->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
 
-    // Get UserDataContainer early
-    lookForChildren(animation, currentJSONNode, UserDataContainerType::UserData, "osgAnimation.Animation");
-
     if (currentJSONNode.contains("Channels") && currentJSONNode["Channels"].is_array())
     {
         for (const auto& child : currentJSONNode["Channels"])
@@ -1456,13 +1461,12 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONN
             for (auto itr = child.begin(); itr != child.end(); ++itr)
             {
                 ref_ptr<Object> childChannel;
-                const UserDataContainer* udc = animation->getUserDataContainer();
-                auto found = processChannels.find(itr.key());
-                if (found != processChannels.end() && itr.value().is_object())
+                auto found = processObjects.find(itr.key());
+                if (found != processObjects.end() && itr.value().is_object())
                 {
-                    childChannel = found->second(itr.value(), itr.key(), udc);
+                    childChannel = found->second(itr.value(), itr.key());
                 }
-                else if (found != processChannels.end() && !itr.value().is_object())
+                else if (found != processObjects.end() && !itr.value().is_object())
                 {
                     OSG_WARN << " found a Object JSON node [" << itr.key() <<
                         "] that is not an object or is malformed. " << ADD_KEY_NAME << std::endl;
@@ -1482,6 +1486,8 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONN
             }
         }
     }
+
+    lookForChildren(animation, currentJSONNode, UserDataContainerType::UserData, nodeKey);
 
     return animation;
 }
@@ -1603,8 +1609,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedMatrix(const json& currentJ
 }
 
 
-ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey, 
-    const UserDataContainer* udc)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1641,13 +1646,21 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
         // Try to decompress arrays
         if (nodeKey == "osgAnimation.Vec3LerpChannelCompressedPacked")
         {
-            keysArray = ParserHelper::decompressArray(keysArray, udc, ParserHelper::KeyDecodeMode::Vec3Compressed);
+            // Get UserDataContainer early
+            lookForChildren(channel, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+            keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::Vec3Compressed);
         }
 
         if ((dynamic_pointer_cast<Vec3Array>(keysArray) || dynamic_pointer_cast<Vec3dArray>(keysArray))
             && dynamic_pointer_cast<FloatArray>(timesArray))
         {
-            for (unsigned int i = 0; i < keysArray->getNumElements(); ++i)
+            ref_ptr<Vec3LinearSampler> vec3Sampler = new Vec3LinearSampler;
+            ref_ptr<Vec3KeyframeContainer> vec3Container = new Vec3KeyframeContainer;
+            vec3Sampler->setKeyframeContainer(vec3Container);
+            channel->setSampler(vec3Sampler);
+
+            vec3Container->reserve(timesArray->getNumElements());
+            for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
             {
                 Vec3Keyframe f;
                 Vec3 vec;
@@ -1666,7 +1679,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
                     break;
                 }
                 f.setValue(vec);
-                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+                vec3Container->push_back(f);
             }
         }
     }
@@ -1674,8 +1687,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
     return channel;
 }
 
-ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& currentJSONNode, const std::string& nodeKey, 
-    const UserDataContainer* udc)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1712,13 +1724,21 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& curre
         // Try to decompress arrays
         if (nodeKey == "osgAnimation.QuatSlerpChannelCompressedPacked")
         {
-            keysArray = ParserHelper::decompressArray(keysArray, udc, ParserHelper::KeyDecodeMode::QuatCompressed);
+            // Get UserDataContainer early
+            lookForChildren(channel, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+            keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::QuatCompressed);
         }
 
         if ((dynamic_pointer_cast<Vec4dArray>(keysArray) || dynamic_pointer_cast<Vec4Array>(keysArray))
             && dynamic_pointer_cast<FloatArray>(timesArray))
         {
-            for (unsigned int i = 0; i < keysArray->getNumElements(); ++i)
+            ref_ptr<QuatSphericalLinearSampler> quatSampler = new QuatSphericalLinearSampler;
+            ref_ptr<QuatKeyframeContainer> quatContainer = new QuatKeyframeContainer;
+            quatSampler->setKeyframeContainer(quatContainer);
+            channel->setSampler(quatSampler);
+
+            quatContainer->reserve(timesArray->getNumElements());
+            for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
             {
                 QuatKeyframe f;
                 Quat vec;
@@ -1739,7 +1759,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& curre
                     break;
                 }
                 f.setValue(vec);
-                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+                quatContainer->push_back(f);                
             }
         }
     }
@@ -1747,8 +1767,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSLerpChannel(const json& curre
     return channel;
 }
 
-ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey, 
-    const UserDataContainer* udc)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1797,8 +1816,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& curre
     return channel;
 }
 
-ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey, 
-    const UserDataContainer* udc)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -1862,8 +1880,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json
     return channel;
 }
 
-ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey, 
-    const UserDataContainer* udc)
+ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
