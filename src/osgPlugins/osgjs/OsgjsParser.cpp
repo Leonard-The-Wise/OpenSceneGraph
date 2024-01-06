@@ -1809,7 +1809,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& curre
                 FloatKeyframe f;
                 f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
                 f.setValue((*dynamic_pointer_cast<FloatArray>(keysArray))[i]);
-                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+                channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(f);
             }
         }
     }
@@ -1872,7 +1872,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json
                 f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
                 f.setValue(FloatCubicBezier((*dynamic_pointer_cast<FloatArray>(positionArray))[i], (*dynamic_pointer_cast<FloatArray>(controlPointInArray))[i],
                     (*dynamic_pointer_cast<FloatArray>(controlPointOutArray))[i]));
-                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+                channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(f);
             }
         }
     }
@@ -1961,7 +1961,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json&
 
                 f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
                 f.setValue(vec);
-                channel->getSamplerTyped()->getKeyframeContainerTyped()->push_back(f);
+                channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(f);
             }
         }
     }
