@@ -12,8 +12,9 @@ namespace osgJSONParser
 	{
 	public:
 
+
 		enum class KeyDecodeMode {
-			Vec2Compressed, Vec3Compressed, QuatCompressed
+			DirectionCompressed, Vec3Compressed, QuatCompressed
 		};
 
 		using json = nlohmann::json;
@@ -94,6 +95,9 @@ namespace osgJSONParser
 		static osg::ref_ptr<osg::DoubleArray> int3ToFloat4(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
 
 		template<typename T>
-		osg::ref_ptr<osg::DoubleArray> int2ToFloat3(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
+		static osg::ref_ptr<osg::DoubleArray> inflateKeysVec3(const osg::ref_ptr<T>& input);
+
+		template<typename T>
+		static osg::ref_ptr<osg::Vec3Array> decodeDirections(const osg::ref_ptr<T>& input);
 	};
 }

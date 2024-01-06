@@ -1242,7 +1242,11 @@ namespace pluginfbx
 			addPolygon(mesh, index_vert, it->first, it->second);
 			mesh->EndPolygon();
 		}
+
+		// Build vertices and recalculate normals and tangents
 		setControlPointAndNormalsAndUV(geometryList, index_vert, texcoords, mesh);
+		mesh->GenerateNormals(true);
+		mesh->GenerateTangentsDataForAllUVSets(true);
 
 		FbxSurfacePhong* meshMaterial = materialParser.getFbxMaterial();
 		if (meshMaterial)

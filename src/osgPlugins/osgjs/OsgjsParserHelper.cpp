@@ -720,6 +720,33 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 	osg::ref_ptr<osg::DoubleArray> keysFloat;
 	unsigned int elementSize = keys->getDataSize();
 
+	if (mode == KeyDecodeMode::DirectionCompressed)
+	{
+		switch (keysConverted->getType())
+		{
+		case Array::UIntArrayType:
+			keysConverted = decodeDirections<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted));
+			break;
+		case Array::UShortArrayType:
+			keysConverted = decodeDirections<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted));
+			break;
+		case Array::UByteArrayType:
+			keysConverted = decodeDirections<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted));
+			break;
+		case Array::IntArrayType:
+			keysConverted = decodeDirections<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted));
+			break;
+		case Array::ShortArrayType:
+			keysConverted = decodeDirections<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted));
+			break;
+		case Array::ByteArrayType:
+			keysConverted = decodeDirections<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted));
+			break;
+		}
+
+		return keysConverted;
+	}
+
 	switch (keysConverted->getType())
 	{
 	case Array::UIntArrayType:
@@ -2175,66 +2202,101 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4(const osg::ref_ptr<T>&
 }
 
 
-
 template <typename T>
-osg::ref_ptr<osg::DoubleArray> ParserHelper::int2ToFloat3(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize)
+osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysVec3(const osg::ref_ptr<T>& input)
 {
-	int c = 3;
-	double d = epsilon != 0 ? epsilon : 0.25;
-	int p = static_cast<int>(nphi != 0 ? nphi : 720);
-	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray();
-	e->resizeArray(input->getNumElements() * 3 / itemSize);
+	osg::ref_ptr<osg::DoubleArray> output = new DoubleArray(input->begin(), input->end());
 
-	double i = 1.57079632679;
-	double n = 6.28318530718;
-	double r = 3.14159265359;
-	double a = 0.01745329251;
-	double l = 47938362584151635e-21;
-	std::map<int, double> _;
+	unsigned int e = 1;
+	unsigned int i = output->getNumElements() / 3;
 
-	double b = r / static_cast<double>(p - 1);
-	double x = i / static_cast<double>(p - 1);
+	while (e < i) {
+		unsigned int n = 3 * (e - 1);
+		unsigned int r = 3 * e;
 
-	int y = 2;
+		double a = (*output)[n];
+		double s = (*output)[static_cast<size_t>(n) + 1];
+		double o = (*output)[static_cast<size_t>(n) + 2];
+		double u = 0.0; //(*output)[static_cast<size_t>(n) + 3];
+		double l = (*output)[r];
+		double h = (*output)[static_cast<size_t>(r) + 1];
+		double c = (*output)[static_cast<size_t>(r) + 2];
+		double d = 0.0; //(*output)[static_cast<size_t>(r) + 3];
 
-	int m = 0;
-	int v_length = input->getNumElements() / y;
-	while (m < v_length)
-	{
-		int A = m * c;
-		int S = m * y;
-		int C = (*input)[S];
-		int w = (*input)[S + 1];
-		double M(0.0), T(0.0), E(0.0);
-		int I = 3 * (C + p * w);
+		(*output)[r] = a * d + s * c - o * h + u * l;
+		(*output)[static_cast<size_t>(r) + 1] = -a * c + s * d + o * l + u * h;
+		(*output)[static_cast<size_t>(r) + 2] = a * h - s * l + o * d + u * c;
+		//(*output)[static_cast<size_t>(r) + 3] = -a * l - s * h - o * c + u * d;
 
-		M = _[I];
-		if (M == 0)
-		{
-			double N = C * b;
-			double k = std::cos(N);
-			double F = std::sin(N);
-			N += x;
-			double D = (std::cos(d * a) - k * std::cos(N)) / std::max(1e-5, F * std::sin(N));
-			D = std::max(-1.0, std::min(D, 1.0));
-
-			double P = w * n / std::ceil(r / std::max(1e-5, std::acos(D)));
-			M = _[I] = F * std::cos(P);
-			T = _[static_cast<size_t>(I) + 1] = F * std::sin(P);
-			E = _[static_cast<size_t>(I) + 2] = k;
-		}
-		else
-		{
-			T = _[static_cast<size_t>(I) + 1];
-			E = _[static_cast<size_t>(I) + 2];
-		}
-
-		(*e)[A] = M;
-		(*e)[static_cast<size_t>(A) + 1] = T;
-		(*e)[static_cast<size_t>(A) + 2] = E;
-
-		++m;
+		++e;
 	}
 
-	return e;
+	return output;
+}
+
+
+// For references, see: 
+// https://cesium.com/blog/2015/05/18/vertex-compression/
+// https://github.com/CesiumGS/cesium/blob/master/Source/Core/AttributeCompression.js
+// https://jcgt.org/published/0003/02/01/
+
+inline static double clamp(double value, double min, double max)
+{
+	return std::max(min, std::min(value, max));
+}
+
+inline static double fromSNorm(int value, int rangeMaximum = 255)
+{
+	return (clamp(value, 0.0, rangeMaximum) / rangeMaximum) * 2.0 - 1.0;
+}
+
+inline static double signNotZero(double value) {
+	return value < 0.0 ? -1.0 : 1.0;
+}
+
+static osg::Vec3 octDecodeInRange(unsigned int x, unsigned int y, unsigned int rangeMax)
+{
+	if (x < 0 || x > rangeMax || y < 0 || y > rangeMax) {
+		throw std::runtime_error("x and y must be unsigned normalized integers between 0 and rangeMax");
+	}
+
+	osg::Vec3 result(0.0, 0.0, 0.0);
+
+	result.x() = fromSNorm(x, rangeMax);
+	result.y() = fromSNorm(y, rangeMax);
+	result.z() = 1.0 - (std::abs(result.x()) + std::abs(result.y()));
+
+	if (result.z() < 0.0) {
+		double oldVX = result.x();
+		result.x() = (1.0 - std::abs(result.y())) * signNotZero(oldVX);
+		result.y() = (1.0 - std::abs(oldVX)) * signNotZero(result.y());
+	}
+
+	result.normalize();
+	return result;
+}
+
+
+// TODO: fix octahedral compression for sketchfab
+template <typename T>
+osg::ref_ptr<osg::Vec3Array> ParserHelper::decodeDirections(const osg::ref_ptr<T>& input)
+{
+	ref_ptr<osg::UIntArray> e = new UIntArray(input->begin(), input->end());
+	ref_ptr<Vec3Array> returnVec = new Vec3Array;
+
+	unsigned int range = 0;
+	for (unsigned int f = 0; f < e->getNumElements(); ++f)
+	{
+		if ((*e)[f] >= range)
+			range = (*e)[f] + 1;
+	}
+
+	returnVec->reserveArray(e->getNumElements() / 2);
+	for (unsigned int i = 0; i < e->getNumElements(); i += 2)
+	{
+		Vec3 v = octDecodeInRange((*e)[i], (*e)[i] + 1, range);
+		returnVec->push_back(v);
+	}
+
+	return returnVec;
 }

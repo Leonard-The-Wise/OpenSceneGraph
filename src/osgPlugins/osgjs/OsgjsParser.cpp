@@ -2171,7 +2171,8 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
     // Get Vertex Shape Attributes
     std::vector<double> vtx_bbl(3, 0);
     std::vector<double> vtx_h(3, 0);
-    std::vector<bool> success(10, false);
+    std::vector<bool> success(12, false);
+    double epsilon(0.0), nphi(0.0);
 
     // Get UV's Shape Attributes
     std::vector<double> uv_bbl(2, 0);
@@ -2195,9 +2196,9 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
     if (dei)
         indices = new UIntArray(dei->begin(), dei->end());
     else if (des)
-        indices = new UShortArray(dei->begin(), dei->end());
+        indices = new UShortArray(des->begin(), des->end());
     else if (deb)
-        indices = new UByteArray(dei->begin(), dei->end());
+        indices = new UByteArray(deb->begin(), deb->end());
 
     if (success[0] && success[3])
     {
@@ -2254,6 +2255,22 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
 
         i++;
     }
+
+    success[10] = ParserHelper::getShapeAttribute(shapeAttrList, "epsilon", epsilon);
+    success[11] = ParserHelper::getShapeAttribute(shapeAttrList, "nphi", nphi);
+
+    if (success[10] && success[11])
+    {
+        ref_ptr<Array> normals = geometry->getNormalArray();
+        if (normals && normals->getDataSize() == 2)
+        {
+            ref_ptr<Array> normalsConverted = ParserHelper::decompressArray(geometry->getNormalArray(), geometry->getUserDataContainer(),
+                ParserHelper::KeyDecodeMode::DirectionCompressed);
+
+            geometry->setNormalArray(normalsConverted);
+        }
+    }
+
 
 }
 
