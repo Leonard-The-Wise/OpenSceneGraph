@@ -2259,19 +2259,38 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
     success[10] = ParserHelper::getShapeAttribute(shapeAttrList, "epsilon", epsilon);
     success[11] = ParserHelper::getShapeAttribute(shapeAttrList, "nphi", nphi);
 
-    if (success[10] && success[11])
+    // FIXME: Disabled because we need to figure out the compression for normals.
+    if (false && success[10] && success[11])
     {
         ref_ptr<Array> normals = geometry->getNormalArray();
         if (normals && normals->getDataSize() == 2)
         {
-            ref_ptr<Array> normalsConverted = ParserHelper::decompressArray(geometry->getNormalArray(), geometry->getUserDataContainer(),
+            ref_ptr<Array> normalsConverted = ParserHelper::decompressArray(normals, geometry->getUserDataContainer(),
                 ParserHelper::KeyDecodeMode::DirectionCompressed);
 
             geometry->setNormalArray(normalsConverted);
         }
+
+        ref_ptr<Array> tangents;
+        int index = 0;
+        for (auto& attrib : geometry->getVertexAttribArrayList())
+        {
+            bool tangent;
+            if (attrib->getUserValue("tangent", tangent))
+            {
+                tangents = attrib;
+                break;
+            }
+            index++;
+        }
+
+        if (tangents && tangents->getDataSize() == 2)
+        {
+            ref_ptr<Array> tangentsConverted = ParserHelper::decompressArray(tangents, geometry->getUserDataContainer(),
+                ParserHelper::KeyDecodeMode::DirectionCompressed);
+            geometry->setVertexAttribArray(index, tangentsConverted);
+        }
     }
-
-
 }
 
 void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset)

@@ -98,6 +98,6 @@ namespace osgJSONParser
 		static osg::ref_ptr<osg::DoubleArray> inflateKeysVec3(const osg::ref_ptr<T>& input);
 
 		template<typename T>
-		static osg::ref_ptr<osg::Vec3Array> decodeDirections(const osg::ref_ptr<T>& input);
+		static osg::ref_ptr<osg::Vec3Array> decodeVectorOctahedral(const osg::ref_ptr<T>& input);
 	};
 }

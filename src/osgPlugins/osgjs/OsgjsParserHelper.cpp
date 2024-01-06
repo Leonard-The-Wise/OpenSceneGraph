@@ -725,22 +725,22 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		switch (keysConverted->getType())
 		{
 		case Array::UIntArrayType:
-			keysConverted = decodeDirections<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted));
+			keysConverted = decodeVectorOctahedral<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted));
 			break;
 		case Array::UShortArrayType:
-			keysConverted = decodeDirections<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted));
+			keysConverted = decodeVectorOctahedral<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted));
 			break;
 		case Array::UByteArrayType:
-			keysConverted = decodeDirections<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted));
+			keysConverted = decodeVectorOctahedral<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted));
 			break;
 		case Array::IntArrayType:
-			keysConverted = decodeDirections<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted));
+			keysConverted = decodeVectorOctahedral<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted));
 			break;
 		case Array::ShortArrayType:
-			keysConverted = decodeDirections<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted));
+			keysConverted = decodeVectorOctahedral<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted));
 			break;
 		case Array::ByteArrayType:
-			keysConverted = decodeDirections<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted));
+			keysConverted = decodeVectorOctahedral<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted));
 			break;
 		}
 
@@ -2240,61 +2240,45 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysVec3(const osg::ref_ptr<
 // https://github.com/CesiumGS/cesium/blob/master/Source/Core/AttributeCompression.js
 // https://jcgt.org/published/0003/02/01/
 
-inline static double clamp(double value, double min, double max)
-{
-	return std::max(min, std::min(value, max));
-}
 
-inline static double fromSNorm(int value, int rangeMaximum = 255)
+static osg::Vec3 decodeOctahedral(const osg::Vec2ui& encodedInt, float maxRange)
 {
-	return (clamp(value, 0.0, rangeMaximum) / rangeMaximum) * 2.0 - 1.0;
-}
+	// Normalizar os valores inteiros para o intervalo de -1 a 1
+	float x = (static_cast<float>(encodedInt.x()) / (maxRange / 2)) - 1.0f;
+	float y = (static_cast<float>(encodedInt.y()) / (maxRange / 2)) - 1.0f;
 
-inline static double signNotZero(double value) {
-	return value < 0.0 ? -1.0 : 1.0;
-}
+	// Passo 1: Reconstruir z
+	float z = 1.0f - fabs(x) - fabs(y);
 
-static osg::Vec3 octDecodeInRange(unsigned int x, unsigned int y, unsigned int rangeMax)
-{
-	if (x < 0 || x > rangeMax || y < 0 || y > rangeMax) {
-		throw std::runtime_error("x and y must be unsigned normalized integers between 0 and rangeMax");
+	// Passo 2: Ajustar se o ponto está na parte inferior do octaedro
+	if (z < 0.0f) {
+		float oldX = x;
+		x = copysign(1.0f - fabs(y), x);
+		y = copysign(1.0f - fabs(oldX), y);
 	}
 
-	osg::Vec3 result(0.0, 0.0, 0.0);
+	// Passo 3: Normalizar o vetor
+	osg::Vec3 normal(x, y, z);
+	normal.normalize();
 
-	result.x() = fromSNorm(x, rangeMax);
-	result.y() = fromSNorm(y, rangeMax);
-	result.z() = 1.0 - (std::abs(result.x()) + std::abs(result.y()));
-
-	if (result.z() < 0.0) {
-		double oldVX = result.x();
-		result.x() = (1.0 - std::abs(result.y())) * signNotZero(oldVX);
-		result.y() = (1.0 - std::abs(oldVX)) * signNotZero(result.y());
-	}
-
-	result.normalize();
-	return result;
+	return normal;
 }
 
-
-// TODO: fix octahedral compression for sketchfab
+// TODO: Figure out which encoding for normals and tangents. This encoding here seems to NOT be the case.
 template <typename T>
-osg::ref_ptr<osg::Vec3Array> ParserHelper::decodeDirections(const osg::ref_ptr<T>& input)
+osg::ref_ptr<osg::Vec3Array> ParserHelper::decodeVectorOctahedral(const osg::ref_ptr<T>& input)
 {
 	ref_ptr<osg::UIntArray> e = new UIntArray(input->begin(), input->end());
 	ref_ptr<Vec3Array> returnVec = new Vec3Array;
 
-	unsigned int range = 0;
-	for (unsigned int f = 0; f < e->getNumElements(); ++f)
-	{
-		if ((*e)[f] >= range)
-			range = (*e)[f] + 1;
-	}
+	unsigned int maxRange = *std::max_element(e->begin(), e->end());
 
 	returnVec->reserveArray(e->getNumElements() / 2);
-	for (unsigned int i = 0; i < e->getNumElements(); i += 2)
+	for (unsigned int i = 0; i < e->getNumElements() / 2; i++)
 	{
-		Vec3 v = octDecodeInRange((*e)[i], (*e)[i] + 1, range);
+		unsigned int x = (*e)[i * 2];
+		unsigned int y = (*e)[i * 2 + 1];
+		Vec3 v = decodeOctahedral(Vec2ui(x, y), static_cast<float>(maxRange));
 		returnVec->push_back(v);
 	}
 
