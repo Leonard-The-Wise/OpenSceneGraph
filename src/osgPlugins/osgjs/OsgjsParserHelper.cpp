@@ -29,6 +29,9 @@ const std::unordered_map<std::string, PrimitiveSet::Type> primitiveTypeMap
 
 bool ParserHelper::getSafeInteger(const std::string& in, int& outValue)
 {
+	if (in.empty())
+		return false;
+
 	try
 	{
 		char* endPtr = nullptr;
@@ -49,6 +52,9 @@ bool ParserHelper::getSafeInteger(const std::string& in, int& outValue)
 
 bool ParserHelper::getSafeDouble(const std::string& in, double& outValue)
 {
+	if (in.empty())
+		return false;
+
 	try
 	{
 		char* endPtr = nullptr;
@@ -64,7 +70,7 @@ bool ParserHelper::getSafeDouble(const std::string& in, double& outValue)
 }
 
 ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int elementsPerItem, const FileCache& fileCache,
-	bool& isVarintEncoded, uint32_t& magic, bool needDecodeIndices, GLenum drawMode)
+	uint32_t& magic, bool needDecodeIndices, GLenum drawMode)
 {
 #ifdef DEBUG
 	std::string CurrentNode = currentJSONNode.dump();
@@ -231,7 +237,6 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			// Decode array if necessary
 			if ((*elementsNode).contains("Encoding") && (*elementsNode)["File"].get<std::string>() != "varint")
 			{
-				isVarintEncoded = true;
 				elementsBytesConverted = decodeVarintVector(*elementsBytes, arrayType, static_cast<size_t>(itemCount * elementsPerItem), readOffset);
 				elementsBytes = elementsBytesConverted;
 				readOffset = 0;
@@ -2054,7 +2059,7 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeys2(const osg::ref_ptr<osg
 	osg::ref_ptr<osg::DoubleArray> output = new DoubleArray(*input);
 	unsigned int i = itemSize | 1; 
 	unsigned int n = 1;
-	unsigned int r = output->size() / i;
+	unsigned int r = output->getNumElements() / i;
 
 	while (n < r) {
 		unsigned int a = (n - 1) * i;
@@ -2110,18 +2115,14 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4(const osg::ref_ptr<T>&
 	double d = epsilon != 0 ? epsilon : 0.25;
 	int p = static_cast<int>(nphi != 0 ? nphi : 720);
 	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray();
-	e->resizeArray(input->getNumElements() * 4);
+	e->resizeArray(input->getNumElements() * 4 / itemSize);
 
 	double i = 1.57079632679;
 	double n = 6.28318530718;
 	double r = 3.14159265359;
 	double a = 0.01745329251;
-	int u = 832;
 	double l = 47938362584151635e-21;
-	std::vector<double> _;
-
-	int v = (p + 1) * (u + 1) * 3;
-	_.resize(v, 0);
+	std::map<int, double> _;
 
 	double b = r / static_cast<double>(p - 1);
 	double x = i / static_cast<double>(p - 1);
@@ -2166,6 +2167,71 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4(const osg::ref_ptr<T>&
 		(*e)[static_cast<size_t>(A) + 1] = O * T;
 		(*e)[static_cast<size_t>(A) + 2] = O * E;
 		(*e)[static_cast<size_t>(A) + 3] = std::cos(R);
+
+		++m;
+	}
+
+	return e;
+}
+
+
+
+template <typename T>
+osg::ref_ptr<osg::DoubleArray> ParserHelper::int2ToFloat3(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize)
+{
+	int c = 3;
+	double d = epsilon != 0 ? epsilon : 0.25;
+	int p = static_cast<int>(nphi != 0 ? nphi : 720);
+	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray();
+	e->resizeArray(input->getNumElements() * 3 / itemSize);
+
+	double i = 1.57079632679;
+	double n = 6.28318530718;
+	double r = 3.14159265359;
+	double a = 0.01745329251;
+	double l = 47938362584151635e-21;
+	std::map<int, double> _;
+
+	double b = r / static_cast<double>(p - 1);
+	double x = i / static_cast<double>(p - 1);
+
+	int y = 2;
+
+	int m = 0;
+	int v_length = input->getNumElements() / y;
+	while (m < v_length)
+	{
+		int A = m * c;
+		int S = m * y;
+		int C = (*input)[S];
+		int w = (*input)[S + 1];
+		double M(0.0), T(0.0), E(0.0);
+		int I = 3 * (C + p * w);
+
+		M = _[I];
+		if (M == 0)
+		{
+			double N = C * b;
+			double k = std::cos(N);
+			double F = std::sin(N);
+			N += x;
+			double D = (std::cos(d * a) - k * std::cos(N)) / std::max(1e-5, F * std::sin(N));
+			D = std::max(-1.0, std::min(D, 1.0));
+
+			double P = w * n / std::ceil(r / std::max(1e-5, std::acos(D)));
+			M = _[I] = F * std::cos(P);
+			T = _[static_cast<size_t>(I) + 1] = F * std::sin(P);
+			E = _[static_cast<size_t>(I) + 2] = k;
+		}
+		else
+		{
+			T = _[static_cast<size_t>(I) + 1];
+			E = _[static_cast<size_t>(I) + 2];
+		}
+
+		(*e)[A] = M;
+		(*e)[static_cast<size_t>(A) + 1] = T;
+		(*e)[static_cast<size_t>(A) + 2] = E;
 
 		++m;
 	}

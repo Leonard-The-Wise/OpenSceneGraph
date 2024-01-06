@@ -1,5 +1,6 @@
 #pragma once
 
+#include "OsgjsFileCache.h"
 
 namespace osgJSONParser
 {
@@ -24,7 +25,7 @@ namespace osgJSONParser
 		static bool getSafeDouble(const std::string& in, double& outValue);
 
 		static osg::ref_ptr<osg::Array> parseJSONArray(const json& currentJSONNode, int itemSize, const FileCache& fileCache, 
-			bool& isVarintEncoded, uint32_t& magic, bool needDecodeIndices = false, GLenum drawMode = 0);
+			uint32_t& magic, bool needDecodeIndices = false, GLenum drawMode = 0);
 
 		static void makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, const osg::ref_ptr<osg::Array>& bones, const osg::ref_ptr<osg::Array>& weights,
 			const std::map<int, std::string>& boneIndexes);
@@ -91,5 +92,8 @@ namespace osgJSONParser
 
 		template <typename T>
 		static osg::ref_ptr<osg::DoubleArray> int3ToFloat4(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
+
+		template<typename T>
+		osg::ref_ptr<osg::DoubleArray> int2ToFloat3(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
 	};
 }

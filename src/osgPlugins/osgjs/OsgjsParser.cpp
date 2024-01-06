@@ -74,11 +74,11 @@ constexpr auto MODELINFO_FILE = "model_info.json";
 
 void OsgjsParser::buildMaterialFiles() 
 {
-    std::string materialFile = _filesBasePath + std::string("\\materialInfo.txt");
+    std::string materialFile = _filesBasePath.empty() ? std::string("materialInfo.txt") : _filesBasePath + std::string("\\materialInfo.txt");
 
     if (!_meshMaterials.readMaterialFile(materialFile))
     {
-        OSG_WARN << "INFO: Could not load " << materialFile << ". Objects will be textureless." << std::endl;
+        OSG_WARN << "INFO: Could not load '" << materialFile << "'. Models may be exported without textures." << std::endl;
     }
 }
 
@@ -240,10 +240,11 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
+
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
 
     switch (containerType)
     {
@@ -263,8 +264,7 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
         else
             udc = new DefaultUserDataContainer(*oldUdc);
 
-        if (currentJSONNode.contains("Name"))
-            udc->setName(currentJSONNode["Name"]);
+        udc->setName(name);
 
         if (currentJSONNode["Values"].is_array())
         {
@@ -286,8 +286,7 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
     case UserDataContainerType::ShapeAttributes:
     {
         ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = new osgSim::ShapeAttributeList;
-        if (currentJSONNode.contains("Name"))
-            shapeAttrList->setName(currentJSONNode["Name"]);
+        shapeAttrList->setName(name);
 
         if (currentJSONNode["Values"].is_array())
         {
@@ -437,10 +436,11 @@ ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
+
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
 
     // Look ahead to see if this ogs.Node contains only geometry nodes
     bool isGeode = false;
@@ -476,8 +476,7 @@ ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std
         newObject = new Group;
 
     // Add name information to node
-    if (currentJSONNode.contains("Name"))
-        newObject->setName(currentJSONNode["Name"]);
+    newObject->setName(name);
 
     lookForChildren(newObject, currentJSONNode, isGeode ? UserDataContainerType::ShapeAttributes : UserDataContainerType::UserData, nodeKey);
 
@@ -490,13 +489,14 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
     // Create a matrix transform
     ref_ptr<MatrixTransform> newObject;
+
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
 
     if (nodeKey == "osg.MatrixTransform")
         newObject = new MatrixTransform;
@@ -510,8 +510,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
     Bone* bone = dynamic_pointer_cast<Bone>(newObject);
 
     // Add name information to node
-    if (currentJSONNode.contains("Name"))
-        newObject->setName(currentJSONNode["Name"]);
+    newObject->setName(name);
 
     // Get the matrix
     if (!currentJSONNode.contains("Matrix") || !currentJSONNode["Matrix"].is_array() || currentJSONNode["Matrix"].size() != 16)
@@ -601,12 +600,13 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
     ref_ptr<Geometry> newGeometry;
+
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
 
     // Polymorph based on node key
     if (nodeKey == "osg.Geometry")
@@ -626,8 +626,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     MorphGeometry* morphGeometry = dynamic_pointer_cast<MorphGeometry>(newGeometry);
 
     // Add name information to node
-    if (currentJSONNode.contains("Name"))
-        newGeometry->setName(currentJSONNode["Name"]);
+    newGeometry->setName(name);
 
     const json* vertexAttributeList = currentJSONNode.contains("VertexAttributeList") ? &currentJSONNode["VertexAttributeList"] : nullptr;
     const json* vertexNode = nullptr;
@@ -650,10 +649,6 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     int vertexAttribArrays = 0;
     uint32_t magic = 0;
     GLenum drawMode = GL_POINTS;
-
-    bool verticesVarIntEncoded = false;
-    bool isVarintEncoded = false; // dummy variable
-
 
     // 1) Parse Vertex Attributes List
     if (currentJSONNode.contains("VertexAttributeList") && currentJSONNode["VertexAttributeList"].is_object())
@@ -693,20 +688,20 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 #endif
 
         if (vertexNode && vertexNode->contains("Array") && (*vertexNode)["Array"].is_object() && vertexNode->contains("ItemSize") && (*vertexNode)["ItemSize"].is_number())
-            vertices = ParserHelper::parseJSONArray((*vertexNode)["Array"], (*vertexNode)["ItemSize"].get<int>(), _fileCache, verticesVarIntEncoded, magic);
+            vertices = ParserHelper::parseJSONArray((*vertexNode)["Array"], (*vertexNode)["ItemSize"].get<int>(), _fileCache, magic);
         if (normalNode && normalNode->contains("Array") && (*normalNode)["Array"].is_object() && normalNode->contains("ItemSize") && (*normalNode)["ItemSize"].is_number())
-            normals = ParserHelper::parseJSONArray((*normalNode)["Array"], (*normalNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
+            normals = ParserHelper::parseJSONArray((*normalNode)["Array"], (*normalNode)["ItemSize"].get<int>(), _fileCache, magic);
         if (colorNode && colorNode->contains("Array") && (*colorNode)["Array"].is_object() && colorNode->contains("ItemSize") && (*colorNode)["ItemSize"].is_number())
-            colors = ParserHelper::parseJSONArray((*colorNode)["Array"], (*colorNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
+            colors = ParserHelper::parseJSONArray((*colorNode)["Array"], (*colorNode)["ItemSize"].get<int>(), _fileCache, magic);
         if (tangentNode && tangentNode->contains("Array") && (*tangentNode)["Array"].is_object() && tangentNode->contains("ItemSize") && (*tangentNode)["ItemSize"].is_number())
-            tangents = ParserHelper::parseJSONArray((*tangentNode)["Array"], (*tangentNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
+            tangents = ParserHelper::parseJSONArray((*tangentNode)["Array"], (*tangentNode)["ItemSize"].get<int>(), _fileCache, magic);
         if (bonesNode && bonesNode->contains("Array") && (*bonesNode)["Array"].is_object() && bonesNode->contains("ItemSize") && (*bonesNode)["ItemSize"].is_number())
-            bones = ParserHelper::parseJSONArray((*bonesNode)["Array"], (*bonesNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
+            bones = ParserHelper::parseJSONArray((*bonesNode)["Array"], (*bonesNode)["ItemSize"].get<int>(), _fileCache, magic);
         if (weightsNode && weightsNode->contains("Array") && (*weightsNode)["Array"].is_object() && weightsNode->contains("ItemSize") && (*weightsNode)["ItemSize"].is_number())
-            weights = ParserHelper::parseJSONArray((*weightsNode)["Array"], (*weightsNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic);
+            weights = ParserHelper::parseJSONArray((*weightsNode)["Array"], (*weightsNode)["ItemSize"].get<int>(), _fileCache, magic);
         for (auto& texCoordNode : texCoordNodes)
             if (texCoordNode->contains("Array") && (*texCoordNode)["Array"].is_object() && texCoordNode->contains("ItemSize") && (*texCoordNode)["ItemSize"].is_number())
-                texcoords.push_back(ParserHelper::parseJSONArray((*texCoordNode)["Array"], (*texCoordNode)["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic));
+                texcoords.push_back(ParserHelper::parseJSONArray((*texCoordNode)["Array"], (*texCoordNode)["ItemSize"].get<int>(), _fileCache, magic));
 
         // 1.3) Sanity checks
         if (nodeKey == "osg.Geometry")
@@ -812,7 +807,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                     if (newPrimitiveIndices.contains("Array") && newPrimitiveIndices["Array"].is_object() && newPrimitiveIndices.contains("ItemSize") && newPrimitiveIndices["ItemSize"].is_number())
                     {
                         indices = ParserHelper::parseJSONArray(newPrimitiveIndices["Array"], 
-                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, isVarintEncoded, magic, _needDecodeIndices, drawMode);
+                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, magic, _needDecodeIndices, drawMode);
 
                         if (indices)
                         {
@@ -976,11 +971,14 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     // 6) Get object statesets and userData
     lookForChildren(newGeometry, currentJSONNode, UserDataContainerType::ShapeAttributes, nodeKey);
 
-    // 7) Vertices post-processing (for varint encoded only)
-    if (nodeKey == "osg.Geometry" && vertices && newGeometry->getPrimitiveSetList().size() > 0 && verticesVarIntEncoded)
+    // 7) Get external materials (from materialInfo.txt)
+    parseExternalMaterials(newGeometry);
+
+    // 8) Vertices post-processing
+    if (nodeKey == "osg.Geometry")
         postProcessGeometry(newGeometry);
 
-    // 8) Done
+    // 9) Done
     return newGeometry;
 }
 
@@ -1004,16 +1002,23 @@ ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
+
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
+
+    if (!name.empty())
+    {
+        if (_materialMap.find(name) != _materialMap.end())
+            return _materialMap[name];
+    }
 
     ref_ptr<Material> newMaterial = new Material;
     Vec4 ambient, diffuse, specular, emission;
     float shininess;
 
-    newMaterial->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    newMaterial->setName(name);
     newMaterial->setUserValue("UniqueID", currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : -1);
 
     if (currentJSONNode.contains("Ambient") && currentJSONNode["Ambient"].is_array())
@@ -1046,6 +1051,9 @@ ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const
         newMaterial->setShininess(Material::FRONT, shininess);
     }
 
+    if (!name.empty())
+        _materialMap[name] = newMaterial;
+
     return newMaterial;
 }
 
@@ -1053,20 +1061,26 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
+
+    if (!name.empty())
+    {
+        if (_textureMap.find(name) != _textureMap.end())
+            return _textureMap[name];
+    }
+
     std::string fileName = currentJSONNode.contains("File") ? currentJSONNode["File"].get<std::string>() : "";
-    std::string fileRenamed;
-    ref_ptr<Image> image = createImage(fileName, fileRenamed);
+    ref_ptr<Image> image = getOrCreateImage(fileName);
 
     if (!image)
         return nullptr;
 
     ref_ptr<Texture2D> newTexture = new Texture2D;
-    newTexture->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+    newTexture->setName(name);
     newTexture->setImage(image);
 
     if (currentJSONNode.contains("MagFilter"))
@@ -1086,6 +1100,8 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
         newTexture->setWrap(Texture::WRAP_T, ParserHelper::getWrapModeFromString(currentJSONNode["WrapT"].get<std::string>()));
     }
 
+    if (!name.empty())
+        _textureMap[name] = newTexture;
 
     return newTexture;
 }
@@ -1623,7 +1639,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
     channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
 
     ref_ptr<Array> keysArray, timesArray;
-    bool isKeyEncoded(false), isTimeEncoded(false); // dummy
     uint32_t magic(0); // dummy
 
     if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
@@ -1634,13 +1649,13 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
         if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
         {
             const json& time = keyFrames["Time"];
-            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
         {
             const json& key = keyFrames["Key"];
-            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isKeyEncoded, magic);
+            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, magic);
         }
 
         // Try to decompress arrays
@@ -1654,12 +1669,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
         if ((dynamic_pointer_cast<Vec3Array>(keysArray) || dynamic_pointer_cast<Vec3dArray>(keysArray))
             && dynamic_pointer_cast<FloatArray>(timesArray))
         {
-            ref_ptr<Vec3LinearSampler> vec3Sampler = new Vec3LinearSampler;
-            ref_ptr<Vec3KeyframeContainer> vec3Container = new Vec3KeyframeContainer;
-            vec3Sampler->setKeyframeContainer(vec3Container);
-            channel->setSampler(vec3Sampler);
-
-            vec3Container->reserve(timesArray->getNumElements());
             for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
             {
                 Vec3Keyframe f;
@@ -1679,7 +1688,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
                     break;
                 }
                 f.setValue(vec);
-                vec3Container->push_back(f);
+                channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(f);
             }
         }
     }
@@ -1701,7 +1710,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
     channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
 
     ref_ptr<Array> keysArray, timesArray;
-    bool isKeyEncoded(false), isTimeEncoded(false); // dummy
     uint32_t magic(0); // dummy
 
     if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
@@ -1712,13 +1720,13 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
         if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
         {
             const json& time = keyFrames["Time"];
-            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
         {
             const json& key = keyFrames["Key"];
-            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isKeyEncoded, magic);
+            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, magic);
         }
 
         // Try to decompress arrays
@@ -1732,12 +1740,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
         if ((dynamic_pointer_cast<Vec4dArray>(keysArray) || dynamic_pointer_cast<Vec4Array>(keysArray))
             && dynamic_pointer_cast<FloatArray>(timesArray))
         {
-            ref_ptr<QuatSphericalLinearSampler> quatSampler = new QuatSphericalLinearSampler;
-            ref_ptr<QuatKeyframeContainer> quatContainer = new QuatKeyframeContainer;
-            quatSampler->setKeyframeContainer(quatContainer);
-            channel->setSampler(quatSampler);
-
-            quatContainer->reserve(timesArray->getNumElements());
             for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
             {
                 QuatKeyframe f;
@@ -1759,7 +1761,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
                     break;
                 }
                 f.setValue(vec);
-                quatContainer->push_back(f);                
+                channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(f);
             }
         }
     }
@@ -1781,7 +1783,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& curre
     channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
 
     ref_ptr<Array> keysArray, timesArray;
-    bool isKeyEncoded(false), isTimeEncoded(false); // dummy
     uint32_t magic(0); // dummy
 
     if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
@@ -1792,13 +1793,13 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& curre
         if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
         {
             const json& time = keyFrames["Time"];
-            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
         {
             const json& key = keyFrames["Key"];
-            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isKeyEncoded, magic);
+            keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, magic);
         }
 
         if (dynamic_pointer_cast<FloatArray>(keysArray) && dynamic_pointer_cast<FloatArray>(timesArray))
@@ -1830,7 +1831,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json
     channel->setTargetName(currentJSONNode.contains("TargetName") ? currentJSONNode["TargetName"] : "");
 
     ref_ptr<Array> positionArray, timesArray, controlPointInArray, controlPointOutArray;
-    bool isPosEncoded(false), isTimeEncoded(false), isCPInEncoded, isCPOutEncoded; // dummy
     uint32_t magic(0); // dummy
 
     if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
@@ -1841,25 +1841,25 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json
         if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
         {
             const json& time = keyFrames["Time"];
-            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("Position") && keyFrames["Position"].is_object())
         {
             const json& key = keyFrames["Position"];
-            positionArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, isPosEncoded, magic);
+            positionArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("ControlPointIn") && keyFrames["ControlPointIn"].is_object())
         {
             const json& cpoint = keyFrames["ControlPointIn"];
-            controlPointInArray = ParserHelper::parseJSONArray(cpoint["Array"], cpoint["ItemSize"], _fileCache, isCPInEncoded, magic);
+            controlPointInArray = ParserHelper::parseJSONArray(cpoint["Array"], cpoint["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("ControlPointOut") && keyFrames["ControlPointOut"].is_object())
         {
             const json& cpoint = keyFrames["ControlPointOut"];
-            controlPointOutArray = ParserHelper::parseJSONArray(cpoint["Array"], cpoint["ItemSize"], _fileCache, isCPOutEncoded, magic);
+            controlPointOutArray = ParserHelper::parseJSONArray(cpoint["Array"], cpoint["ItemSize"], _fileCache,magic);
         }
 
 
@@ -1904,7 +1904,6 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json&
         controlPointOutArrayY,
         controlPointOutArrayZ;
 
-    bool isPosEncoded(false), isTimeEncoded(false), isCPInEncoded, isCPOutEncoded; // dummy
     uint32_t magic(0); // dummy
 
     if (currentJSONNode.contains("KeyFrames") && currentJSONNode["KeyFrames"].is_object())
@@ -1915,31 +1914,31 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json&
         if (keyFrames.contains("Time") && keyFrames["Time"].is_object())
         {
             const json& time = keyFrames["Time"];
-            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, isTimeEncoded, magic);
+            timesArray = ParserHelper::parseJSONArray(time["Array"], time["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("Position") && keyFrames["Position"].is_object())
         {
             const json& key = keyFrames["Position"];
-            positionArrayX = ParserHelper::parseJSONArray(key[0]["Array"], key[0]["ItemSize"], _fileCache, isPosEncoded, magic);
-            positionArrayY = ParserHelper::parseJSONArray(key[1]["Array"], key[1]["ItemSize"], _fileCache, isPosEncoded, magic);
-            positionArrayZ = ParserHelper::parseJSONArray(key[2]["Array"], key[2]["ItemSize"], _fileCache, isPosEncoded, magic);
+            positionArrayX = ParserHelper::parseJSONArray(key[0]["Array"], key[0]["ItemSize"], _fileCache, magic);
+            positionArrayY = ParserHelper::parseJSONArray(key[1]["Array"], key[1]["ItemSize"], _fileCache, magic);
+            positionArrayZ = ParserHelper::parseJSONArray(key[2]["Array"], key[2]["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("ControlPointIn") && keyFrames["ControlPointIn"].is_object())
         {
             const json& cpoint = keyFrames["ControlPointIn"];
-            controlPointInArrayX = ParserHelper::parseJSONArray(cpoint[0]["Array"], cpoint[0]["ItemSize"], _fileCache, isCPInEncoded, magic);
-            controlPointInArrayY = ParserHelper::parseJSONArray(cpoint[1]["Array"], cpoint[1]["ItemSize"], _fileCache, isCPInEncoded, magic);
-            controlPointInArrayZ = ParserHelper::parseJSONArray(cpoint[2]["Array"], cpoint[2]["ItemSize"], _fileCache, isCPInEncoded, magic);
+            controlPointInArrayX = ParserHelper::parseJSONArray(cpoint[0]["Array"], cpoint[0]["ItemSize"], _fileCache, magic);
+            controlPointInArrayY = ParserHelper::parseJSONArray(cpoint[1]["Array"], cpoint[1]["ItemSize"], _fileCache, magic);
+            controlPointInArrayZ = ParserHelper::parseJSONArray(cpoint[2]["Array"], cpoint[2]["ItemSize"], _fileCache, magic);
         }
 
         if (keyFrames.contains("ControlPointOut") && keyFrames["ControlPointOut"].is_object())
         {
             const json& cpoint = keyFrames["ControlPointOut"];
-            controlPointOutArrayX = ParserHelper::parseJSONArray(cpoint[0]["Array"], cpoint[0]["ItemSize"], _fileCache, isCPOutEncoded, magic);
-            controlPointOutArrayY = ParserHelper::parseJSONArray(cpoint[1]["Array"], cpoint[1]["ItemSize"], _fileCache, isCPOutEncoded, magic);
-            controlPointOutArrayZ = ParserHelper::parseJSONArray(cpoint[2]["Array"], cpoint[2]["ItemSize"], _fileCache, isCPOutEncoded, magic);
+            controlPointOutArrayX = ParserHelper::parseJSONArray(cpoint[0]["Array"], cpoint[0]["ItemSize"], _fileCache, magic);
+            controlPointOutArrayY = ParserHelper::parseJSONArray(cpoint[1]["Array"], cpoint[1]["ItemSize"], _fileCache, magic);
+            controlPointOutArrayZ = ParserHelper::parseJSONArray(cpoint[2]["Array"], cpoint[2]["ItemSize"], _fileCache, magic);
         }
 
         if (dynamic_pointer_cast<FloatArray>(timesArray) 
@@ -1993,9 +1992,13 @@ std::string OsgjsParser::getModelName() const
     return modelName;
 }
 
-ref_ptr<Image> OsgjsParser::createImage(const std::string& fileName, std::string& outFileRenamed)
+ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
 {
     osg::ref_ptr<osg::Image> image;
+
+    // Look for image on map so we don't load the same file twice.
+    if (_imageMap.find(fileName) != _imageMap.end())
+        return _imageMap.at(fileName);
 
     std::string fileNameOrig = fileName;
     std::string fileNameChanged = fileName;
@@ -2045,7 +2048,6 @@ ref_ptr<Image> OsgjsParser::createImage(const std::string& fileName, std::string
                 else
                 {
                     OSG_NOTICE << "INFO: Texture " << fileNameOrig << " was actually a PNG image. Renamed to " << fileNameChanged << std::endl;
-                    outFileRenamed = fileNameChanged;
                 }
             }
         }
@@ -2068,16 +2070,93 @@ ref_ptr<Image> OsgjsParser::createImage(const std::string& fileName, std::string
                 OSG_WARN << "Unsuported texture format: " << fileNameChanged << std::endl;
                 return nullptr;
             }
-
-            outFileRenamed = fileNameChanged;
         }
     }
 
+    _imageMap[fileNameChanged] = image;
     return image;
 }
 
 
-void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
+void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry)
+{
+    // Only process materials that have external references
+    std::string meshName = geometry->getName();
+    if (_meshMaterials.getMeshes().find(meshName) == _meshMaterials.getMeshes().end())
+        return;
+
+    // Check for missing materials and create one if necessary
+    osg::StateSet* meshState = geometry->getOrCreateStateSet();
+    const osg::Material* mat = dynamic_cast<const osg::Material*>(meshState->getAttribute(osg::StateAttribute::MATERIAL));
+
+    if (!mat)
+    {
+        // Search for existing materials
+        std::string materialName = _meshMaterials.getMeshes().at(meshName).MaterialName;
+
+        if (!materialName.empty() && _materialMap.find(materialName) != _materialMap.end())
+        {
+            meshState->setAttribute(_materialMap[materialName], StateAttribute::MATERIAL);
+
+            // Pick missing textures for material
+            postProcessStateSet(meshState);
+        }
+        else if (!materialName.empty())
+        {
+            ref_ptr<Material> newMaterial = new Material;
+            newMaterial->setName(materialName);
+
+            meshState->setAttribute(newMaterial, StateAttribute::MATERIAL);
+            _materialMap[materialName] = newMaterial;
+
+            // Pick missing textures for material
+            postProcessStateSet(meshState);
+
+            // Try to Read known properties from _meshMaterials.
+            if (_meshMaterials.getMaterials().find(materialName) != _meshMaterials.getMaterials().end())
+            {
+                MaterialInfo meshMaterial = _meshMaterials.getMaterials().at(materialName);
+
+                Vec4 albedoDiffuse, normal, specularMetal, emission;
+                double opacity(1.0), glossiness(0.0);
+
+                albedoDiffuse = meshMaterial.getVector("Albedo");
+                if (albedoDiffuse == Vec4())
+                    albedoDiffuse = meshMaterial.getVector("Diffuse");
+                if (albedoDiffuse == Vec4())
+                    albedoDiffuse = meshMaterial.getVector("Diffuse colour");
+
+                normal = meshMaterial.getVector("Normal");
+
+                specularMetal = meshMaterial.getVector("Metalness");
+                if (specularMetal == Vec4())
+                    specularMetal = meshMaterial.getVector("Specular");
+                if (specularMetal == Vec4())
+                    specularMetal = meshMaterial.getVector("SpecularPBR");
+                if (specularMetal == Vec4())
+                    specularMetal = meshMaterial.getVector("Specular F0");
+                if (specularMetal == Vec4())
+                    specularMetal = meshMaterial.getVector("Specular colour");
+
+                emission = meshMaterial.getVector("Emission");
+
+                opacity = meshMaterial.getDouble("Opacity");
+                opacity = opacity == -1 ? 1 : opacity;
+
+                glossiness = meshMaterial.getDouble("Glossiness");
+                glossiness = glossiness == -1 ? 0 : glossiness;
+
+                newMaterial->setDiffuse(Material::FRONT, albedoDiffuse);
+                newMaterial->setSpecular(Material::FRONT, specularMetal);
+                newMaterial->setEmission(Material::FRONT, emission);
+                newMaterial->setTransparency(Material::FRONT, static_cast<float>(opacity));
+                newMaterial->setShininess(Material::FRONT, glossiness);
+            }
+        }
+    }
+}
+
+void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
 {
 #ifdef DEBUG
     std::string geometryName = geometry->getName();
@@ -2088,6 +2167,22 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
     ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(geometry->getUserData());
     if (!shapeAttrList)
         return;
+
+    // Get Vertex Shape Attributes
+    std::vector<double> vtx_bbl(3, 0);
+    std::vector<double> vtx_h(3, 0);
+    std::vector<bool> success(10, false);
+
+    // Get UV's Shape Attributes
+    std::vector<double> uv_bbl(2, 0);
+    std::vector<double> uv_h(2, 0);
+
+    success[0] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_x", vtx_bbl[0]);
+    success[1] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_y", vtx_bbl[1]);
+    success[2] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_z", vtx_bbl[2]);
+    success[3] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_x", vtx_h[0]);
+    success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
+    success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
 
     ref_ptr<Array> indices;
     osg::PrimitiveSet* firstPrimitive = geometry->getPrimitiveSet(0);
@@ -2103,27 +2198,15 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
         indices = new UShortArray(dei->begin(), dei->end());
     else if (deb)
         indices = new UByteArray(dei->begin(), dei->end());
-    else
-    {
-        OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
-        return;
-    }
-
-    // Get Vertex Shape Attributes
-    std::vector<double> vtx_bbl(3, 0);
-    std::vector<double> vtx_h(3, 0);
-    std::vector<bool> success(10, false);
-
-    success[0] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_x", vtx_bbl[0]);
-    success[1] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_y", vtx_bbl[1]);
-    success[2] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_z", vtx_bbl[2]);
-    success[3] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_x", vtx_h[0]);
-    success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
-    success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
-
 
     if (success[0] && success[3])
     {
+        if (!indices)
+        {
+            OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
+            return;
+        }
+
         ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(indices, geometry->getVertexArray(), vtx_bbl, vtx_h);
 
         if (!verticesConverted)
@@ -2134,14 +2217,6 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
 
         geometry->setVertexArray(verticesConverted);
     }
-    else
-    {
-        return;
-    }
-
-    // Get UV's Shape Attributes
-    std::vector<double> uv_bbl(2, 0);
-    std::vector<double> uv_h(2, 0);
 
     int i = 0;
     for (auto& texCoord : geometry->getTexCoordArrayList())
@@ -2159,6 +2234,13 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
 
         if (success[6] && success[8])
         {
+
+            if (!indices)
+            {
+                OSG_DEBUG << "WARNING: Encoded TextCoord array contains unsupported DrawPrimitive type." << std::endl;
+                return;
+            }
+
             ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(indices, texCoord, uv_bbl, uv_h);
 
             if (!texCoordConverted)
@@ -2175,7 +2257,7 @@ void OsgjsParser::postProcessGeometry(ref_ptr<Geometry> geometry)
 
 }
 
-void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
+void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset)
 {
     // Try to get textures for material from stateset and model_info.txt
     osg::Material* material = dynamic_cast<osg::Material*>(stateset->getAttribute(osg::StateAttribute::MATERIAL));
@@ -2186,41 +2268,46 @@ void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
     // Fill up supported textures
     std::string materialName = material->getName();
     std::unordered_set<std::string> unfoundTextures;
-    for (auto& materialInfo : _meshMaterials.getMaterials())
+
+    std::map<std::string, MaterialInfo>::const_iterator materialInfo = _meshMaterials.getMaterials().find(materialName);
+    if (materialInfo != _meshMaterials.getMaterials().end())
     {
-        if (materialInfo.Name == materialName)
+        for (auto& knownLayer : materialInfo->second.KnownLayerNames)
         {
-            for (auto& knownLayer : materialInfo.KnownLayerNames)
+            // Use getImageName to ensure the field contains a valid file name (may be a vector or number either)
+            if (!materialInfo->second.getImageName(knownLayer.first).empty())
             {
-                if (!knownLayer.second.empty())
+                // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
+                // because they may be incorrectly renamed from Sketchfab
+                std::string filename = knownLayer.second;
+                if (!osgDB::fileExists(filename))
                 {
-                    // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
-                    // because they may be incorrectly renamed from Sketchfab
-                    std::string filename = knownLayer.second;
-                    if (!osgDB::fileExists(filename))
+                    filename = ParserHelper::stripAllExtensions(filename) + std::string(".png");
+                }
+
+                if (osgDB::fileExists(filename))
+                {
+                    // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
+                    std::string origExt = osgDB::getLowerCaseFileExtension(filename);
+                    std::string fileNameChanged = ParserHelper::stripAllExtensions(filename) + std::string(".") + origExt;
+                    if (filename != fileNameChanged && std::rename(filename.c_str(), fileNameChanged.c_str()) == 0)
                     {
-                        filename = ParserHelper::stripAllExtensions(filename) + std::string(".png");
+                        OSG_NOTICE << "INFO: Texture " << filename << " renamed to " << fileNameChanged << std::endl;
+                        filename = fileNameChanged;
                     }
 
-                    if (osgDB::fileExists(filename))
+                    material->setUserValue(std::string("textureLayer_") + knownLayer.first, filename);
+                    unfoundTextures.emplace(filename);
+                }
+                else
+                {
+                    if (_notFoundTextures.find(filename) == _notFoundTextures.end())
                     {
-                        // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
-                        std::string origExt = osgDB::getLowerCaseFileExtension(filename);
-                        std::string fileNameChanged = ParserHelper::stripAllExtensions(filename) + std::string(".") + origExt;
-                        if (filename != fileNameChanged && std::rename(filename.c_str(), fileNameChanged.c_str()) == 0)
-                        {
-                            OSG_NOTICE << "INFO: Texture " << filename << " renamed to " << fileNameChanged << std::endl;
-                            filename = fileNameChanged;
-                        }
-
-                        material->setUserValue(std::string("textureLayer_") + knownLayer.first, filename);
-                        unfoundTextures.emplace(filename);
-                    }
-                    else
                         OSG_WARN << "WARNING: Could not find " << filename << " from model_info.txt" << std::endl;
+                        _notFoundTextures.emplace(filename);
+                    }
                 }
             }
-            break;
         }
     }
 
@@ -2241,14 +2328,20 @@ void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
     int j = stateset->getNumTextureAttributeLists();
     for (auto& unfoundTexture : unfoundTextures)
     {
-        std::string ignored; // We already checked for file name
-        ref_ptr<Image> image = createImage(unfoundTexture, ignored);
+        if (_textureMap.find(unfoundTexture) != _textureMap.end())
+        {
+            stateset->setTextureAttribute(j++, _textureMap[unfoundTexture], StateAttribute::TEXTURE);
+            continue;
+        }
+
+        ref_ptr<Image> image = getOrCreateImage(unfoundTexture);
 
         if (!image)
             continue;
 
         ref_ptr<Texture2D> texture = new Texture2D;
 
+        texture->setName(unfoundTexture);
         texture->setImage(image);
         texture->setFilter(Texture::MAG_FILTER, Texture::LINEAR);
         texture->setFilter(Texture::MIN_FILTER, Texture::LINEAR);
@@ -2256,6 +2349,7 @@ void OsgjsParser::postProcessStateSet(ref_ptr<StateSet> stateset)
         texture->setWrap(Texture::WRAP_T, Texture::REPEAT);
 
         stateset->setTextureAttribute(j++, texture, StateAttribute::TEXTURE);
+        _textureMap[unfoundTexture] = texture;
     }
 }
 

@@ -1,13 +1,14 @@
 
 #include "pch.h"
 
+#include "OsgjsParserHelper.h"
 #include "MaterialParser.h"
 #include "jpcre2.hpp"
 
 const std::string COMMENT = R"(^\/\/.+)";
 const std::string MESHNAME = R"(^Mesh \"(?'MeshName'\w+)\" uses material \"(?'MaterialName'\w+)\" and has UniqueID \"(?'UniqueID'\d+)\")";
 const std::string MATERIALNAME = R"(^Material \"(?'MaterialName'\w+)\" has ID (?'ID'[\w-]+))";
-const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'FlipAxis'Flipped\s*\w+)\)))?(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|]*))";
+const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'FlipAxis'Flipped\s*\w+)\)))?(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|()]*))";
 
 const jpcre2::select<char>::Regex commentRegEx(COMMENT, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
 const jpcre2::select<char>::Regex meshNameRegEx(MESHNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
@@ -53,11 +54,11 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 			if (count > 0)
 			{
 				MeshInfo newMesh;
-				newMesh.MeshName = captureGroup[0]["MeshName"];
+				std::string meshName = captureGroup[0]["MeshName"];
 				newMesh.MaterialName = captureGroup[0]["MaterialName"];
 				newMesh.UniqueID = stoi(captureGroup[0]["UniqueID"]);
 
-				Meshes.push_back(newMesh);
+				Meshes[meshName] = newMesh;
 
 				continue;
 			}
@@ -70,7 +71,7 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 			{
 				MaterialInfo newMaterial;
 				newMaterial.ID = captureGroup[0]["ID"];
-				newMaterial.Name = captureGroup[0]["MaterialName"];
+				std::string materialName = captureGroup[0]["MaterialName"];
 
 				// Try to build materialList
 				regexMatch.setRegexObject(&materialLineRegEx);
@@ -86,10 +87,7 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 						// Try to find parameter in parameters map.
 						if (newMaterial.KnownLayerNames.find(captureGroup[0]["TextureLayerName"]) != newMaterial.KnownLayerNames.end())
 						{
-							if (!captureGroup[0]["TexCoord"].empty())
-							{
-								newMaterial.KnownLayerNames.at(captureGroup[0]["TextureLayerName"]) = captureGroup[0]["FileOrParam"];
-							}
+							newMaterial.KnownLayerNames.at(captureGroup[0]["TextureLayerName"]) = captureGroup[0]["FileOrParam"];
 						}
 						else
 						{
@@ -98,15 +96,62 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 					}
 				}
 
-				Materials.push_back(newMaterial);
+				Materials[materialName] = newMaterial;
 			}
 		}
 	}
 	else
 	{
-		OSG_WARN << "WARNING: Could not open " << filePath << std::endl;
 		return false;
 	}
 
 	return true;
+}
+
+const std::string osgJSONParser::MaterialInfo::getImageName(std::string layerName) const
+{
+	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
+		return std::string();
+
+	std::string ext = osgDB::getLowerCaseFileExtension(KnownLayerNames.at(layerName));
+	if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "tga" || ext == "tiff" || ext == "bmp" || ext == "gif"
+		|| ext == "dds" || ext == "pic" || ext == "rgb")
+		return KnownLayerNames.at(layerName);
+
+	return std::string();
+}
+
+const osg::Vec4 osgJSONParser::MaterialInfo::getVector(std::string layerName) const
+{
+	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
+		return osg::Vec4();
+
+	std::stringstream strVec; 
+	strVec << KnownLayerNames.at(layerName);
+	std::string strPart;
+	std::vector<double> dvec;
+
+	while (std::getline(strVec, strPart, '|')) 
+	{
+		double d;
+		if (ParserHelper::getSafeDouble(strPart, d))
+			dvec.push_back(d);
+	}
+
+	if (dvec.size() == 3)
+		return osg::Vec4(dvec[0], dvec[1], dvec[2], 1);
+
+	return osg::Vec4();
+}
+
+double osgJSONParser::MaterialInfo::getDouble(std::string layerName) const
+{
+	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
+		return -1.0;
+
+	double d;
+	if (!ParserHelper::getSafeDouble(KnownLayerNames.at(layerName), d))
+		return -1.0;
+
+	return d;
 }

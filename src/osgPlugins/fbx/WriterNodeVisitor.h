@@ -85,7 +85,6 @@ class WriterNodeVisitor: public osg::NodeVisitor
             _pScene(pScene),
             _curFbxNode(pScene->GetRootNode()),
             _currentStateSet(new osg::StateSet()),
-            _lastMeshIndex(0),
             _options(options),
             _externalWriter(srcDirectory, osgDB::getFilePath(fileName), true, 0),
             _texcoords(false),
@@ -145,6 +144,8 @@ class WriterNodeVisitor: public osg::NodeVisitor
                 {"Emission"},
                 {"Normal"},
                 {"Diffuse"},
+                {"Roughness"},
+                {"Specular"},
                 {"SpecularPBR"},
                 {"Specular F0"},
                 {"Displacement"},
@@ -193,9 +194,6 @@ class WriterNodeVisitor: public osg::NodeVisitor
 
         void buildMeshSkin();
 
-        /// Set the layer for texture and Material in layer 0.
-        void setLayerTextureAndMaterial(FbxMesh* mesh);
-
         /// Set Vertices, normals, and UVs
         void setControlPointAndNormalsAndUV(const GeometryList& geometryList,
                                             MapIndices&       index_vert,
@@ -215,7 +213,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
                                 unsigned int         drawable_n);
 
         ///Return a material from StateSet
-        WriterNodeVisitor::MaterialParser processStateSet(const osg::StateSet* stateset);
+        WriterNodeVisitor::MaterialParser* processStateSet(const osg::StateSet* stateset);
 
         typedef std::stack<osg::ref_ptr<osg::StateSet> > StateSetStack;
         typedef std::map<osg::ref_ptr<const osg::StateSet>, MaterialParser, CompareStateSet> MaterialMap;
@@ -241,8 +239,6 @@ class WriterNodeVisitor: public osg::NodeVisitor
         ///The current stateSet.
         osg::ref_ptr<osg::StateSet> _currentStateSet;
 
-        ///We store the fbx Materials and Textures in this map.
-        unsigned int                        _lastMeshIndex;
         const osgDB::ReaderWriter::Options* _options;
         osgDB::ExternalFileWriter           _externalWriter;
 
@@ -258,10 +254,15 @@ class WriterNodeVisitor: public osg::NodeVisitor
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
         typedef std::map<std::string, BonePair> BoneNodeMap;   // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
 
+        std::vector<FbxMesh*> _meshList;
         RiggedMeshMap _riggedMeshMap;
         MorphedMeshMap _MorphedMeshMap;
         BoneNodeMap _boneNodeMap;
         osg::Matrix _firstMatrix;
+
+        // Keep track of created materials
+        std::map<const osg::Material*, MaterialParser*> _materialMap;
+
 };
 
 // end namespace pluginfbx

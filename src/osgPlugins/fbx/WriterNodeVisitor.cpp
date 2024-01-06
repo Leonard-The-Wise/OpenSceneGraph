@@ -360,6 +360,7 @@ namespace pluginfbx
 				FbxFileTexture* fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
 				fbxTexture->SetFileName(relativePath.c_str());
 				fbxTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
+				fbxTexture->SetMappingType(FbxTexture::eUV);
 
 				// Create a FBX material if needed
 				if (!_fbxMaterial)
@@ -437,7 +438,7 @@ namespace pluginfbx
 					return MaterialSurfaceLayer::DisplacementColor;
 				else if (knownLayer == "Emission")
 					return MaterialSurfaceLayer::Emissive;
-				else if (knownLayer == "Glossiness")
+				else if (knownLayer == "Glossiness" || knownLayer == "Roughness")
 					return MaterialSurfaceLayer::Shininess;
 				else if (knownLayer == "Opacity")
 					return MaterialSurfaceLayer::Transparency;
@@ -447,9 +448,16 @@ namespace pluginfbx
 		return MaterialSurfaceLayer::Diffuse;
 	}
 
-	WriterNodeVisitor::MaterialParser WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
+	WriterNodeVisitor::MaterialParser* WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
 	{
 		const osg::Material* mat = dynamic_cast<const osg::Material*>(ss->getAttribute(osg::StateAttribute::MATERIAL));
+
+		// Look for shared materials between statesets
+		if (mat && _materialMap.find(mat) != _materialMap.end())
+		{
+			return _materialMap.at(mat);
+		}
+
 		std::vector<const osg::Texture*> texArray;
 
 		for (unsigned int i = 0; i < ss->getNumTextureAttributeLists(); i++)
@@ -457,7 +465,10 @@ namespace pluginfbx
 			texArray.push_back(dynamic_cast<const osg::Texture*>(ss->getTextureAttribute(i, osg::StateAttribute::TEXTURE)));
 		}
 
-		MaterialParser stateMaterial(*this, _externalWriter, ss, mat, texArray, _pSdkManager, _options);
+		MaterialParser* stateMaterial = new MaterialParser(*this, _externalWriter, ss, mat, texArray, _pSdkManager, _options);
+
+		if (mat)
+			_materialMap[mat] = stateMaterial;
 
 		return stateMaterial;
 	}
@@ -741,55 +752,19 @@ namespace pluginfbx
 					case osg::Array::Vec2ArrayType:
 					{
 						const osg::Vec2& vec = (*static_cast<const osg::Vec2Array*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
+						texcoord.Set(vec.x(), 1-vec.y());
 						break;
 					}
 					case osg::Array::Vec2dArrayType:
 					{
 						const osg::Vec2d& vec = (*static_cast<const osg::Vec2dArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
-						break;
-					}
-					case osg::Array::Vec2uiArrayType:
-					{
-						const osg::Vec2ui& vec = (*static_cast<const osg::Vec2uiArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
-						break;
-					}
-					case osg::Array::Vec2usArrayType:
-					{
-						const osg::Vec2us& vec = (*static_cast<const osg::Vec2usArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
-						break;
-					}
-					case osg::Array::Vec2ubArrayType:
-					{
-						const osg::Vec2ub& vec = (*static_cast<const osg::Vec2ubArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
-						break;
-					}
-					case osg::Array::Vec2iArrayType:
-					{
-						const osg::Vec2i& vec = (*static_cast<const osg::Vec2iArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
-						break;
-					}
-					case osg::Array::Vec2sArrayType:
-					{
-						const osg::Vec2s& vec = (*static_cast<const osg::Vec2sArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
-						break;
-					}
-					case osg::Array::Vec2bArrayType:
-					{
-						const osg::Vec2b& vec = (*static_cast<const osg::Vec2bArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), vec.y());
+						texcoord.Set(vec.x(), 1-vec.y());
 						break;
 					}
 					default:
 					{
 						OSG_NOTIFY(osg::FATAL) << "Error parsing texcoord array." << std::endl;
-						throw "FATAL: Texture coords array is not Vec2. Not implemented";
+						throw "FATAL: Texture coords array is not Vec2 [floats]. Not implemented";
 					}
 					}
 
@@ -1249,6 +1224,8 @@ namespace pluginfbx
 	{
 		MapIndices index_vert;
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, name.c_str());
+		_meshList.push_back(mesh);
+
 		_curFbxNode->AddNodeAttribute(mesh);
 		_curFbxNode->SetShadingMode(FbxNode::eTextureShading);
 		FbxLayer* lLayer = mesh->GetLayer(0);
@@ -1267,9 +1244,9 @@ namespace pluginfbx
 		}
 		setControlPointAndNormalsAndUV(geometryList, index_vert, texcoords, mesh);
 
-		// setLayerTextureAndMaterial(mesh);
 		FbxSurfacePhong* meshMaterial = materialParser.getFbxMaterial();
-		_curFbxNode->AddMaterial(meshMaterial);
+		if (meshMaterial)
+			_curFbxNode->AddMaterial(meshMaterial);
 
 		// Since we changed our geometryList to contain only 1 geometry (or Rig or Morph), we can safely pick the first Morph and process
 		// Might need to change this approach in the future.
@@ -1437,9 +1414,9 @@ namespace pluginfbx
 			_curFbxNode->AddChild(nodeFBX);
 			_curFbxNode = nodeFBX;
 
-			MaterialParser materialParser = processStateSet(geometry.getStateSet());
+			MaterialParser* materialParser = processStateSet(geometry.getStateSet());
 
-			buildMesh(geometry.getName(), _geometryList, _listTriangles, _texcoords, materialParser);
+			buildMesh(geometry.getName(), _geometryList, _listTriangles, _texcoords, *materialParser);
 
 			if (rigGeometry)
 				_riggedMeshMap.emplace(rigGeometry, nodeFBX);

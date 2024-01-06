@@ -132,7 +132,14 @@ namespace osgJSONParser
         bool _needDecodeIndices = true;
         std::string _filesBasePath;
 
+        // Materials from materialInfo.txt
         MaterialFile _meshMaterials;
+        std::set<std::string> _notFoundTextures; // Keep track of not found textures to avoid multiple warnings
+
+        // Keep track of Materials, Textures and Images
+        std::map<std::string, osg::ref_ptr<osg::Material>> _materialMap;
+        std::map<std::string, osg::ref_ptr<osg::Texture>> _textureMap;
+        std::map<std::string, osg::ref_ptr<osg::Image>> _imageMap;
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;
@@ -190,10 +197,11 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Object> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
 
         std::string getModelName() const;
-        osg::ref_ptr<osg::Image> createImage(const std::string& fileName, std::string& outFileRenamed);
+        osg::ref_ptr<osg::Image> getOrCreateImage(const std::string& fileName);
 
-        void postProcessGeometry(osg::ref_ptr<osg::Geometry> geometry);
-        void postProcessStateSet(osg::ref_ptr<osg::StateSet> stateset);
+        void parseExternalMaterials(const osg::ref_ptr<osg::Geometry>& geometry);
+        void postProcessGeometry(const osg::ref_ptr<osg::Geometry>& geometry);
+        void postProcessStateSet(const osg::ref_ptr<osg::StateSet>& stateset);
 
 
 	};
