@@ -18,6 +18,7 @@ namespace osgJSONParser
 			{"Albedo", ""},
 			{"AO", ""},
 			{"Opacity", ""},
+			{"Bump map", "" },
 			{"Emission", ""},
 			{"Normal", ""},
 			{"Diffuse", ""},

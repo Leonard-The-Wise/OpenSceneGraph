@@ -129,6 +129,7 @@ namespace osgJSONParser
 
 		FileCache _fileCache;
         bool _firstMatrix = true;
+        bool _firstDecodedTexture = true;
         bool _needDecodeIndices = true;
         std::string _filesBasePath;
 

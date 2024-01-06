@@ -429,7 +429,7 @@ namespace pluginfbx
 			{
 				if (knownLayer == "Albedo" || knownLayer == "Diffuse" || knownLayer == "Diffuse colour")
 					return MaterialSurfaceLayer::Diffuse;
-				else if (knownLayer == "Normal")
+				else if (knownLayer == "Normal" || knownLayer == "Bump map")
 					return MaterialSurfaceLayer::NormalMap;
 				else if (knownLayer == "SpecularPBR" || knownLayer == "Specular F0" || knownLayer == "Specular colour" || knownLayer == "Specular hardness" ||
 					knownLayer == "Metalness")

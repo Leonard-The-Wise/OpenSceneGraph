@@ -55,7 +55,7 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 
     buildMaterialFiles();
 
-    osg::notify(osg::ALWAYS) << "[OSGJS] Parsing Scene tree [models, textures, animations]..." << std::endl;
+    OSG_NOTICE << "Parsing Scene tree..." << std::endl;
     if (parseObject(rootNode, firstOsgNodeJSON, "JSON Root"))
         return rootNode;
     else
@@ -2368,6 +2368,12 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset)
         {
             stateset->setTextureAttribute(j++, _textureMap[unfoundTexture], StateAttribute::TEXTURE);
             continue;
+        }
+
+        if (_firstDecodedTexture)
+        {
+            OSG_NOTICE << "Loading textures..." << std::endl;
+            _firstDecodedTexture = false;
         }
 
         ref_ptr<Image> image = getOrCreateImage(unfoundTexture);

@@ -141,6 +141,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
                 {"Albedo"},
                 {"AO"},
                 {"Opacity"},
+                {"Bump map"},
                 {"Emission"},
                 {"Normal"},
                 {"Diffuse"},
