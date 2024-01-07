@@ -70,15 +70,202 @@ typedef std::vector<const osg::Geometry*> GeometryList; // a list of geometries 
 namespace pluginfbx
 {
 
-///\author Capo (Thibault Caporal), Sukender (Benoit Neil)
-class WriterNodeVisitor: public osg::NodeVisitor
-{
+    /** writes all primitives of a primitive-set out to a stream, decomposes quads to triangles, line-strips to lines etc */
+    class PrimitiveIndexWriter : public osg::PrimitiveIndexFunctor
+    {
+    public:
+        PrimitiveIndexWriter(const osg::Geometry* geo,
+            ListTriangle& listTriangles,
+            unsigned int         drawable_n) :
+            _drawable_n(drawable_n),
+            _listTriangles(listTriangles),
+            _modeCache(0),
+            _hasNormalCoords(geo->getNormalArray() != NULL),
+            _hasTexCoords(geo->getTexCoordArray(0) != NULL),
+            _geo(geo),
+            _lastFaceIndex(0),
+            _curNormalIndex(0),
+            _normalBinding(osg::Geometry::BIND_OFF),
+            _mesh(0)
+        {
+            _normalBinding = geo->getNormalBinding();
+            if (!geo->getNormalArray() || geo->getNormalArray()->getNumElements() == 0)
+            {
+                _normalBinding = osg::Geometry::BIND_OFF;        // Turn off binding if there is no normal data
+            }
+            reset();
+        }
+
+        void reset() { _curNormalIndex = 0; }
+
+        unsigned int getNextFaceIndex() { return _lastFaceIndex; }
+
+        virtual void setVertexArray(unsigned int, const osg::Vec2*) {}
+
+        virtual void setVertexArray(unsigned int, const osg::Vec3*) {}
+
+        virtual void setVertexArray(unsigned int, const osg::Vec4*) {}
+
+        virtual void setVertexArray(unsigned int, const osg::Vec2d*) {}
+
+        virtual void setVertexArray(unsigned int, const osg::Vec3d*) {}
+
+        virtual void setVertexArray(unsigned int, const osg::Vec4d*) {}
+
+        // operator for triangles
+        void writeTriangle(unsigned int i1, unsigned int i2, unsigned int i3)
+        {
+            Triangle triangle;
+            triangle.t1 = i1;
+            triangle.t2 = i2;
+            triangle.t3 = i3;
+            if (_normalBinding == osg::Geometry::BIND_PER_VERTEX) {
+                triangle.normalIndex1 = i1;
+                triangle.normalIndex2 = i2;
+                triangle.normalIndex3 = i3;
+            }
+            else {
+                triangle.normalIndex1 = _curNormalIndex;
+                triangle.normalIndex2 = _curNormalIndex;
+                triangle.normalIndex3 = _curNormalIndex;
+            }
+            _listTriangles.push_back(std::make_pair(triangle, _drawable_n));
+        }
+
+        virtual void begin(GLenum mode)
+        {
+            _modeCache = mode;
+            _indexCache.clear();
+        }
+
+        virtual void vertex(unsigned int vert)
+        {
+            _indexCache.push_back(vert);
+        }
+
+        virtual void end()
+        {
+            if (!_indexCache.empty())
+            {
+                drawElements(_modeCache, _indexCache.size(), &_indexCache.front());
+            }
+        }
+
+        virtual void drawArrays(GLenum mode, GLint first, GLsizei count);
+
+        virtual void drawElements(GLenum mode, GLsizei count, const GLubyte* indices)
+        {
+            drawElementsImplementation<GLubyte>(mode, count, indices);
+        }
+
+        virtual void drawElements(GLenum mode, GLsizei count, const GLushort* indices)
+        {
+            drawElementsImplementation<GLushort>(mode, count, indices);
+        }
+
+        virtual void drawElements(GLenum mode, GLsizei count, const GLuint* indices)
+        {
+            drawElementsImplementation<GLuint>(mode, count, indices);
+        }
+
+    protected:
+        template <typename T> void drawElementsImplementation(GLenum mode, GLsizei count, const T* indices)
+        {
+            if (indices == 0 || count == 0) return;
+
+            typedef const T* IndexPointer;
+
+            switch (mode)
+            {
+            case GL_TRIANGLES:
+            {
+                IndexPointer ilast = indices + count;
+                for (IndexPointer iptr = indices; iptr < ilast; iptr += 3)
+                {
+                    writeTriangle(iptr[0], iptr[1], iptr[2]);
+                }
+                break;
+            }
+            case GL_TRIANGLE_STRIP:
+            {
+                IndexPointer iptr = indices;
+                for (GLsizei i = 2; i < count; ++i, ++iptr)
+                {
+                    if (i & 1) writeTriangle(iptr[0], iptr[2], iptr[1]);
+                    else       writeTriangle(iptr[0], iptr[1], iptr[2]);
+                }
+                break;
+            }
+            case GL_QUADS:
+            {
+                IndexPointer iptr = indices;
+                for (GLsizei i = 3; i < count; i += 4, iptr += 4)
+                {
+                    writeTriangle(iptr[0], iptr[1], iptr[2]);
+                    writeTriangle(iptr[0], iptr[2], iptr[3]);
+                }
+                break;
+            }
+            case GL_QUAD_STRIP:
+            {
+                IndexPointer iptr = indices;
+                for (GLsizei i = 3; i < count; i += 2, iptr += 2)
+                {
+                    writeTriangle(iptr[0], iptr[1], iptr[2]);
+                    writeTriangle(iptr[1], iptr[3], iptr[2]);
+                }
+                break;
+            }
+            case GL_POLYGON: // treat polygons as GL_TRIANGLE_FAN
+            case GL_TRIANGLE_FAN:
+            {
+                IndexPointer iptr = indices;
+                unsigned int first = *iptr;
+                ++iptr;
+                for (GLsizei i = 2; i < count; ++i, ++iptr)
+                {
+                    writeTriangle(first, iptr[0], iptr[1]);
+                }
+                break;
+            }
+            case GL_POINTS:
+            case GL_LINES:
+            case GL_LINE_STRIP:
+            case GL_LINE_LOOP:
+                // Not handled
+                break;
+            default:
+                // uhm should never come to this point :)
+                break;
+            }
+            if (_normalBinding == osg::Geometry::BIND_PER_PRIMITIVE_SET) ++_curNormalIndex;
+        }
+
+    private:
+        PrimitiveIndexWriter& operator = (const PrimitiveIndexWriter&); // { return *this; }
+
+        unsigned int         _drawable_n;
+        ListTriangle& _listTriangles;
+        GLenum               _modeCache;
+        std::vector<GLuint>  _indexCache;
+        bool                 _hasNormalCoords, _hasTexCoords;
+        const osg::Geometry* _geo;
+        unsigned int         _lastFaceIndex;
+        unsigned int         _curNormalIndex;
+        osg::Geometry::AttributeBinding _normalBinding;
+        FbxMesh* _mesh;
+    };
+
+
+    ///\author Capo (Thibault Caporal), Sukender (Benoit Neil)
+    class WriterNodeVisitor : public osg::NodeVisitor
+    {
     public:
         WriterNodeVisitor(FbxScene* pScene,
-                          FbxManager* pSdkManager,
-                          const std::string& fileName,
-                          const osgDB::ReaderWriter::Options* options,
-                          const std::string& srcDirectory) :
+            FbxManager* pSdkManager,
+            const std::string& fileName,
+            const osgDB::ReaderWriter::Options* options,
+            const std::string& srcDirectory) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
             _pSdkManager(pSdkManager),
             _succeedLastApply(true),
@@ -89,7 +276,8 @@ class WriterNodeVisitor: public osg::NodeVisitor
             _externalWriter(srcDirectory, osgDB::getFilePath(fileName), true, 0),
             _texcoords(false),
             _drawableNum(0),
-            _firstNodeProcessed(false)
+            _firstNodeProcessed(false),
+            _matrixAndBonesAnimLayer(nullptr)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -101,7 +289,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
         //virtual void apply(osgAnimation::Bone& node);
 
 
-        void traverse (osg::Node& node)
+        void traverse(osg::Node& node)
         {
             osg::NodeVisitor::traverse(node);
         }
@@ -119,14 +307,14 @@ class WriterNodeVisitor: public osg::NodeVisitor
             };
 
             ///Create a KfbxMaterial and KfbxTexture from osg::Texture and osg::Material.
-            MaterialParser(WriterNodeVisitor&   writerNodeVisitor,
-                     osgDB::ExternalFileWriter & externalWriter,
-                     const osg::StateSet* stateset,
-                     const osg::Material* mat,
-                     const std::vector<const osg::Texture*>& texArray,
-                     FbxManager*      pSdkManager,
-                     const osgDB::ReaderWriter::Options * options,
-                     int                  index = -1);
+            MaterialParser(WriterNodeVisitor& writerNodeVisitor,
+                osgDB::ExternalFileWriter& externalWriter,
+                const osg::StateSet* stateset,
+                const osg::Material* mat,
+                const std::vector<const osg::Texture*>& texArray,
+                FbxManager* pSdkManager,
+                const osgDB::ReaderWriter::Options* options,
+                int                  index = -1);
 
             FbxSurfacePhong* getFbxMaterial() const
             {
@@ -134,7 +322,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
             }
 
         private:
-            FbxSurfacePhong*  _fbxMaterial;
+            FbxSurfacePhong* _fbxMaterial;
 
             std::set<std::string> KnownLayerNames =
             {
@@ -186,10 +374,10 @@ class WriterNodeVisitor: public osg::NodeVisitor
         *  \param texcoords tell us if we have to handle texture coordinates.
         */
         void buildMesh(const std::string& name,
-                        const GeometryList& geometryList,
-                        ListTriangle&       listTriangles,
-                        bool                texcoords,
-                        const MaterialParser& materialParser);
+            const GeometryList& geometryList,
+            ListTriangle& listTriangles,
+            bool                texcoords,
+            const MaterialParser& materialParser);
 
         void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
 
@@ -197,9 +385,9 @@ class WriterNodeVisitor: public osg::NodeVisitor
 
         /// Set Vertices, normals, and UVs
         void setControlPointAndNormalsAndUV(const GeometryList& geometryList,
-                                            MapIndices&       index_vert,
-                                            bool              texcoords,
-                                            FbxMesh*         fbxMesh);
+            MapIndices& index_vert,
+            bool              texcoords,
+            FbxMesh* fbxMesh);
 
         /**
         *  Create the list of faces from the geode.
@@ -209,9 +397,17 @@ class WriterNodeVisitor: public osg::NodeVisitor
         *  \param drawable_n tell us which drawable we are building.
         */
         void createListTriangle(const osg::Geometry* geo,
-                                ListTriangle&        listTriangles,
-                                bool&                texcoords,
-                                unsigned int         drawable_n);
+            ListTriangle& listTriangles,
+            bool& texcoords,
+            unsigned int         drawable_n);
+
+        FbxAnimStack* getCurrentAnimStack();
+
+        void applyAnimations(const osg::ref_ptr<osg::Callback> callback);
+
+        void applyUpdateMatrix(const osg::ref_ptr<osg::Callback> callback, FbxNode* currentNode);
+
+        void applyMorphTargets();
 
         ///Return a material from StateSet
         WriterNodeVisitor::MaterialParser* processStateSet(const osg::StateSet* stateset);
@@ -227,7 +423,7 @@ class WriterNodeVisitor: public osg::NodeVisitor
 
         ///Marks if the first node is processed.
         bool _firstNodeProcessed;
-		
+
         ///The current directory.
         std::string _directory;
 
@@ -254,17 +450,20 @@ class WriterNodeVisitor: public osg::NodeVisitor
         typedef std::map<osg::ref_ptr<osgAnimation::MorphGeometry>, FbxNode*> MorphedMeshMap;   // Maps OSG Morphed Geometry to FBX meshes
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
         typedef std::map<std::string, BonePair> BoneNodeMap;   // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
+        typedef std::map<osg::Callback*, FbxNode*> UpdateMatrixMap;  // Map UpdateMatrix nodes to Fbx Nodes.
 
         std::vector<FbxMesh*> _meshList;
         RiggedMeshMap _riggedMeshMap;
         MorphedMeshMap _MorphedMeshMap;
         BoneNodeMap _boneNodeMap;
+        UpdateMatrixMap _updateMatrixMap;
         osg::Matrix _firstMatrix;
+        FbxAnimLayer* _matrixAndBonesAnimLayer;
 
         // Keep track of created materials
         std::map<const osg::Material*, MaterialParser*> _materialMap;
 
-};
+    };
 
 // end namespace pluginfbx
 }

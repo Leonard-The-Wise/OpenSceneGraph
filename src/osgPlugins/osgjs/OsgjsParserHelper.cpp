@@ -222,9 +222,8 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 		size_t totalBytesSize = static_cast<size_t>(totalElements * elementTypeSize + readOffset);
 		const std::vector<uint8_t>* elementsBytes = fileCache.getFileBuffer(fileName);
 		const std::vector<uint8_t>* elementsBytesConverted = nullptr;
-
 		
-		if (!elementsBytes->empty())
+		if (elementsBytes && !elementsBytes->empty())
 		{
 			// Verify size - only valid for non-compressed items
 			if ((elementsBytes->size() < totalBytesSize) && !(*elementsNode).contains("Encoding"))
@@ -975,17 +974,6 @@ osgText::Text::AlignmentType ParserHelper::getTextAlignmentFromString(const std:
 	if (textAlignment == "RIGHT_BOTTOM_BASE_LINE") return osgText::Text::AlignmentType::RIGHT_BOTTOM_BASE_LINE;
 
 	return osgText::Text::AlignmentType::LEFT_TOP;
-}
-
-std::string osgJSONParser::ParserHelper::stripAllExtensions(const std::string& filename)
-{
-	std::string finalName = filename;
-	while (!osgDB::getFileExtension(finalName).empty())
-	{
-		finalName = osgDB::getStrippedName(finalName);
-	}
-
-	return finalName;
 }
 
 

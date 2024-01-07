@@ -421,7 +421,7 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
     }
 
     // Custom step: try to get textures from MaterialInfo and set on User Values of materials
-    postProcessStateSet(stateset);
+    postProcessStateSet(stateset, &currentJSONNode);
 
     // Apply stateset.
     if (dynamic_pointer_cast<Node>(currentObject))
@@ -636,7 +636,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     const json* bonesNode = nullptr;
     const json* weightsNode = nullptr;
 
-    std::vector<const json*> texCoordNodes;
+    std::map<int, const json*> texCoordNodes;
 
     ref_ptr<Array> vertices;
     ref_ptr<Array> normals;
@@ -644,7 +644,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     ref_ptr<Array> tangents;
     ref_ptr<Array> bones;
     ref_ptr<Array> weights;
-    std::vector<ref_ptr<Array>> texcoords;
+    std::map<int, ref_ptr<Array>> texcoords;
     ref_ptr<Array> indices;
     int vertexAttribArrays = 0;
     uint32_t magic = 0;
@@ -674,7 +674,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             ss.str("");
             ss << "TexCoord" << i;
             if (vertexAttributeList->contains(ss.str()) && (*vertexAttributeList)[ss.str()].is_object())
-                texCoordNodes.push_back(&(*vertexAttributeList)[ss.str()]);
+                texCoordNodes[i] = &(*vertexAttributeList)[ss.str()];
         }
 
         // 1.2) Get VertexAttributeList arrays
@@ -699,9 +699,13 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             bones = ParserHelper::parseJSONArray((*bonesNode)["Array"], (*bonesNode)["ItemSize"].get<int>(), _fileCache, magic);
         if (weightsNode && weightsNode->contains("Array") && (*weightsNode)["Array"].is_object() && weightsNode->contains("ItemSize") && (*weightsNode)["ItemSize"].is_number())
             weights = ParserHelper::parseJSONArray((*weightsNode)["Array"], (*weightsNode)["ItemSize"].get<int>(), _fileCache, magic);
+
         for (auto& texCoordNode : texCoordNodes)
-            if (texCoordNode->contains("Array") && (*texCoordNode)["Array"].is_object() && texCoordNode->contains("ItemSize") && (*texCoordNode)["ItemSize"].is_number())
-                texcoords.push_back(ParserHelper::parseJSONArray((*texCoordNode)["Array"], (*texCoordNode)["ItemSize"].get<int>(), _fileCache, magic));
+        {
+            if (texCoordNode.second->contains("Array") && (*texCoordNode.second)["Array"].is_object() && texCoordNode.second->contains("ItemSize") && 
+                (*texCoordNode.second)["ItemSize"].is_number())
+                texcoords[texCoordNode.first] = ParserHelper::parseJSONArray((*texCoordNode.second)["Array"], (*texCoordNode.second)["ItemSize"].get<int>(), _fileCache, magic);
+        }
 
         // 1.3) Sanity checks
         if (nodeKey == "osg.Geometry")
@@ -727,7 +731,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                 }
                 bool texError = false;
                 for (auto& texcoordcheck : texcoords)
-                    if (vertices->getNumElements() != texcoordcheck->getNumElements())
+                    if (vertices->getNumElements() != texcoordcheck.second->getNumElements())
                         texError = true;
 
                 if (texError)
@@ -749,11 +753,10 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             tangents->setUserValue("tangent", true);
             newGeometry->setVertexAttribArray(vertexAttribArrays++, tangents);
         }
-        int i = 0;
+
         for (auto& texcoord : texcoords)
         {
-            newGeometry->setTexCoordArray(i, texcoord);
-            ++i;
+            newGeometry->setTexCoordArray(texcoord.first, texcoord.second);
         }
     }
 
@@ -976,7 +979,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 
     // 8) Vertices post-processing
     if (nodeKey == "osg.Geometry")
-        postProcessGeometry(newGeometry);
+        postProcessGeometry(newGeometry, currentJSONNode);
 
     // 9) Done
     return newGeometry;
@@ -2006,7 +2009,7 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
     {
         // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
         std::string origExt = osgDB::getLowerCaseFileExtension(fileNameOrig);
-        fileNameChanged = ParserHelper::stripAllExtensions(fileNameOrig) + std::string(".") + origExt;
+        fileNameChanged = FileCache::stripAllExtensions(fileNameOrig) + std::string(".") + origExt;
         if (std::rename(fileNameOrig.c_str(), fileNameChanged.c_str()) == 0)
         {
             fileNameOrig = fileNameChanged;
@@ -2026,7 +2029,7 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
             }
             else // if (fileExt == "tga" || fileExt == "tiff" || fileExt == "jpg" || fileExt == "jpeg")
             {
-                fileNameChanged = ParserHelper::stripAllExtensions(fileNameOrig) + std::string(".png");
+                fileNameChanged = FileCache::stripAllExtensions(fileNameOrig) + std::string(".png");
 
                 if (std::rename(fileNameOrig.c_str(), fileNameChanged.c_str()) != 0)
                 {
@@ -2054,7 +2057,7 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
     }
     else if (osgDB::getLowerCaseFileExtension(fileNameOrig) != "png")
     {
-        fileNameChanged = ParserHelper::stripAllExtensions(fileNameOrig) + std::string(".png");
+        fileNameChanged = FileCache::stripAllExtensions(fileNameOrig) + std::string(".png");
 
         if (!osgDB::fileExists(fileNameChanged))
         {
@@ -2156,11 +2159,16 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry)
     }
 }
 
-void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
+void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode)
 {
 #ifdef DEBUG
+    std::string debugCurrentJSONNode = currentJSONNode.dump();
+    std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
+    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
+    UniqueID = UniqueID; // Bypass compilation warning
     std::string geometryName = geometry->getName();
     ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
+    ref_ptr<Array> texCoordOriginals = geometry->getTexCoordArray(0);
 #endif // DEBUG
 
     // Check for user data
@@ -2219,9 +2227,13 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
         geometry->setVertexArray(verticesConverted);
     }
 
-    int i = 0;
-    for (auto& texCoord : geometry->getTexCoordArrayList())
+    
+    for (int i = 0; i < 32; i++)
     {
+        ref_ptr<Array> texCoord = geometry->getTexCoordArray(i);
+        if (!texCoord)
+            continue;
+
         std::stringstream uvbblx, uvbbly, uvhx, uvhy;
         uvbblx << "uv_" << i << "_bbl_x";
         uvbbly << "uv_" << i << "_bbl_y";
@@ -2293,8 +2305,18 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry)
     }
 }
 
-void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset)
+void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const json* currentJSONNode)
 {
+#ifdef DEBUG
+    if (currentJSONNode)
+    {
+        std::string debugCurrentJSONNode = currentJSONNode->dump();
+        std::string name = currentJSONNode->contains("Name") ? (*currentJSONNode)["Name"] : "";
+        int UniqueID = currentJSONNode->contains("UniqueID") ? (*currentJSONNode)["UniqueID"].get<int>() : 0;
+        UniqueID = UniqueID; // Bypass compilation warning
+    }
+#endif
+
     // Try to get textures for material from stateset and model_info.txt
     osg::Material* material = dynamic_cast<osg::Material*>(stateset->getAttribute(osg::StateAttribute::MATERIAL));
 
@@ -2318,14 +2340,14 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset)
                 std::string filename = knownLayer.second;
                 if (!osgDB::fileExists(filename))
                 {
-                    filename = ParserHelper::stripAllExtensions(filename) + std::string(".png");
+                    filename = FileCache::stripAllExtensions(filename) + std::string(".png");
                 }
 
                 if (osgDB::fileExists(filename))
                 {
                     // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
                     std::string origExt = osgDB::getLowerCaseFileExtension(filename);
-                    std::string fileNameChanged = ParserHelper::stripAllExtensions(filename) + std::string(".") + origExt;
+                    std::string fileNameChanged = FileCache::stripAllExtensions(filename) + std::string(".") + origExt;
                     if (filename != fileNameChanged && std::rename(filename.c_str(), fileNameChanged.c_str()) == 0)
                     {
                         OSG_NOTICE << "INFO: Texture " << filename << " renamed to " << fileNameChanged << std::endl;

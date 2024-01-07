@@ -219,7 +219,7 @@ void ReaderWriterJSON::getModelFiles(const json& value, std::set<std::string>& F
             if (itr.key() == "File") 
             {
                 std::string ext = osgDB::getLowerCaseFileExtension(itr.value());
-                if (ext == "bin" || ext == "bin.gz" || ext == "binz")
+                if (ext == "bin" || ext == "gz" || ext == "binz")
                 {
                     osg::notify(osg::DEBUG_INFO) << "Found Model Dependency: " << itr.value() << std::endl;
                     FileNames.insert(itr.value().get<std::string>());

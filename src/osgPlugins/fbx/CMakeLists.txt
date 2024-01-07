@@ -6,6 +6,10 @@ SET(TARGET_SRC
     fbxRLight.cpp
     fbxRMesh.cpp
     fbxRNode.cpp
+    fbxWAnimation.cpp
+    fbxWMaterial.cpp
+    fbxWMesh.cpp
+    fbxWRigMorph.cpp
     ReaderWriterFBX.cpp
     WriterCompareTriangle.cpp
     WriterNodeVisitor.cpp
