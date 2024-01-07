@@ -15,6 +15,7 @@
 
 #include <climits>                     // required for UINT_MAX
 #include <cassert>
+#include <memory> 
 #include <osg/CullFace>
 #include <osg/MatrixTransform>
 #include <osg/NodeVisitor>
@@ -61,6 +62,89 @@ namespace pluginfbx
 		return getRealUpdateCallback(callback->getNestedCallback());		
 	}
 
+	void WriterNodeVisitor::applyUpdateMatrixTransform(const osg::ref_ptr<osg::Callback>& callback,
+		FbxNode* fbxNode, osg::MatrixTransform& matrixTransform)
+	{
+		const ref_ptr<UpdateMatrixTransform> umt = dynamic_pointer_cast<UpdateMatrixTransform>(callback);
+
+		if (!umt)
+			return;
+
+		auto& stackedTransforms = umt->getStackedTransforms();
+
+		// For any matrixTransform that is a bone, creates FbxAnimCurveNodes and map to it
+		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&matrixTransform);
+		if (bone)
+		{
+			std::shared_ptr<UpdateBoneNodes> newBoneAnim = std::make_shared<UpdateBoneNodes>();
+			std::string updateBoneName = umt->getName();
+			newBoneAnim->bone = bone;
+			newBoneAnim->fbxNode = fbxNode;
+
+			_boneAnimCurveMap.emplace(updateBoneName, newBoneAnim);
+		}
+
+		// Should have only 1 of each or a matrix...
+		for (auto& stackedTransform : stackedTransforms)
+		{
+			if (auto translateElement = dynamic_pointer_cast<StackedTranslateElement>(stackedTransform))
+			{
+				FbxDouble3 translation(translateElement->getTranslate().x(),
+					translateElement->getTranslate().y(),
+					translateElement->getTranslate().z());
+				fbxNode->LclTranslation.Set(translation);
+			}
+			else if (auto rotateElement = dynamic_pointer_cast<StackedQuaternionElement>(stackedTransform))
+			{
+				osg::Quat rot = rotateElement->getQuaternion();
+				FbxAMatrix mat;
+				FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+				mat.SetQ(q);
+				FbxVector4 vec4 = mat.GetR();
+				fbxNode->LclRotation.Set(vec4);
+			}
+			else if (auto scaleElement = dynamic_pointer_cast<StackedScaleElement>(stackedTransform))
+			{
+				// Associe scaleElement com scaleCurveNode
+				FbxDouble3 scale(scaleElement->getScale().x(),
+					scaleElement->getScale().y(),
+					scaleElement->getScale().z());
+				fbxNode->LclScaling.Set(scale);
+			}
+			else if (auto rotateAxisElement = dynamic_pointer_cast<StackedRotateAxisElement>(stackedTransform))
+			{
+				osg::Vec3 axis = rotateAxisElement->getAxis();
+				float angle = rotateAxisElement->getAngle();
+
+				osg::Quat rot;
+				rot.makeRotate(angle, axis);
+
+				FbxAMatrix mat;
+				FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+				mat.SetQ(q);
+				FbxVector4 vec4 = mat.GetR();
+				fbxNode->LclRotation.Set(vec4);
+			}
+			else if (auto matrixElement = dynamic_pointer_cast<StackedMatrixElement>(stackedTransform))
+			{
+				osg::Matrix matrix = matrixElement->getMatrix();
+				osg::Vec3d pos, scl;
+				osg::Quat rot, so;
+
+				matrix.decompose(pos, rot, scl, so);
+				_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+				_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+
+				FbxAMatrix mat;
+
+				FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+				mat.SetQ(q);
+				FbxVector4 vec4 = mat.GetR();
+
+				_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+			}
+		}
+	}
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
 	{
@@ -121,6 +205,10 @@ namespace pluginfbx
 
 			traverse(node);
 
+			ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
+			if (nodeCallback)
+				applyAnimations(getRealUpdateCallback(nodeCallback));
+
 			_curFbxNode = parent;
 		}
 		else
@@ -132,7 +220,6 @@ namespace pluginfbx
 
 			// Build mesh skin, apply global animations
 			buildMeshSkin();
-
 
 			ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
 			if (nodeCallback)
@@ -188,7 +275,7 @@ namespace pluginfbx
 			_curFbxNode->SetNodeAttribute(fbxSkel);
 
 			if (bone)
-				_boneNodeMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));
+				_boneNodeSkinMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));
 		}
 
 		// Set transforms for node
@@ -209,10 +296,9 @@ namespace pluginfbx
 
 		_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 
-		// Save update matrix callback to process later
 		ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
 		if (nodeCallback)
-			_updateMatrixMap.emplace(nodeCallback, _curFbxNode);
+			applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
 
 		traverse(node);
 

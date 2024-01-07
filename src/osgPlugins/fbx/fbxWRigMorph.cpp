@@ -375,8 +375,8 @@ namespace pluginfbx
 			const std::string& boneName = influence.first;
 
 			BonePair bonePair;
-			if (_boneNodeMap.find(boneName) != _boneNodeMap.end())
-				bonePair = _boneNodeMap.at(boneName);
+			if (_boneNodeSkinMap.find(boneName) != _boneNodeSkinMap.end())
+				bonePair = _boneNodeSkinMap.at(boneName);
 
 			ref_ptr<osgAnimation::Bone> bone = bonePair.first;
 			FbxNode* fbxBoneNode = bonePair.second;
