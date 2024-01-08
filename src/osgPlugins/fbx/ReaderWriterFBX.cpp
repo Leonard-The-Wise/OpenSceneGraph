@@ -477,6 +477,26 @@ ReaderWriterFBX::readNode(const std::string& filenameInit,
     return ReadResult::ERROR_IN_READING_FILE;
 }
 
+bool getSafeDouble(const std::string& in, double& outValue)
+{
+    if (in.empty())
+        return false;
+
+    try
+    {
+        char* endPtr = nullptr;
+        outValue = std::strtod(in.c_str(), &endPtr);
+
+        return *endPtr == '\0' && endPtr != in.c_str();
+    }
+    catch (const std::exception&)
+    {
+        return false;
+    }
+    return true;
+}
+
+
 osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
     const osg::Node& node,
     const std::string& filename,
@@ -506,46 +526,58 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         bool ascii(false);
         bool ignoreBones(false);
         bool ignoreAnimations(false);
-        bool snapMeshesToParentGroup(false);
-        bool rotateXAxis(false);
+        double rotateXAxis(-180.0);
         std::string exportVersion;
         if (options)
         {
+
             std::istringstream iss(options->getOptionString());
             std::string opt;
             while (iss >> opt)
             {
-                if (opt == "Embedded")
+
+                // split opt into pre= and post=
+                std::string pre_equals;
+                std::string post_equals;
+
+                size_t found = opt.find("=");
+                if (found != std::string::npos)
+                {
+                    pre_equals = opt.substr(0, found);
+                    post_equals = opt.substr(found + 1);
+                }
+                else
+                {
+                    pre_equals = opt;
+                }
+
+                if (pre_equals == "Embedded")
                 {
                     pSdkManager->GetIOSettings()->SetBoolProp(EXP_FBX_EMBEDDED, true);
                 }
-                else if (opt == "UseFbxRoot")
+                else if (pre_equals == "UseFbxRoot")
                 {
                     useFbxRoot = true;
                 }
-                else if (opt == "FBX-ASCII")
+                else if (pre_equals == "FBX-ASCII")
                 {
                     ascii = true;
                 }
-                else if (opt == "FBX-ExportVersion")
+                else if (pre_equals == "FBX-ExportVersion")
                 {
                     iss >> exportVersion;
                 }
-                else if (opt == "IgnoreRigging")
+                else if (pre_equals == "IgnoreRigging")
                 {
                     ignoreBones = true;
                 }
-                else if (opt == "IgnoreAnimations")
+                else if (pre_equals == "IgnoreAnimations")
                 {
                     ignoreAnimations = true;
                 }
-                else if (opt == "SnapMeshesToParentGroup")
+                else if (pre_equals == "RotateXAxis")
                 {
-                    snapMeshesToParentGroup = true;
-                }
-                else if (opt == "RotateXAxis")
-                {
-                    rotateXAxis = true;
+                    std::ignore = getSafeDouble(post_equals, rotateXAxis);
                 }
             }
         }
@@ -564,7 +596,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
 
         pluginfbx::WriterNodeVisitor writerNodeVisitor(pScene, pSdkManager, filename,
             options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
-            ignoreBones, ignoreAnimations, snapMeshesToParentGroup, rotateXAxis);
+            ignoreBones, ignoreAnimations, rotateXAxis);
 
         OSG_NOTICE << "[FBX] Exporting Scene, please wait..." << std::endl;
 

@@ -91,8 +91,7 @@ namespace pluginfbx
             const std::string& srcDirectory,
             bool ignoreBones,
             bool ignoreAnimations,
-            bool snapMeshesToParentGroup,
-            bool rotateXAxis) :
+            double rotateXAxis) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
             _pSdkManager(pSdkManager),
             _succeedLastApply(true),
@@ -107,7 +106,6 @@ namespace pluginfbx
             _ignoreBones(ignoreBones),
             _ignoreAnimations(ignoreAnimations),
             _MeshesRoot(nullptr),
-            _snapMeshesToParentGroup(snapMeshesToParentGroup),
             _rotateXAxis(rotateXAxis)
         {}
 
@@ -270,8 +268,7 @@ namespace pluginfbx
         ///Export options
         bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
         bool _ignoreAnimations;                 // Tell the export engine to not process animations
-        bool _snapMeshesToParentGroup;          // Tell the export engine to snap meshes to parent transformation matrices
-        bool _rotateXAxis;                      // Tell the export engine to rotate rigged and morphed geometry in -180º in X Axis
+        double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = -180.0º)
 
         ///Maintain geode state between visits to the geometry
         GeometryList _geometryList;

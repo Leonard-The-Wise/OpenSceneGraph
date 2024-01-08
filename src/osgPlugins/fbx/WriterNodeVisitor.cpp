@@ -280,10 +280,10 @@ namespace pluginfbx
 		osg::Matrix matrix = node.getMatrix();
 
 		// Fix skeleton rotation
-		// if (skeleton)
-		// {
-		// 	matrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-		// }
+		if (skeleton)
+		{
+		 	matrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+		}
 
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;

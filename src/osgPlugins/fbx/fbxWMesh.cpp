@@ -796,10 +796,8 @@ namespace pluginfbx
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
 		_MeshesRoot->AddChild(meshNode);
 
-		if (_snapMeshesToParentGroup)
-		{
-			snapMeshToParent(geometry, meshNode);
-		}
+		// Make meshes snap to parent transformations
+		snapMeshToParent(geometry, meshNode);
 
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());
 		_meshList.push_back(mesh);
@@ -822,11 +820,11 @@ namespace pluginfbx
 			mesh->EndPolygon();
 		}
 
-		// Option to rotate rigged and morphed meshes -180º on X axis
+		// Option to rotate rigged and morphed meshes on X axis
 		osg::Matrix rotateMatrix;
-		if (_rotateXAxis && (dynamic_cast<const RigGeometry*>(&geometry) || dynamic_cast<const MorphGeometry*>(&geometry)))
+		if (dynamic_cast<const RigGeometry*>(&geometry) || dynamic_cast<const MorphGeometry*>(&geometry))
 		{
-			rotateMatrix.makeRotate(osg::inDegrees(-180.0), osg::X_AXIS); // Fix rigged mesh rotation
+			rotateMatrix.makeRotate(osg::inDegrees(_rotateXAxis), osg::X_AXIS); // Fix rigged mesh rotation
 		}
 
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
