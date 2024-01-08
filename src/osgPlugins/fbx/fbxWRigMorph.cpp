@@ -48,6 +48,7 @@ namespace pluginfbx
 		FbxBlendShape* fbxBlendShape = FbxBlendShape::Create(_pSdkManager, morphGeometry->getName().c_str());
 		mesh->AddDeformer(fbxBlendShape);
 
+		bool vertexFailedNotice(false);
 		for (unsigned int i = 0; i < morphGeometry->getMorphTargetList().size(); ++i)
 		{
 			const osg::Geometry* osgMorphTarget = morphGeometry->getMorphTarget(i).getGeometry();
@@ -66,6 +67,7 @@ namespace pluginfbx
 			fbxShape->InitControlPoints(vertices->getNumElements());
 			FbxVector4* fbxControlPoints = fbxShape->GetControlPoints();
 
+			bool vertexFailed(false);
 			for (unsigned int j = 0; j < vertices->getNumElements(); j++)
 			{
 				switch (vertices->getType())
@@ -100,11 +102,19 @@ namespace pluginfbx
 				}
 				default:
 				{
-					OSG_FATAL << "Error creating morph target for FbxMesh " << mesh->GetName() << std::endl;
-					throw "Exiting...";
+					if (!vertexFailedNotice)
+						OSG_WARN << "Error creating 1 or more targets for Mesh. Vertex Array is not floats. Name = " << mesh->GetName() << std::endl;
+					vertexFailed = true;
+					vertexFailedNotice = true;
 				}
 				}
+
+				if (vertexFailed)
+					break;
 			}
+
+			if (vertexFailed)
+				continue;
 
 			// Create Normals
 			const osg::Array* normals = osgMorphTarget->getNormalArray();

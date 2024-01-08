@@ -88,7 +88,11 @@ namespace pluginfbx
             FbxManager* pSdkManager,
             const std::string& fileName,
             const osgDB::ReaderWriter::Options* options,
-            const std::string& srcDirectory) :
+            const std::string& srcDirectory,
+            bool ignoreBones,
+            bool ignoreAnimations,
+            bool snapMeshesToParentGroup,
+            bool rotateXAxis) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
             _pSdkManager(pSdkManager),
             _succeedLastApply(true),
@@ -99,7 +103,12 @@ namespace pluginfbx
             _externalWriter(srcDirectory, osgDB::getFilePath(fileName), true, 0),
             _texcoords(false),
             _drawableNum(0),
-            _firstNodeProcessed(false)
+            _firstNodeProcessed(false),
+            _ignoreBones(ignoreBones),
+            _ignoreAnimations(ignoreAnimations),
+            _MeshesRoot(nullptr),
+            _snapMeshesToParentGroup(snapMeshesToParentGroup),
+            _rotateXAxis(rotateXAxis)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -125,7 +134,7 @@ namespace pluginfbx
         public:
 
             enum class MaterialSurfaceLayer {
-                Ambient, Diffuse, DisplacementColor, Emissive, NormalMap, Reflection, Specular, Shininess, Transparency
+                None, Ambient, Diffuse, DisplacementColor, Emissive, NormalMap, Reflection, Specular, Shininess, Transparency
             };
 
             ///Create a KfbxMaterial and KfbxTexture from osg::Texture and osg::Material.
@@ -194,22 +203,17 @@ namespace pluginfbx
         *  \param geometryList is the list of geometries which contains the vertices and faces.
         *  \param listTriangles contain all the mesh's faces.
         *  \param texcoords tell us if we have to handle texture coordinates.
-        */
-        void buildMesh(const std::string& name,
-            const GeometryList& geometryList,
-            ListTriangle& listTriangles,
-            bool                texcoords,
-            const MaterialParser& materialParser);
+        *  \return the new mesh node 
+        */ 
+        FbxNode* buildMesh(const osg::Geometry& geometry,
+            const MaterialParser* materialParser);
 
         void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
 
         void buildMeshSkin();
 
         /// Set Vertices, normals, and UVs
-        void setControlPointAndNormalsAndUV(const GeometryList& geometryList,
-            MapIndices& index_vert,
-            bool              texcoords,
-            FbxMesh* fbxMesh);
+        void setControlPointAndNormalsAndUV(MapIndices& index_vert, FbxMesh* fbxMesh, osg::Matrix& rotateMatrix);
 
         /**
         *  Create the list of faces from the geode.
@@ -255,12 +259,19 @@ namespace pluginfbx
 
         ///The current Fbx Node.
         FbxNode* _curFbxNode;
+        FbxNode* _MeshesRoot;
 
         ///The current stateSet.
         osg::ref_ptr<osg::StateSet> _currentStateSet;
 
         const osgDB::ReaderWriter::Options* _options;
         osgDB::ExternalFileWriter           _externalWriter;
+
+        ///Export options
+        bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
+        bool _ignoreAnimations;                 // Tell the export engine to not process animations
+        bool _snapMeshesToParentGroup;          // Tell the export engine to snap meshes to parent transformation matrices
+        bool _rotateXAxis;                      // Tell the export engine to rotate rigged and morphed geometry in -180º in X Axis
 
         ///Maintain geode state between visits to the geometry
         GeometryList _geometryList;

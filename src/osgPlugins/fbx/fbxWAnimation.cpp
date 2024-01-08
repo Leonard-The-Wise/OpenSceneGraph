@@ -48,7 +48,7 @@ namespace pluginfbx
 		FbxAnimStack* animStack;
 		if (_pScene->GetSrcObjectCount<FbxAnimStack>() == 0)
 		{
-			animStack = FbxAnimStack::Create(_pScene, "Animations Stack");
+			animStack = FbxAnimStack::Create(_pScene, "Static Pose");
 			_pScene->SetCurrentAnimationStack(animStack);
 		}
 		else
@@ -58,41 +58,6 @@ namespace pluginfbx
 
 		return animStack;
 	}
-
-	/*
-	//void AddVec3Keyframes(osgAnimation::Vec3CubicBezierChannel* transformChannel,
-	//	FbxAnimCurveNode* animCurveNode, FbxAnimLayer* fbxAnimLayer)
-	//{
-	//	if (!transformChannel || !animCurveNode)
-	//	{
-	//		return;
-	//	}
-
-	//	// Obtenha as curvas de animação para X, Y e Z do nó de translação.
-	//	FbxAnimCurve* curveX = animCurveNode->CreateCurve("X");
-	//	FbxAnimCurve* curveY = animCurveNode->CreateCurve("Y");
-	//	FbxAnimCurve* curveZ = animCurveNode->CreateCurve("Z");
-
-	//	// Obtenha o KeyframeContainer do canal de translação.
-	//	osgAnimation::Vec3CubicBezierKeyframeContainer* keyframes = transformChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
-
-	//	// Itere sobre todos os keyframes do canal de translação e adicione-os às curvas FBX.
-	//	for (unsigned int i = 0; i < keyframes->size(); ++i)
-	//	{
-	//		const osgAnimation::Vec3CubicBezierKeyframe& keyframe = (*keyframes)[i];
-
-	//		// Converta o tempo do OSG para o tempo do FBX.
-	//		FbxTime fbxTime;
-	//		fbxTime.SetSecondDouble(keyframe.getTime());
-
-	//		// FIXME
-	//		// Adicione os valores de translação para cada eixo às curvas correspondentes.
-	//		// curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, keyframe.getValue().x(), fbxInterpolationMode);
-	//		// curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, keyframe.getValue().y(), fbxInterpolationMode);
-	//		// curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, keyframe.getValue().z(), fbxInterpolationMode);
-	//	}
-	//}
-	*/
 
 	void AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel, 
 		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string channelName)

@@ -168,22 +168,19 @@ namespace pluginfbx
 
 		if (_listTriangles.size() > 0)
 		{
-			FbxNode* parent = _curFbxNode;
-
-			FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, geometry.getName().empty() ? "DefaultMesh" : geometry.getName().c_str());
-			_curFbxNode->AddChild(nodeFBX);
-			_curFbxNode = nodeFBX;
-
 			MaterialParser* materialParser = processStateSet(geometry.getStateSet());
 
-			buildMesh(geometry.getName(), _geometryList, _listTriangles, _texcoords, *materialParser);
+			FbxNode* nodeFBX = buildMesh(geometry, materialParser);
 
 			if (rigGeometry)
 				_riggedMeshMap.emplace(rigGeometry, nodeFBX);
 			else if (morphGeometry)
 				_MorphedMeshMap.emplace(morphGeometry, nodeFBX);
 
-			_curFbxNode = parent;
+			_geometryList.clear();
+			_listTriangles.clear();
+			_texcoords = false;
+			_drawableNum = 0;
 		}
 	}
 
@@ -199,15 +196,18 @@ namespace pluginfbx
 		{
 			FbxNode* parent = _curFbxNode;
 
-			FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
-			_curFbxNode->AddChild(nodeFBX);
-			_curFbxNode = nodeFBX;
+			//FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
+			//_curFbxNode->AddChild(nodeFBX);
+			//_curFbxNode = nodeFBX;
 
 			traverse(node);
 
-			ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
-			if (nodeCallback)
-				applyAnimations(getRealUpdateCallback(nodeCallback));
+			if (!_ignoreBones && !_ignoreAnimations)
+			{
+				ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
+				if (nodeCallback)
+					applyAnimations(getRealUpdateCallback(nodeCallback));
+			}
 
 			_curFbxNode = parent;
 		}
@@ -216,14 +216,23 @@ namespace pluginfbx
 			//ignore the root node to maintain same hierarchy
 			_firstNodeProcessed = true;
 
+			_MeshesRoot = _curFbxNode;
+
+			
 			traverse(node);
 
-			// Build mesh skin, apply global animations
-			buildMeshSkin();
+			if (!_ignoreBones)
+			{
+				// Build mesh skin, apply global animations
+				buildMeshSkin();
 
-			ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
-			if (nodeCallback)
-				applyAnimations(getRealUpdateCallback(nodeCallback));
+				if (!_ignoreAnimations)
+				{
+					ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
+					if (nodeCallback)
+						applyAnimations(getRealUpdateCallback(nodeCallback));
+				}
+			}
 		}
 	}
 
@@ -234,43 +243,27 @@ namespace pluginfbx
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
 
 		if (skeleton)
-			nodeName = node.getName().empty() ? "DefaultSkeleton" : node.getName();
+			nodeName = node.getName().empty() ? "Armature" : node.getName();
 		else if (bone)
 			nodeName = node.getName().empty() ? "DefaultBone" : node.getName();
 		else
 			nodeName = node.getName().empty() ? "DefaultTransform" : node.getName();
 
 		FbxNode* parent = _curFbxNode;
-		_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
-		parent->AddChild(_curFbxNode);
 
 		// Get custom parameter on node to first Matrix. If we are the first, also save the current transform
 		// for later (_firstMatrixPostProcess)
-		std::string firstMatrix;
 		const DefaultUserDataContainer* udc = dynamic_cast<DefaultUserDataContainer*>(node.getUserDataContainer());
-		if (udc && udc->getUserValue("firstMatrix", firstMatrix))
+
+		bool firstMatrixGet;
+		bool isFirstMatrix = (udc && udc->getUserValue("firstMatrix", firstMatrixGet));
+		_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
+		parent->AddChild(_curFbxNode);
+
+		// Process Skeleton and Bones and create nodes before continuing
+		if (!_ignoreBones && (skeleton || bone))
 		{
-			std::vector<double> values;
-			std::stringstream ss(firstMatrix);
-			std::string item;
-
-			while (std::getline(ss, item, ',')) {
-				values.push_back(std::stod(item));
-			}
-
-			if (values.size() != 16) {
-				throw std::runtime_error("Incorrect number of elements to osg::Matrix!");
-			}
-
-			for (int i = 0; i < 16; ++i) {
-				_firstMatrix(i / 4, i % 4) = values[i];
-			}
-		}
-
-		// Process Skeleton and Bones
-		if (skeleton || bone)
-		{
-			FbxSkeleton* fbxSkel = FbxSkeleton::Create(_curFbxNode, nodeName.c_str());
+			FbxSkeleton* fbxSkel = FbxSkeleton::Create(_curFbxNode, skeleton ? "RootNode" : nodeName.c_str());
 			fbxSkel->SetSkeletonType(skeleton ? FbxSkeleton::eRoot : FbxSkeleton::eLimbNode);
 			_curFbxNode->SetNodeAttribute(fbxSkel);
 
@@ -278,8 +271,19 @@ namespace pluginfbx
 				_boneNodeSkinMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));
 		}
 
+		if (isFirstMatrix)
+		{
+			_MeshesRoot = _curFbxNode;
+		}
+
 		// Set transforms for node
 		osg::Matrix matrix = node.getMatrix();
+
+		// Fix skeleton rotation
+		// if (skeleton)
+		// {
+		// 	matrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+		// }
 
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
@@ -296,9 +300,13 @@ namespace pluginfbx
 
 		_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 
-		ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
-		if (nodeCallback)
-			applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
+		// Process UpdateBone and Skeleton Callbacks last
+		if (!_ignoreBones && bone)
+		{
+			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
+			if (nodeCallback)
+				applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
+		}
 
 		traverse(node);
 

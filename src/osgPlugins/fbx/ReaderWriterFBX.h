@@ -21,9 +21,13 @@ public:
     {
         supportsExtension("fbx", "FBX format");
         supportsOption("Embedded", "(Write option) Embed textures in FBX file");
-        supportsOption("UseFbxRoot", "(Read/write option) If the source OSG root node is a simple group with no stateset, the writer will put its children directly under the FBX root, and vice-versa for reading");
+        supportsOption("UseFbxRoot", "(Read) If the source OSG root node is a simple group with no stateset, the reader will put its children directly under the FBX root");
         supportsOption("LightmapTextures", "(Read option) Interpret texture maps as overriding the lighting. 3D Studio Max may export files that should be interpreted in this way.");
         supportsOption("TessellatePolygons", "(Read option) Tessellate mesh polygons. If the model contains concave polygons this may be necessary, however tessellating can be very slow and may erroneously produce triangle shards.");
+        supportsOption("IgnoreRigging", "(Write option) Ignore model rigging. This option also disables animations import.");
+        supportsOption("IgnoreAnimations", "(Write option) Ignore animations.");
+        supportsOption("SnapMeshesToParentGroup", "(Write option) Some models need to snap meshes transformations to parent Matrix groups. Use this option if pieces of your object looks mixed up.");
+        supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry to fix some models being upside down.");
     }
 
     const char* className() const { return "FBX reader/writer"; }

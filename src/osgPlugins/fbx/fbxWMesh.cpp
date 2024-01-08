@@ -301,10 +301,7 @@ namespace pluginfbx
 		mesh->AddPolygon(addPolygon(index_vert, tri.t3, tri.normalIndex3, drawableNum));
 	}
 
-	void WriterNodeVisitor::setControlPointAndNormalsAndUV(const GeometryList& geometryList,
-		MapIndices& index_vert,
-		bool              texcoords,
-		FbxMesh* mesh)
+	void WriterNodeVisitor::setControlPointAndNormalsAndUV(MapIndices& index_vert, FbxMesh* mesh, osg::Matrix& rotateMatrix)
 	{
 		mesh->InitControlPoints(index_vert.size());
 		FbxLayerElementNormal* lLayerElementNormal = FbxLayerElementNormal::Create(mesh, "");
@@ -328,7 +325,7 @@ namespace pluginfbx
 
 		FbxLayerElementUV* lUVDiffuseLayer = FbxLayerElementUV::Create(mesh, "DiffuseUV");
 
-		if (texcoords)
+		if (_texcoords)
 		{
 			lUVDiffuseLayer->SetMappingMode(FbxLayerElement::eByControlPoint);
 			lUVDiffuseLayer->SetReferenceMode(FbxLayerElement::eDirect);
@@ -336,15 +333,15 @@ namespace pluginfbx
 			mesh->GetLayer(0)->SetUVs(lUVDiffuseLayer, FbxLayerElement::eTextureDiffuse);
 		}
 
+
+		std::vector<bool> failNotify(4, false); // Emits only 1 warning for entire arrays
+
 		for (MapIndices::iterator it = index_vert.begin(); it != index_vert.end(); ++it)
 		{
-			const osg::Geometry* pGeometry = geometryList[it->first.drawableIndex];
+			const osg::Geometry* pGeometry = _geometryList[it->first.drawableIndex];
+			std::string geometryName = pGeometry->getName();
 			unsigned int vertexIndex = it->first.vertexIndex;
 			unsigned int normalIndex = it->first.normalIndex;
-
-			osg::Matrix rotateMatrix;
-			if (dynamic_cast<const RigGeometry*>(pGeometry))
-				rotateMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS); // Fix rigged mesh rotation
 
 			if (!pGeometry)
 				continue;
@@ -359,7 +356,8 @@ namespace pluginfbx
 
 			if (vertexIndex >= basevecs->getNumElements())
 			{
-				OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)" << std::endl;
+				OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)."
+					<< "[Geometry: " << geometryName << "]" << std::endl;
 				throw "Exiting without saving.";
 			}
 
@@ -486,13 +484,14 @@ namespace pluginfbx
 			{
 				const osg::Vec3i& vect = (*static_cast<const osg::Vec3iArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				vertex.Set(vec.x(), vec.y(), vec.z());
+				osg::Vec3 vecf = vec * rotateMatrix;
+				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
 			default:
 			{
-				OSG_NOTIFY(osg::FATAL) << "Error parsing vertex array." << std::endl;
-				throw "FATAL: Vertex array is not Vec4 or Vec3. Not implemented.";
+				OSG_NOTIFY(osg::FATAL) << "Error parsing vertex array. " << "[Geometry: " << geometryName << "]" << std::endl;
+				throw "FATAL: Vertex array is not Vec4 or Vec3. Exiting without saving." ;
 			}
 			}
 
@@ -537,8 +536,10 @@ namespace pluginfbx
 				}
 				default:
 				{
-					OSG_DEBUG << "DEBUG: Error parsing normal array." << std::endl;
+					if (!failNotify[0])
+						OSG_DEBUG << "DEBUG: Error parsing normal array. Normals ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
 					failed = true;
+					failNotify[0] = true;
 					break;
 				}
 				}
@@ -547,7 +548,7 @@ namespace pluginfbx
 					lLayerElementNormal->GetDirectArray().SetAt(it->second, normal);
 			}
 
-			if (texcoords)
+			if (_texcoords)
 			{
 				const osg::Array* basetexcoords;
 				// Get the first texCoord array avaliable
@@ -555,6 +556,7 @@ namespace pluginfbx
 					if (basetexcoords = pGeometry->getTexCoordArray(i))
 						break;
 
+				bool failed = false;
 				if (basetexcoords && basetexcoords->getNumElements() > 0)
 				{
 					FbxVector2 texcoord;
@@ -574,12 +576,15 @@ namespace pluginfbx
 					}
 					default:
 					{
-						OSG_NOTIFY(osg::FATAL) << "Error parsing texcoord array." << std::endl;
-						throw "FATAL: Texture coords array is not Vec2 [floats]. Not implemented";
+						if (!failNotify[1])
+							OSG_WARN << "WARNING: Error parsing UVs array. UVs Ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
+						failed = true;
+						failNotify[1] = true;
 					}
 					}
 
-					lUVDiffuseLayer->GetDirectArray().SetAt(it->second, texcoord);
+					if (!failed)
+						lUVDiffuseLayer->GetDirectArray().SetAt(it->second, texcoord);
 				}
 			}
 
@@ -644,8 +649,10 @@ namespace pluginfbx
 				}
 				default:
 				{
-					OSG_DEBUG << "Error parsing tangent array." << std::endl;
+					if (!failNotify[2])
+						OSG_DEBUG << "DEBUG: Error parsing tangent array. Tangents ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
 					failed = true;
+					failNotify[2] = true;
 					break;
 				}
 				}
@@ -690,8 +697,10 @@ namespace pluginfbx
 
 				default:
 				{
-					OSG_DEBUG << "DEBUG: Error parsing color array." << std::endl;
+					if (!failNotify[3])
+						OSG_WARN << "WARNING: Error parsing color array. Colors ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
 					failed = true;
+					failNotify[3] = true;
 					break;
 				}
 				}
@@ -744,19 +753,59 @@ namespace pluginfbx
 		}
 	}
 
-
-	void WriterNodeVisitor::buildMesh(const std::string& name,
-		const GeometryList& geometryList,
-		ListTriangle& listTriangles,
-		bool              texcoords,
-		const MaterialParser& materialParser)
+	static osg::Matrix buildParentMatrixes(const osg::Node& object)
 	{
-		MapIndices index_vert;
-		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, name.c_str());
+		osg::Matrix mult;
+		if (object.getNumParents() > 0)
+		{
+			mult = buildParentMatrixes(*object.getParent(0));
+		}
+
+		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
+		{
+			return mult * matrixObj->getMatrix();
+		}
+
+		return mult;
+	}
+
+	static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode)
+	{
+		osg::Matrix matrix = buildParentMatrixes(geometry);
+
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+
+		matrix.decompose(pos, rot, scl, so);
+		meshNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+		meshNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+
+		FbxAMatrix mat;
+
+		FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+		mat.SetQ(q);
+		FbxVector4 vec4 = mat.GetR();
+
+		meshNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+	}
+
+	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser)
+	{
+		// Create a node for this mesh and apply it to Mesh Root
+		std::string meshName = geometry.getName();
+		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
+		_MeshesRoot->AddChild(meshNode);
+
+		if (_snapMeshesToParentGroup)
+		{
+			snapMeshToParent(geometry, meshNode);
+		}
+
+		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());
 		_meshList.push_back(mesh);
 
-		_curFbxNode->AddNodeAttribute(mesh);
-		_curFbxNode->SetShadingMode(FbxNode::eTextureShading);
+		meshNode->AddNodeAttribute(mesh);
+		meshNode->SetShadingMode(FbxNode::eTextureShading);
 		FbxLayer* lLayer = mesh->GetLayer(0);
 		if (lLayer == NULL)
 		{
@@ -765,43 +814,48 @@ namespace pluginfbx
 		}
 
 		unsigned int i = 0;
-		for (ListTriangle::iterator it = listTriangles.begin(); it != listTriangles.end(); ++it, ++i) //Go through the triangle list to define meshs
+		MapIndices index_vert;
+		for (ListTriangle::iterator it = _listTriangles.begin(); it != _listTriangles.end(); ++it, ++i) //Go through the triangle list to define meshs
 		{
 			mesh->BeginPolygon();
 			addPolygon(mesh, index_vert, it->first, it->second);
 			mesh->EndPolygon();
 		}
 
-		// Build vertices and recalculate normals and tangents
-		setControlPointAndNormalsAndUV(geometryList, index_vert, texcoords, mesh);
+		// Option to rotate rigged and morphed meshes -180º on X axis
+		osg::Matrix rotateMatrix;
+		if (_rotateXAxis && (dynamic_cast<const RigGeometry*>(&geometry) || dynamic_cast<const MorphGeometry*>(&geometry)))
+		{
+			rotateMatrix.makeRotate(osg::inDegrees(-180.0), osg::X_AXIS); // Fix rigged mesh rotation
+		}
+
+		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
+		setControlPointAndNormalsAndUV(index_vert, mesh, rotateMatrix);
 		mesh->GenerateNormals(true);
 		mesh->GenerateTangentsDataForAllUVSets(true);
 
-		FbxSurfacePhong* meshMaterial = materialParser.getFbxMaterial();
-		if (meshMaterial)
-			_curFbxNode->AddMaterial(meshMaterial);
+		if (materialParser)
+		{
+			FbxSurfacePhong* meshMaterial = materialParser->getFbxMaterial();
+			if (meshMaterial)
+				meshNode->AddMaterial(meshMaterial);
+		}
 
-		// Since we changed our geometryList to contain only 1 geometry (or Rig or Morph), we can safely pick the first Morph and process
-		// Might need to change this approach in the future.
-		osg::Matrix rotateMatrix;
-		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(geometryList[0]);
+		// Process morphed geometry
+		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
 		if (morph)
 			createMorphTargets(morph, mesh, rotateMatrix);
 
 		// Look for morph geometries inside rig
-		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(geometryList[0]);
+		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
 		if (rig)
 		{
 			const osgAnimation::MorphGeometry* rigMorph = dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry());
-			//rotateMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS); // Fix rigged mesh rotation
 			if (rigMorph)
 				createMorphTargets(rigMorph, mesh, rotateMatrix);
 		}
 
-		_geometryList.clear();
-		_listTriangles.clear();
-		_texcoords = false;
-		_drawableNum = 0;
+		return meshNode;
 	}
 
 }

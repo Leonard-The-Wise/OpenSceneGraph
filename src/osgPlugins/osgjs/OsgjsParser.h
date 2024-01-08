@@ -201,7 +201,7 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Image> getOrCreateImage(const std::string& fileName);
 
         void parseExternalMaterials(const osg::ref_ptr<osg::Geometry>& geometry);
-        void postProcessGeometry(const osg::ref_ptr<osg::Geometry>& geometry, const json& currentJSONNode);
+        void postProcessGeometry(const osg::ref_ptr<osg::Geometry>& geometry, const json& currentJSONNode, const osg::ref_ptr<osg::Array>& indices = nullptr);
         void postProcessStateSet(const osg::ref_ptr<osg::StateSet>& stateset, const json* currentJSONNode = nullptr);
 
 

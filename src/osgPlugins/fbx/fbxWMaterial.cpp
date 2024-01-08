@@ -114,6 +114,7 @@ namespace pluginfbx
 					specular.y(),
 					specular.z()));
 
+				shininess = shininess < 0 ? 0 : shininess;
 				_fbxMaterial->Shininess.Set(shininess);
 			}
 		}
@@ -123,6 +124,9 @@ namespace pluginfbx
 			// Get where on material this texture applies
 			for (auto& tex : texArray)
 			{
+				if (!tex)
+					continue;
+
 				MaterialSurfaceLayer textureLayer = getTexMaterialLayer(mat, tex);
 				std::string relativePath;
 
@@ -191,6 +195,9 @@ namespace pluginfbx
 	// Get texture's material property from UserData if applies
 	WriterNodeVisitor::MaterialParser::MaterialSurfaceLayer WriterNodeVisitor::MaterialParser::getTexMaterialLayer(const osg::Material* material, const osg::Texture* texture)
 	{
+		if (!texture || !material)
+			return MaterialSurfaceLayer::None;
+
 		std::string textureFile = texture->getImage(0)->getFileName();
 		std::string layerName;
 
@@ -224,6 +231,9 @@ namespace pluginfbx
 
 	WriterNodeVisitor::MaterialParser* WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
 	{
+		if (!ss)
+			return nullptr;
+
 		const osg::Material* mat = dynamic_cast<const osg::Material*>(ss->getAttribute(osg::StateAttribute::MATERIAL));
 
 		// Look for shared materials between statesets

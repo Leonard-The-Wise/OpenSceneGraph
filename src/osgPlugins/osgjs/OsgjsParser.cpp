@@ -515,7 +515,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
     // Get the matrix
     if (!currentJSONNode.contains("Matrix") || !currentJSONNode["Matrix"].is_array() || currentJSONNode["Matrix"].size() != 16)
     {
-        OSG_WARN << "WARNING: MatrixTransform's Matrix object does not exist or have incorrect size!" << ADD_KEY_NAME << std::endl;
+        OSG_DEBUG << "DEBUG: MatrixTransform's Matrix object does not exist or have incorrect size!" << ADD_KEY_NAME << std::endl;
     }
     else
     {
@@ -529,17 +529,8 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
 
         if (_firstMatrix)
         {
-            std::stringstream ss;
-            for (int i = 0; i < 16; i++)
-                ss << matrix(i / 4, i % 4) << ",";
-
-            // Add first matrix as user parameter
-            std::string pop = ss.str();
-            pop.pop_back();
-            newObject->setUserValue("firstMatrix", pop);
-
-            // Fix rotate
-            matrix.preMult(osg::Matrix::rotate(osg::inDegrees(-90.0), osg::X_AXIS));
+            // Add custom information of first matrix for exporters
+            newObject->setUserValue("firstMatrix", true);
             _firstMatrix = false;
 
             // Add model info to mesh
@@ -978,7 +969,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     parseExternalMaterials(newGeometry);
 
     // 8) Vertices post-processing
-    if (nodeKey == "osg.Geometry")
+    if (nodeKey == "osg.Geometry" || nodeKey == "osgAnimation.MorphGeometry")
         postProcessGeometry(newGeometry, currentJSONNode);
 
     // 9) Done
@@ -1051,6 +1042,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const
     if (currentJSONNode.contains("Shininess"))
     {
         shininess = currentJSONNode["Shininess"].get<float>();
+        if (shininess < 0) shininess = 0;
         newMaterial->setShininess(Material::FRONT, shininess);
     }
 
@@ -2159,7 +2151,7 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry)
     }
 }
 
-void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode)
+void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode, const ref_ptr<Array>& indices)
 {
 #ifdef DEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -2169,6 +2161,8 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     std::string geometryName = geometry->getName();
     ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
     ref_ptr<Array> texCoordOriginals = geometry->getTexCoordArray(0);
+    int texCoordNum = geometry->getTexCoordArrayList().size();
+    texCoordNum = texCoordNum;
 #endif // DEBUG
 
     // Check for user data
@@ -2193,30 +2187,42 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
     success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
 
-    ref_ptr<Array> indices;
-    osg::PrimitiveSet* firstPrimitive = geometry->getPrimitiveSet(0);
+    ref_ptr<Array> realIndices;
 
-    // Convert primitive sets into indices array.
-    DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(firstPrimitive);
-    DrawElementsUShort* des = dynamic_cast<DrawElementsUShort*>(firstPrimitive);
-    DrawElementsUByte* deb = dynamic_cast<DrawElementsUByte*>(firstPrimitive);
+    if (!indices)
+    {
+        osg::PrimitiveSet* firstPrimitive;
+        if (geometry->getPrimitiveSetList().size() == 0)
+        {
+            return;
+        }
 
-    if (dei)
-        indices = new UIntArray(dei->begin(), dei->end());
-    else if (des)
-        indices = new UShortArray(des->begin(), des->end());
-    else if (deb)
-        indices = new UByteArray(deb->begin(), deb->end());
+        firstPrimitive = geometry->getPrimitiveSet(0);
+
+        // Convert primitive sets into indices array.
+        DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(firstPrimitive);
+        DrawElementsUShort* des = dynamic_cast<DrawElementsUShort*>(firstPrimitive);
+        DrawElementsUByte* deb = dynamic_cast<DrawElementsUByte*>(firstPrimitive);
+
+        if (dei)
+            realIndices = new UIntArray(dei->begin(), dei->end());
+        else if (des)
+            realIndices = new UShortArray(des->begin(), des->end());
+        else if (deb)
+            realIndices = new UByteArray(deb->begin(), deb->end());
+    }
+    else
+        realIndices = indices;
 
     if (success[0] && success[3])
     {
-        if (!indices)
+        if (!realIndices)
         {
             OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
             return;
         }
 
-        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(indices, geometry->getVertexArray(), vtx_bbl, vtx_h);
+        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, geometry->getVertexArray(), vtx_bbl, vtx_h);
 
         if (!verticesConverted)
         {
@@ -2248,13 +2254,13 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
         if (success[6] && success[8])
         {
 
-            if (!indices)
+            if (!realIndices)
             {
                 OSG_DEBUG << "WARNING: Encoded TextCoord array contains unsupported DrawPrimitive type." << std::endl;
                 return;
             }
 
-            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(indices, texCoord, uv_bbl, uv_h);
+            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(realIndices, texCoord, uv_bbl, uv_h);
 
             if (!texCoordConverted)
             {
@@ -2303,7 +2309,21 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
             geometry->setVertexAttribArray(index, tangentsConverted);
         }
     }
+
+    // Process Morph targets
+    if (auto morph = dynamic_pointer_cast<MorphGeometry>(geometry))
+    {
+        for (auto& morphTarget : morph->getMorphTargetList())
+        {
+            auto morphGeometry = morphTarget.getGeometry();
+            if (!morphGeometry || (morphGeometry->getVertexArray() && morphGeometry->getVertexArray()->getNumElements() == 0))
+                continue;
+
+            postProcessGeometry(morphGeometry, currentJSONNode, realIndices);
+        }
+    }
 }
+
 
 void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const json* currentJSONNode)
 {

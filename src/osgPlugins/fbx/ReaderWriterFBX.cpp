@@ -504,6 +504,10 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
 
         bool useFbxRoot = false;
         bool ascii(false);
+        bool ignoreBones(false);
+        bool ignoreAnimations(false);
+        bool snapMeshesToParentGroup(false);
+        bool rotateXAxis(false);
         std::string exportVersion;
         if (options)
         {
@@ -527,6 +531,22 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                 {
                     iss >> exportVersion;
                 }
+                else if (opt == "IgnoreRigging")
+                {
+                    ignoreBones = true;
+                }
+                else if (opt == "IgnoreAnimations")
+                {
+                    ignoreAnimations = true;
+                }
+                else if (opt == "SnapMeshesToParentGroup")
+                {
+                    snapMeshesToParentGroup = true;
+                }
+                else if (opt == "RotateXAxis")
+                {
+                    rotateXAxis = true;
+                }
             }
         }
 
@@ -543,7 +563,11 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         }
 
         pluginfbx::WriterNodeVisitor writerNodeVisitor(pScene, pSdkManager, filename,
-            options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()));
+            options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
+            ignoreBones, ignoreAnimations, snapMeshesToParentGroup, rotateXAxis);
+
+        OSG_NOTICE << "[FBX] Exporting Scene, please wait..." << std::endl;
+
         if (useFbxRoot && isBasicRootNode(node))
         {
             // If root node is a simple group, put all elements under the FBX root
