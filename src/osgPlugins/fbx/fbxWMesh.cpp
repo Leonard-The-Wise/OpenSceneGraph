@@ -486,8 +486,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3i& vect = (*static_cast<const osg::Vec3iArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
-				vertex.Set(vecf.x(), vecf.y(), vecf.z());
+				vertex.Set(vec.x(), vec.y(), vec.z());
 				break;
 			}
 			default:
