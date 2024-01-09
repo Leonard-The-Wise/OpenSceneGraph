@@ -527,6 +527,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         bool ignoreBones(false);
         bool ignoreAnimations(false);
         double rotateXAxis(180.0);
+        bool exportFullHierarchy(false);
         std::string exportVersion;
         if (options)
         {
@@ -584,6 +585,10 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                     ignoreBones = true;
                     rotateXAxis = 0.0;
                 }
+                else if (pre_equals == "ExportFullHierarchy")
+                {
+                    exportFullHierarchy = true;
+                }
             }
         }
 
@@ -601,7 +606,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
 
         pluginfbx::WriterNodeVisitor writerNodeVisitor(pScene, pSdkManager, filename,
             options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
-            ignoreBones, ignoreAnimations, rotateXAxis);
+            ignoreBones, ignoreAnimations, rotateXAxis, exportFullHierarchy);
 
         OSG_NOTICE << "[FBX] Exporting Scene..." << std::endl;
 

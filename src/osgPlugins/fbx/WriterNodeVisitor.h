@@ -70,12 +70,12 @@ typedef std::vector<const osg::Geometry*> GeometryList; // a list of geometries 
 namespace pluginfbx
 {
 
-    struct UpdateBoneNodes
+    struct UpdateMatrixNodes
     {
-        osg::ref_ptr<osgAnimation::Bone> bone;
+        osg::ref_ptr<osg::MatrixTransform> matrixTransform;
         FbxNode* fbxNode;
 
-        UpdateBoneNodes() :
+        UpdateMatrixNodes() :
             fbxNode(nullptr)
         {};
     };
@@ -91,7 +91,8 @@ namespace pluginfbx
             const std::string& srcDirectory,
             bool ignoreBones,
             bool ignoreAnimations,
-            double rotateXAxis) :
+            double rotateXAxis,
+            bool exportFullHierarchy) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
             _pSdkManager(pSdkManager),
             _succeedLastApply(true),
@@ -106,7 +107,8 @@ namespace pluginfbx
             _ignoreBones(ignoreBones),
             _ignoreAnimations(ignoreAnimations),
             _MeshesRoot(nullptr),
-            _rotateXAxis(rotateXAxis)
+            _rotateXAxis(rotateXAxis),
+            _exportFullHierarchy(exportFullHierarchy)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -268,7 +270,8 @@ namespace pluginfbx
         ///Export options
         bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
         bool _ignoreAnimations;                 // Tell the export engine to not process animations
-        double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = -180.0º)
+        double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = 180.0º)
+        bool _exportFullHierarchy;              // Tell the export engine to not bypass node hierarchy
 
         ///Maintain geode state between visits to the geometry
         GeometryList _geometryList;
@@ -281,17 +284,16 @@ namespace pluginfbx
         typedef std::map<osg::ref_ptr<osgAnimation::MorphGeometry>, FbxNode*> MorphedMeshMap;   // Maps OSG Morphed Geometry to FBX meshes
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
         typedef std::unordered_map<std::string, BonePair> BoneNodeMap;                                 // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
-        typedef std::unordered_map<std::string, std::shared_ptr<UpdateBoneNodes>> BoneAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
+        typedef std::unordered_map<std::string, std::shared_ptr<UpdateMatrixNodes>> MatrixAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
 
-        std::vector<FbxMesh*> _meshList;
         RiggedMeshMap _riggedMeshMap;
         MorphedMeshMap _MorphedMeshMap;
         BoneNodeMap _boneNodeSkinMap;
-        BoneAnimCurveMap _boneAnimCurveMap;
+        MatrixAnimCurveMap _matrixAnimCurveMap;
         osg::Matrix _firstMatrix;
 
         // Keep track of created materials
-        std::map<const osg::Material*, MaterialParser*> _materialMap;
+        std::unordered_map<const osg::Material*, MaterialParser*> _materialMap;
 
     };
 

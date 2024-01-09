@@ -763,17 +763,8 @@ namespace pluginfbx
 
 		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
 		{
-			// Ignore scaling (see apply(osg::MatrixTransform& node) in WriteNodeVisitor too)
 			osg::Matrix m = matrixObj->getMatrix();
-			Vec3 trans, scale;
-			Quat rot, so;
-			m.decompose(trans, rot, scale, so);
-			osg::Matrix mReal;
-			mReal.setRotate(rot);
-			mReal.setTrans(trans);
-			//mReal.postMultScale(scale);
-
-			return mult * mReal;
+			return mult * m;
 		}
 
 		return mult;
@@ -805,14 +796,16 @@ namespace pluginfbx
 		std::string meshName = geometry.getName();
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
 
-		//_curFbxNode->AddChild(meshNode);
-		_MeshesRoot->AddChild(meshNode);
+		FbxNode* meshParent = _exportFullHierarchy ? _curFbxNode : _MeshesRoot;
+		meshParent->AddChild(meshNode);
 
-		// Make meshes snap to parent transformations
-		snapMeshToParent(geometry, meshNode);
+		if (!_exportFullHierarchy)
+		{
+			// Make meshes snap to parent transformations
+			snapMeshToParent(geometry, meshNode);
+		}
 
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());
-		_meshList.push_back(mesh);
 
 		meshNode->AddNodeAttribute(mesh);
 		meshNode->SetShadingMode(FbxNode::eTextureShading);
@@ -836,7 +829,13 @@ namespace pluginfbx
 		osg::Matrix rotateMatrix;
 		if (dynamic_cast<const RigGeometry*>(&geometry) || dynamic_cast<const MorphGeometry*>(&geometry))
 		{
-			rotateMatrix.makeRotate(osg::inDegrees(_rotateXAxis), osg::X_AXIS); // Fix rigged mesh rotation
+			rotateMatrix.makeRotate(osg::inDegrees(_rotateXAxis), osg::X_AXIS); 
+			if (_exportFullHierarchy) // Need to match skeleton rotation with mesh this time
+			{
+				osg::Quat q;
+				q.makeRotate(osg::DegreesToRadians(90.0), X_AXIS);
+				rotateMatrix.preMultRotate(q);
+			}
 		}
 
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]

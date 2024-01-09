@@ -115,6 +115,13 @@ namespace pluginfbx
 		{
 			FbxNode* parent = _curFbxNode;
 
+			if (_exportFullHierarchy)
+			{
+				FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
+				_curFbxNode->AddChild(nodeFBX);
+				_curFbxNode = nodeFBX;
+			}
+
 			traverse(node);
 
 			if (!_ignoreBones && !_ignoreAnimations)
@@ -177,14 +184,17 @@ namespace pluginfbx
 		osg::Matrix matrix = node.getMatrix();
 
 		// Fix skeleton rotation
-		if (skeleton)
+		if ( (skeleton && !_exportFullHierarchy) )
 		{
-			matrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+			osg::Matrix matrix2;
+			matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+			matrix.preMult(matrix2);
+			//node.setMatrix(matrix);
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
 		// so we can see matrix groups when no bone is present
-		if (isFirstMatrix || _ignoreBones || skeleton || bone)
+		if (isFirstMatrix || _ignoreBones || _exportFullHierarchy || skeleton || bone)
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
@@ -194,9 +204,12 @@ namespace pluginfbx
 
 			matrix.decompose(pos, rot, scl, so);
 			_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 
-			// Ignoring scaling (see buildParentMatrixes in fbxWMesh too)
-			// _curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+			if (isFirstMatrix && _exportFullHierarchy)
+			{
+				rot.makeRotate(osg::DegreesToRadians(0.0), X_AXIS);
+			}
 
 			FbxAMatrix mat;
 			FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
@@ -222,18 +235,13 @@ namespace pluginfbx
 				_boneNodeSkinMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));
 		}
 
-		// Process UpdateBone Callbacks last
-		if (!_ignoreBones && bone)
-		{
-			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
-			if (nodeCallback)
-				applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
-		}
+		// Process UpdateMatrixTransform and UpdateBone Callbacks last
+		ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
+		if (nodeCallback)
+			applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
 
 		traverse(node);
 
 		_curFbxNode = parent;
 	}
-
-	// end namespace pluginfbx
 }

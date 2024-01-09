@@ -29,6 +29,7 @@ public:
         supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (Default Angle: 180.0)");
         supportsOption("ExportOriginal", "(Write option) Export only base model with original rotations (usefull to identify rigging problems).");
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
+        supportsOption("ExportFullHierarchy", "(Write option) Export models respecting the original full node hierarchy.");
     }
 
     const char* className() const { return "FBX reader/writer"; }

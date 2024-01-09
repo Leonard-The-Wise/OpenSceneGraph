@@ -53,76 +53,79 @@ namespace pluginfbx
 
 		auto& stackedTransforms = umt->getStackedTransforms();
 
-		// For any matrixTransform that is a bone, creates FbxAnimCurveNodes and map to it
+		// Save matrixtransform targets
+		std::shared_ptr<UpdateMatrixNodes> newMatrixAnim = std::make_shared<UpdateMatrixNodes>();
+		std::string updateMatrixName = umt->getName();
+		newMatrixAnim->matrixTransform = &matrixTransform;
+		newMatrixAnim->fbxNode = fbxNode;
+
+		_matrixAnimCurveMap.emplace(updateMatrixName, newMatrixAnim);
+
+		// For any matrixTransform that is a bone, applies rotations, scales and translations to it
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&matrixTransform);
-		if (bone)
+
+		if (_exportFullHierarchy || (!_ignoreBones && bone))
 		{
-			std::shared_ptr<UpdateBoneNodes> newBoneAnim = std::make_shared<UpdateBoneNodes>();
-			std::string updateBoneName = umt->getName();
-			newBoneAnim->bone = bone;
-			newBoneAnim->fbxNode = fbxNode;
-
-			_boneAnimCurveMap.emplace(updateBoneName, newBoneAnim);
-		}
-
-		// Should have only 1 of each or a matrix...
-		for (auto& stackedTransform : stackedTransforms)
-		{
-			if (auto translateElement = dynamic_pointer_cast<StackedTranslateElement>(stackedTransform))
+			// Should have only 1 of each or a matrix...
+			for (auto& stackedTransform : stackedTransforms)
 			{
-				FbxDouble3 translation(translateElement->getTranslate().x(),
-					translateElement->getTranslate().y(),
-					translateElement->getTranslate().z());
-				fbxNode->LclTranslation.Set(translation);
-			}
-			else if (auto rotateElement = dynamic_pointer_cast<StackedQuaternionElement>(stackedTransform))
-			{
-				osg::Quat rot = rotateElement->getQuaternion();
-				FbxAMatrix mat;
-				FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-				mat.SetQ(q);
-				FbxVector4 vec4 = mat.GetR();
-				fbxNode->LclRotation.Set(vec4);
-			}
-			else if (auto scaleElement = dynamic_pointer_cast<StackedScaleElement>(stackedTransform))
-			{
-				// Associe scaleElement com scaleCurveNode
-				FbxDouble3 scale(scaleElement->getScale().x(),
-					scaleElement->getScale().y(),
-					scaleElement->getScale().z());
-				fbxNode->LclScaling.Set(scale);
-			}
-			else if (auto rotateAxisElement = dynamic_pointer_cast<StackedRotateAxisElement>(stackedTransform))
-			{
-				osg::Vec3 axis = rotateAxisElement->getAxis();
-				float angle = rotateAxisElement->getAngle();
+				if (auto translateElement = dynamic_pointer_cast<StackedTranslateElement>(stackedTransform))
+				{
+					FbxDouble3 translation(translateElement->getTranslate().x(),
+						translateElement->getTranslate().y(),
+						translateElement->getTranslate().z());
+					fbxNode->LclTranslation.Set(translation);
+				}
+				else if (auto rotateElement = dynamic_pointer_cast<StackedQuaternionElement>(stackedTransform))
+				{
+					osg::Quat rot = rotateElement->getQuaternion();
+					FbxAMatrix mat;
+					FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+					mat.SetQ(q);
+					FbxVector4 vec4 = mat.GetR();
+					fbxNode->LclRotation.Set(vec4);
+				}
+				else if (auto scaleElement = dynamic_pointer_cast<StackedScaleElement>(stackedTransform))
+				{
+					// Associe scaleElement com scaleCurveNode
+					FbxDouble3 scale(scaleElement->getScale().x(),
+						scaleElement->getScale().y(),
+						scaleElement->getScale().z());
 
-				osg::Quat rot;
-				rot.makeRotate(angle, axis);
+					fbxNode->LclScaling.Set(scale);
+				}
+				else if (auto rotateAxisElement = dynamic_pointer_cast<StackedRotateAxisElement>(stackedTransform))
+				{
+					osg::Vec3 axis = rotateAxisElement->getAxis();
+					float angle = rotateAxisElement->getAngle();
 
-				FbxAMatrix mat;
-				FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-				mat.SetQ(q);
-				FbxVector4 vec4 = mat.GetR();
-				fbxNode->LclRotation.Set(vec4);
-			}
-			else if (auto matrixElement = dynamic_pointer_cast<StackedMatrixElement>(stackedTransform))
-			{
-				osg::Matrix matrix = matrixElement->getMatrix();
-				osg::Vec3d pos, scl;
-				osg::Quat rot, so;
+					osg::Quat rot;
+					rot.makeRotate(angle, axis);
 
-				matrix.decompose(pos, rot, scl, so);
-				_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-				_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+					FbxAMatrix mat;
+					FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+					mat.SetQ(q);
+					FbxVector4 vec4 = mat.GetR();
+					fbxNode->LclRotation.Set(vec4);
+				}
+				else if (auto matrixElement = dynamic_pointer_cast<StackedMatrixElement>(stackedTransform))
+				{
+					osg::Matrix matrix = matrixElement->getMatrix();
+					osg::Vec3d pos, scl;
+					osg::Quat rot, so;
 
-				FbxAMatrix mat;
+					matrix.decompose(pos, rot, scl, so);
+					_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+					_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 
-				FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-				mat.SetQ(q);
-				FbxVector4 vec4 = mat.GetR();
+					FbxAMatrix mat;
 
-				_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+					FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+					mat.SetQ(q);
+					FbxVector4 vec4 = mat.GetR();
+
+					_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+				}
 			}
 		}
 	}

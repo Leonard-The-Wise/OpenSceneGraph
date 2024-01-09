@@ -162,8 +162,8 @@ namespace pluginfbx
 			std::string targetBoneName = channel->getTargetName();
 
 			// FIXME: Add Morph target
-			auto boneAnimCurveNodeIter = _boneAnimCurveMap.find(targetBoneName);
-			if (boneAnimCurveNodeIter == _boneAnimCurveMap.end())
+			auto boneAnimCurveNodeIter = _matrixAnimCurveMap.find(targetBoneName);
+			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end())
 			{
 				continue;
 			}
