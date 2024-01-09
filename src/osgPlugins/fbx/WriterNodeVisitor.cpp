@@ -183,13 +183,13 @@ namespace pluginfbx
 		// Set transforms for node
 		osg::Matrix matrix = node.getMatrix();
 
-		// Fix skeleton rotation
-		if ( (skeleton && !_exportFullHierarchy) )
+		// Fix for sketchfab coordinates
+		if (isFirstMatrix)
 		{
 			osg::Matrix matrix2;
 			matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 			matrix.preMult(matrix2);
-			//node.setMatrix(matrix);
+			node.setMatrix(matrix);
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
@@ -205,11 +205,6 @@ namespace pluginfbx
 			matrix.decompose(pos, rot, scl, so);
 			_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
 			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
-
-			if (isFirstMatrix && _exportFullHierarchy)
-			{
-				rot.makeRotate(osg::DegreesToRadians(0.0), X_AXIS);
-			}
 
 			FbxAMatrix mat;
 			FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());

@@ -356,7 +356,7 @@ namespace pluginfbx
 
 			if (vertexIndex >= basevecs->getNumElements())
 			{
-				OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)."
+				OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableVertexDecompress (or turn it off if you already enabled it)."
 					<< "[Geometry: " << geometryName << "]" << std::endl;
 				throw "Exiting without saving.";
 			}
@@ -827,16 +827,17 @@ namespace pluginfbx
 
 		// Option to rotate rigged and morphed meshes on X axis
 		osg::Matrix rotateMatrix;
-		if (dynamic_cast<const RigGeometry*>(&geometry) || dynamic_cast<const MorphGeometry*>(&geometry))
+
+		// Fix for rigged geometry under bones influence
+		if (!_ignoreBones && dynamic_cast<const RigGeometry*>(&geometry))
 		{
-			rotateMatrix.makeRotate(osg::inDegrees(_rotateXAxis), osg::X_AXIS); 
-			if (_exportFullHierarchy) // Need to match skeleton rotation with mesh this time
-			{
-				osg::Quat q;
-				q.makeRotate(osg::DegreesToRadians(90.0), X_AXIS);
-				rotateMatrix.preMultRotate(q);
-			}
+			rotateMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS);
 		}
+
+		// Addicional rotate axis based on parameters
+		osg::Quat q;
+		q.makeRotate(osg::DegreesToRadians(_rotateXAxis), X_AXIS);
+		rotateMatrix.preMultRotate(q);
 
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
 		setControlPointAndNormalsAndUV(index_vert, mesh, rotateMatrix);

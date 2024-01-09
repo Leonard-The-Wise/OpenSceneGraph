@@ -162,9 +162,9 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 localOptions.varint = true;
             }
 
-            if (pre_equals == "disableIndexDecompress")
+            if (pre_equals == "disableVertexDecompress")
             {
-                localOptions.disableIndexDecompress = true;
+                localOptions.disableVertexDecompress = true;
             }
 
             if (pre_equals == "rebuildMaterials")
@@ -263,7 +263,7 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
         {
             osg::notify(osg::ALWAYS) << "Generator: " << input["Generator"].get<std::string>();
             if (input["Generator"].get<std::string>() == "OpenSceneGraph 3.7.0")
-                nodeParser.setNeedDecodeIndices(false);
+                nodeParser.setNeedDecodeVertices(false);
         }
         if (input.contains("Generator") && input.contains("Version"))
             osg::notify(osg::ALWAYS) << " [Version " << input["Version"] << "]";
@@ -283,8 +283,8 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
         nodeParser.setTimeHack(options.useTimeHack);
         nodeParser.setFileBasePath(options.baseFilePath);
 
-        if (options.disableIndexDecompress)
-            nodeParser.setNeedDecodeIndices(false);
+        if (options.disableVertexDecompress)
+            nodeParser.setNeedDecodeVertices(false);
 
         rootNode = nodeParser.parseObjectTree(input["osg.Node"]);
 

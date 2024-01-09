@@ -15,7 +15,7 @@ public:
         bool inlineImages;
         bool varint;
         bool strictJson;
-        bool disableIndexDecompress;
+        bool disableVertexDecompress;
         bool rebuildMaterials;
         bool ignoreGzExtension;
         bool useTimeHack;
@@ -31,7 +31,7 @@ public:
             inlineImages = false;
             varint = false;
             strictJson = true;
-            disableIndexDecompress = false;
+            disableVertexDecompress = false;
             rebuildMaterials = false;
             ignoreGzExtension = true;
             useTimeHack = false;

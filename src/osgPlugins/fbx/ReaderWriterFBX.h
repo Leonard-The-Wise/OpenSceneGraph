@@ -26,7 +26,7 @@ public:
         supportsOption("TessellatePolygons", "(Read option) Tessellate mesh polygons. If the model contains concave polygons this may be necessary, however tessellating can be very slow and may erroneously produce triangle shards.");
         supportsOption("IgnoreRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
         supportsOption("IgnoreAnimations", "(Write option) Ignore animations.");
-        supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (Default Angle: 180.0)");
+        supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0 )");
         supportsOption("ExportOriginal", "(Write option) Export only base model with original rotations (usefull to identify rigging problems).");
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
         supportsOption("ExportFullHierarchy", "(Write option) Export models respecting the original full node hierarchy. Some models may need it.");

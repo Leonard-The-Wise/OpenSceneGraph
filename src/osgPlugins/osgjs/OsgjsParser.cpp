@@ -803,7 +803,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                     if (newPrimitiveIndices.contains("Array") && newPrimitiveIndices["Array"].is_object() && newPrimitiveIndices.contains("ItemSize") && newPrimitiveIndices["ItemSize"].is_number())
                     {
                         indices = ParserHelper::parseJSONArray(newPrimitiveIndices["Array"], 
-                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, magic, _needDecodeIndices, drawMode);
+                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, magic, _needDecodeVertices, drawMode);
 
                         if (indices)
                         {

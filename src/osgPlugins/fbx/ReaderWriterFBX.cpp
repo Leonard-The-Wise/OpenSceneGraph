@@ -526,7 +526,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         bool ascii(false);
         bool ignoreBones(false);
         bool ignoreAnimations(false);
-        double rotateXAxis(180.0);
+        double rotateXAxis(0.0);
         bool exportFullHierarchy(false);
         std::string exportVersion;
         if (options)
@@ -580,14 +580,15 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                 {
                     std::ignore = getSafeDouble(post_equals, rotateXAxis);
                 }
-                else if (pre_equals == "ExportOriginal")
-                {
-                    ignoreBones = true;
-                    rotateXAxis = 0.0;
-                }
                 else if (pre_equals == "ExportFullHierarchy")
                 {
                     exportFullHierarchy = true;
+                }
+                else if (pre_equals == "ExportOriginal")
+                {
+                    ignoreBones = true;
+                    exportFullHierarchy = true;
+                    rotateXAxis = 0.0;
                 }
             }
         }
