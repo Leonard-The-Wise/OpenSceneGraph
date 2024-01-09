@@ -763,7 +763,16 @@ namespace pluginfbx
 
 		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
 		{
-			return mult * matrixObj->getMatrix();
+			// Ignore scaling (see apply(osg::MatrixTransform& node) in WriteNodeVisitor too)
+			osg::Matrix m = matrixObj->getMatrix();
+			Vec3 trans, scale;
+			Quat rot, so;
+			m.decompose(trans, rot, scale, so);
+			osg::Matrix mReal;
+			mReal.setRotate(rot);
+			mReal.setTrans(trans);
+
+			return mult * mReal;
 		}
 
 		return mult;

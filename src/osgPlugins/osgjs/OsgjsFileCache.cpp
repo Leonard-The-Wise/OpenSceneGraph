@@ -10,7 +10,29 @@ FileCache::FileCache(const std::set<std::string>& fileNames, const std::set<std:
 
     _extraDirSearch.emplace("animations/");
     _extraDirSearch.emplace("textures/");
+    _extraDirSearch.emplace("background/");
+    _extraDirSearch.emplace("environment/");
     setCache(fileNames);
+}
+
+bool FileCache::fileExistsInDirs(const std::string& filename, std::string& realFilePath)
+{
+    realFilePath = filename;
+
+    if (osgDB::fileExists(filename))
+        return true;
+
+    for (const std::string& directory : _extraDirSearch)
+    {
+        std::string fullPath = osgDB::concatPaths(directory, filename);
+        if (osgDB::fileExists(fullPath))
+        {
+            realFilePath = fullPath;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void FileCache::setCache(const std::set<std::string>& fileNames)
@@ -24,42 +46,25 @@ void FileCache::setCache(const std::set<std::string>& fileNames)
         std::vector<uint8_t> fileContent;
 
         // First, try search raw (stripped) file name, because this one we can read
-        std::string fileSearch = stripAllExtensions(fileName) + ".bin";
-        if (osgDB::fileExists(fileSearch))
+        std::string fileNameStripped = stripAllExtensions(fileName) + ".bin";
+        std::string realFileName;
+        if (fileExistsInDirs(fileNameStripped, realFileName))
         {
-            if (getFileContent(fileSearch, fileContent))
+            if (getFileContent(realFileName, fileContent))
             {
                 found = true;
-                _fileCacheInternal.emplace(fileSearch, fileContent);
+                _fileCacheInternal.emplace(fileNameStripped, fileContent);
             }
             else
                 error = true;
-        }
-        else
-        {
-            for (const std::string& directory : _extraDirSearch) 
-            {
-                std::string fullPath = osgDB::concatPaths(directory, fileSearch);
-                if (osgDB::fileExists(fullPath)) {
-                    if (getFileContent(fullPath, fileContent))
-                    {
-                        found = true;
-                        _fileCacheInternal.emplace(fileSearch, fileContent);
-                    }
-                    else
-                        error = true;
-
-                    break;
-                }
-            }
         }
 
         // Second attempt. This time, try original file.
         if (!found)
         {
-            if (osgDB::fileExists(fileName))
+            if (fileExistsInDirs(fileName, realFileName))
             {
-                if (getFileContent(fileName, fileContent))
+                if (getFileContent(realFileName, fileContent))
                 {
                     found = true;
                     _fileCacheInternal.emplace(fileName, fileContent);
@@ -67,27 +72,9 @@ void FileCache::setCache(const std::set<std::string>& fileNames)
                 else
                     error = true;
             }
-            else
-            {
-                for (const std::string& directory : _extraDirSearch)
-                {
-                    std::string fullPath = osgDB::concatPaths(directory, fileName);
-                    if (osgDB::fileExists(fullPath)) {
-                        if (getFileContent(fullPath, fileContent))
-                        {
-                            found = true;
-                            _fileCacheInternal.emplace(fileName, fileContent);
-                        }
-                        else
-                            error = true;
-
-                        break;
-                    }
-                }
-            }
         }
 
-        if (!found && !error)
+        if (!found)
         {
             OSG_WARN << "WARNING: Resource file " << fileName << " not found." << std::endl;
             globalBroken = true;
@@ -133,35 +120,6 @@ const std::vector<uint8_t>* FileCache::getFileBuffer(const std::string& fileName
     return nullptr;
 }
 
-//bool FileCache::getBytes(const std::string& fileName, std::vector<uint8_t>& outBytes, size_t vecSize, size_t offSet) const
-//{
-//    if (_fileCacheInternal.find(fileName) == _fileCacheInternal.end())
-//        return false;
-//
-//    if (vecSize < 0)
-//    {
-//        outBytes.resize(_fileCacheInternal.at(fileName).size());
-//        std::copy(_fileCacheInternal.at(fileName).begin(), _fileCacheInternal.at(fileName).end(), outBytes.begin());
-//        return true;
-//    }
-//    else
-//    {
-//        size_t trueSize = vecSize + offSet;
-//        if (_fileCacheInternal.at(fileName).size() < trueSize)
-//        {
-//            osg::notify(osg::WARN) << fileName << " has smaller size than requested buffer." << std::endl;
-//            return false;
-//        }
-//
-//        outBytes.resize(vecSize);
-//        std::copy(_fileCacheInternal.at(fileName).begin() + offSet, _fileCacheInternal.at(fileName).begin() + offSet + vecSize, outBytes.begin());
-//
-//        return true;
-//    }
-//
-//    return false;
-//}
-
 bool FileCache::getFileContent(const std::string& fileName, std::vector<uint8_t>& outFileContent)
 {
     // Temporary: don't read compressed binaries
@@ -186,7 +144,6 @@ bool FileCache::getFileContent(const std::string& fileName, std::vector<uint8_t>
     outFileContent.clear();
     return false;
 }
-
 
 
 std::string FileCache::stripAllExtensions(const std::string& filename)

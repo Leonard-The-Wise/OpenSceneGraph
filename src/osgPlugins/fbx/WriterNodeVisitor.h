@@ -280,8 +280,8 @@ namespace pluginfbx
         typedef std::map<osg::ref_ptr<osgAnimation::RigGeometry>, FbxNode*> RiggedMeshMap;      // Maps OSG Rigged Geometry to FBX meshes
         typedef std::map<osg::ref_ptr<osgAnimation::MorphGeometry>, FbxNode*> MorphedMeshMap;   // Maps OSG Morphed Geometry to FBX meshes
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
-        typedef std::map<std::string, BonePair> BoneNodeMap;                                    // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
-        typedef std::map<std::string, std::shared_ptr<UpdateBoneNodes>> BoneAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
+        typedef std::unordered_map<std::string, BonePair> BoneNodeMap;                                 // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
+        typedef std::unordered_map<std::string, std::shared_ptr<UpdateBoneNodes>> BoneAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
 
         std::vector<FbxMesh*> _meshList;
         RiggedMeshMap _riggedMeshMap;

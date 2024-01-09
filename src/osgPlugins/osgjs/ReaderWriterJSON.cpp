@@ -203,6 +203,11 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                     post_equals.length() - start_pos));
             }
 
+            if (pre_equals == "useTimeHack")
+            {
+                localOptions.useTimeHack = true;
+            }
+
         }
         if (!options->getPluginStringData(std::string("baseLodURL")).empty())
         {
@@ -275,6 +280,7 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
 
         osgJSONParser::FileCache fileCache(files, options.additionalSourceDirs);
         nodeParser.setFileCache(fileCache);
+        nodeParser.setTimeHack(options.useTimeHack);
         nodeParser.setFileBasePath(options.baseFilePath);
 
         if (options.disableIndexDecompress)

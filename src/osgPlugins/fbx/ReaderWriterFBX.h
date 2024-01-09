@@ -27,6 +27,7 @@ public:
         supportsOption("IgnoreRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
         supportsOption("IgnoreAnimations", "(Write option) Ignore animations.");
         supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (Default Angle: -180.0)");
+        supportsOption("ExportOriginal", "(Write option) Export only base model with original rotations (usefull to identify rigging problems).");
     }
 
     const char* className() const { return "FBX reader/writer"; }

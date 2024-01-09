@@ -70,6 +70,8 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 #define ADD_UNIQUE_ID (currentJSONNode.contains("UniqueID") ? ("[UniqueID: " + std::to_string(currentJSONNode["UniqueID"].get<int>()) + "]") : std::string(""))
 #define ADD_KEY_NAME ADD_NODE_KEY << ADD_NODE_NAME << ADD_UNIQUE_ID
 
+constexpr auto TIMEHACK = 0.0333333351;
+
 constexpr auto MODELINFO_FILE = "model_info.json";
 
 void OsgjsParser::buildMaterialFiles() 
@@ -1659,6 +1661,16 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
             // Get UserDataContainer early
             lookForChildren(channel, currentJSONNode, UserDataContainerType::UserData, nodeKey);
             keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::Vec3Compressed);
+
+            // HACK: Since our data is corrupted...
+            auto t = dynamic_pointer_cast<FloatArray>(timesArray);
+            if (_useTimeHack && t)
+            {
+                for (unsigned int i = 0; i < t->getNumElements(); ++i)
+                {
+                    (*t)[i] = (*t)[i] * i;
+                }
+            }
         }
 
         if ((dynamic_pointer_cast<Vec3Array>(keysArray) || dynamic_pointer_cast<Vec3dArray>(keysArray))
@@ -1730,6 +1742,16 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
             // Get UserDataContainer early
             lookForChildren(channel, currentJSONNode, UserDataContainerType::UserData, nodeKey);
             keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::QuatCompressed);
+
+            // HACK: Since our data is corrupted...
+            auto t = dynamic_pointer_cast<FloatArray>(timesArray);
+            if (_useTimeHack && t)
+            {
+                for (unsigned int i = 0; i < t->getNumElements(); ++i)
+                {
+                    (*t)[i] = (*t)[i] * i;
+                }
+            }
         }
 
         if ((dynamic_pointer_cast<Vec4dArray>(keysArray) || dynamic_pointer_cast<Vec4Array>(keysArray))
@@ -1997,35 +2019,36 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
 
     std::string fileNameOrig = fileName;
     std::string fileNameChanged = fileName;
-    if (osgDB::fileExists(fileNameOrig))
+    std::string realOrigFileName;
+    if (_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName))
     {
         // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
-        std::string origExt = osgDB::getLowerCaseFileExtension(fileNameOrig);
-        fileNameChanged = FileCache::stripAllExtensions(fileNameOrig) + std::string(".") + origExt;
-        if (std::rename(fileNameOrig.c_str(), fileNameChanged.c_str()) == 0)
+        std::string origExt = osgDB::getLowerCaseFileExtension(realOrigFileName);
+        fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".") + origExt;
+        if (std::rename(realOrigFileName.c_str(), fileNameChanged.c_str()) == 0)
         {
-            fileNameOrig = fileNameChanged;
+            realOrigFileName = fileNameChanged;
         }
 
         // First try to read original file name. If unsuccessfull, then retry as .png
         // (need to temporarily rename file. If success, then rename becomes permanent)
-        image = osgDB::readImageFile(fileNameOrig);
+        image = osgDB::readImageFile(realOrigFileName);
         if (!image)
         {
-            std::string fileExt = osgDB::getLowerCaseFileExtension(fileNameOrig);
+            std::string fileExt = osgDB::getLowerCaseFileExtension(realOrigFileName);
 
             if (fileExt == "png")
             {
-                OSG_WARN << "Unsuported texture format: " << fileNameOrig << std::endl;
+                OSG_WARN << "Unsuported texture format: " << realOrigFileName << std::endl;
                 return nullptr;
             }
             else // if (fileExt == "tga" || fileExt == "tiff" || fileExt == "jpg" || fileExt == "jpeg")
             {
-                fileNameChanged = FileCache::stripAllExtensions(fileNameOrig) + std::string(".png");
+                fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".png");
 
-                if (std::rename(fileNameOrig.c_str(), fileNameChanged.c_str()) != 0)
+                if (std::rename(realOrigFileName.c_str(), fileNameChanged.c_str()) != 0)
                 {
-                    OSG_WARN << "Could not process file: " << fileNameOrig << std::endl;
+                    OSG_WARN << "Could not process file: " << realOrigFileName << std::endl;
                     return nullptr;
                 }
 
@@ -2036,24 +2059,24 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
 
                 if (!image)
                 {
-                    OSG_WARN << "Unsuported texture format: " << fileNameOrig << std::endl;
-                    std::ignore = std::rename(fileNameChanged.c_str(), fileNameOrig.c_str());
+                    OSG_WARN << "Unsuported texture format: " << realOrigFileName << std::endl;
+                    std::ignore = std::rename(fileNameChanged.c_str(), realOrigFileName.c_str());
                     return nullptr;
                 }
                 else
                 {
-                    OSG_NOTICE << "INFO: Texture " << fileNameOrig << " was actually a PNG image. Renamed to " << fileNameChanged << std::endl;
+                    OSG_NOTICE << "INFO: Texture " << realOrigFileName << " was actually a PNG image. Renamed to " << fileNameChanged << std::endl;
                 }
             }
         }
     }
-    else if (osgDB::getLowerCaseFileExtension(fileNameOrig) != "png")
+    else if (osgDB::getLowerCaseFileExtension(realOrigFileName) != "png")
     {
-        fileNameChanged = FileCache::stripAllExtensions(fileNameOrig) + std::string(".png");
+        fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".png");
 
         if (!osgDB::fileExists(fileNameChanged))
         {
-            OSG_WARN << "WARNING: Could not find either " << fileNameOrig << " or " << fileNameChanged << " on model's path." << std::endl;
+            OSG_WARN << "WARNING: Could not find either " << realOrigFileName << " or " << fileNameChanged << " on model's path." << std::endl;
             return nullptr;
         }
         else
@@ -2358,24 +2381,25 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
                 // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
                 // because they may be incorrectly renamed from Sketchfab
                 std::string filename = knownLayer.second;
-                if (!osgDB::fileExists(filename))
+                std::string realFileName;
+                if (!_fileCache.fileExistsInDirs(filename, realFileName))
                 {
                     filename = FileCache::stripAllExtensions(filename) + std::string(".png");
                 }
 
-                if (osgDB::fileExists(filename))
+                if (_fileCache.fileExistsInDirs(filename, realFileName))
                 {
                     // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
-                    std::string origExt = osgDB::getLowerCaseFileExtension(filename);
-                    std::string fileNameChanged = FileCache::stripAllExtensions(filename) + std::string(".") + origExt;
-                    if (filename != fileNameChanged && std::rename(filename.c_str(), fileNameChanged.c_str()) == 0)
+                    std::string origExt = osgDB::getLowerCaseFileExtension(realFileName);
+                    std::string fileNameChanged = FileCache::stripAllExtensions(realFileName) + std::string(".") + origExt;
+                    if (realFileName != fileNameChanged && std::rename(realFileName.c_str(), fileNameChanged.c_str()) == 0)
                     {
-                        OSG_NOTICE << "INFO: Texture " << filename << " renamed to " << fileNameChanged << std::endl;
-                        filename = fileNameChanged;
+                        OSG_NOTICE << "INFO: Texture " << realFileName << " renamed to " << fileNameChanged << std::endl;
+                        realFileName = fileNameChanged;
                     }
 
-                    material->setUserValue(std::string("textureLayer_") + knownLayer.first, filename);
-                    unfoundTextures.emplace(filename);
+                    material->setUserValue(std::string("textureLayer_") + knownLayer.first, realFileName);
+                    unfoundTextures.emplace(realFileName);
                 }
                 else
                 {

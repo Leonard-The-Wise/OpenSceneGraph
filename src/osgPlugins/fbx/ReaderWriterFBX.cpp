@@ -579,6 +579,11 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                 {
                     std::ignore = getSafeDouble(post_equals, rotateXAxis);
                 }
+                else if (pre_equals == "ExportOriginal")
+                {
+                    ignoreBones = true;
+                    rotateXAxis = 0.0;
+                }
             }
         }
 
@@ -598,7 +603,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
             options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
             ignoreBones, ignoreAnimations, rotateXAxis);
 
-        OSG_NOTICE << "[FBX] Exporting Scene, please wait..." << std::endl;
+        OSG_NOTICE << "[FBX] Exporting Scene..." << std::endl;
 
         if (useFbxRoot && isBasicRootNode(node))
         {

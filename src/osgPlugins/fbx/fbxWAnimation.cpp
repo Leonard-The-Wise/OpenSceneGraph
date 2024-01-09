@@ -72,11 +72,13 @@ namespace pluginfbx
 		FbxAnimCurve* curveY(nullptr);
 		FbxAnimCurve* curveZ(nullptr);
 
+		bool bTranslate(false);
 		if (channelName == "translate")
 		{
 			curveX = animCurveNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
 			curveY = animCurveNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
 			curveZ = animCurveNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+			bTranslate = true;
 		}
 		else if (channelName == "scale")
 		{
@@ -101,16 +103,17 @@ namespace pluginfbx
 			// Converta o tempo do OSG para o tempo do FBX.
 			FbxTime fbxTime;
 			fbxTime.SetSecondDouble(keyframe.getTime());
+			Vec3 keyValue = keyframe.getValue();
 
 			// Adicione os valores de translação para cada eixo às curvas correspondentes.
-			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, keyframe.getValue().x(), FbxAnimCurveDef::eInterpolationConstant);
-			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, keyframe.getValue().y(), FbxAnimCurveDef::eInterpolationConstant);
-			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, keyframe.getValue().z(), FbxAnimCurveDef::eInterpolationConstant);
+			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, keyValue.x(), FbxAnimCurveDef::eInterpolationConstant);
+			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, keyValue.y(), FbxAnimCurveDef::eInterpolationConstant);
+			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, keyValue.z(), FbxAnimCurveDef::eInterpolationConstant);
 		}
 	}
 
 	void AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel,
-		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string targetBoneName)
+		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer)
 	{
 		if (!transformChannel || !animCurveNode)
 		{
@@ -131,6 +134,7 @@ namespace pluginfbx
 			fbxTime.SetSecondDouble(keyframe.getTime());
 
 			Quat quat = keyframe.getValue();
+
 			FbxQuaternion q(quat.x(), quat.y(), quat.z(), quat.w());
 			FbxAMatrix mat;
 			mat.SetQ(q);
@@ -168,7 +172,7 @@ namespace pluginfbx
 			}
 			else if (auto rotateChannel = dynamic_pointer_cast<QuatSphericalLinearChannel>(channel))
 			{
-				AddQuatSlerpKeyframes(rotateChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer, targetBoneName);
+				AddQuatSlerpKeyframes(rotateChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer);
 			}
 		}
 	}
@@ -184,6 +188,8 @@ namespace pluginfbx
 		auto bam = dynamic_pointer_cast<BasicAnimationManager>(callback);
 		if (!bam)
 			return;
+
+		OSG_NOTICE << "Processing " << bam->getAnimationList().size() << " animation(s)..." << std::endl;
 
 		// Run through all animations
 		for (auto& animation : bam->getAnimationList())

@@ -52,3 +52,17 @@ In rare cases you may get an "out of bound indexes or vertexes", that usually me
 Defaultly, the plugin will try to decompress vertices and texcoords because most recent models use it, but if it is a legacy model and it fails to export or your vertices looks totally broken, try to export with the option `-O disableVertexDecompress` and it may fix the issue.
 
 Also, you can ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging, use it. Sometimes model placement is not aligned with skeleton. If you don't know which rotation and your model looks weird, try to put it on Rest Pose to see which rotation it uses, also if you use the option `-O IgnoreRigging` you won't get any deformer exported, but the export will mark all bones as normal transform groups, so you can see where the skeleton is without it affecting the base model itself.
+
+### Pro tip:
+
+If you want to see the uncompressed array data for files, just import the `.osgjs` and export to the same format (without using compression options). Just like:
+```
+osgconv file.osgjs file-export.osgjs
+```
+
+This way you can edit the text file (Notepad++ preferred), and see if your data has integrity. 
+Or just export to FBX in ASCII format (also supported by FBX Plugin).
+
+### Pro tip 2:
+
+Many times, animation data is broken (not the plugin's fault, the animation files have incorrect data, don't ask me why). So I made a hack to try and fix animations, by adding custom keyframing into time arrays. Use `-O useTimeHack` on export and try it out to see if your animations are back up again.

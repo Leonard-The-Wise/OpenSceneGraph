@@ -18,10 +18,9 @@ namespace osgJSONParser
 
 		const std::vector<uint8_t>* getFileBuffer(const std::string& fileName) const;
 
-		// Get bytes from cache. vecSize == -1 means to get the entire buffer.
-		// bool getBytes(const std::string& fileName, std::vector<uint8_t>& outBytes, size_t vecSize = -1, size_t offSet = 0) const;
-
 		static std::string stripAllExtensions(const std::string& filename);
+
+		bool fileExistsInDirs(const std::string& filename, std::string& realFilePath);
 
 	private:
 
