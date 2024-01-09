@@ -526,7 +526,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         bool ascii(false);
         bool ignoreBones(false);
         bool ignoreAnimations(false);
-        double rotateXAxis(-180.0);
+        double rotateXAxis(180.0);
         std::string exportVersion;
         if (options)
         {
@@ -559,7 +559,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                 {
                     useFbxRoot = true;
                 }
-                else if (pre_equals == "FBX-ASCII")
+                else if (pre_equals == "FBXASCII")
                 {
                     ascii = true;
                 }
@@ -662,6 +662,14 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
 
         pScene->GetGlobalSettings().SetAxisSystem(axisSystem);
 
+        int numObjects = pScene->GetSrcObjectCount();
+        for (int i = 0; i < numObjects; i++) {
+            FbxAnimStack* animStack = pScene->GetSrcObject<FbxAnimStack>(i);
+            if (animStack != nullptr) {
+                pScene->SetCurrentAnimationStack(animStack);
+            }
+        }
+
         // Ensure the directory exists or else the FBX SDK will fail
         if (!osgDB::getFilePath(filename).empty() && !osgDB::fileExists(osgDB::getFilePath(filename)) && !osgDB::makeDirectoryForFile(filename)) {
             OSG_NOTICE << "Can't create directory for file '" << filename << "'. FBX SDK may fail creating the file." << std::endl;
@@ -706,6 +714,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
             OSG_WARN << "Can't set FBX export version to '" << exportVersion << "'. Using default. Available export versions are:" << versionsStr.str() << std::endl;
         }
 
+        OSG_NOTICE << "[FBX] Writting output .fbx file..." << std::endl;
         if (!lExporter->Export(pScene))
         {
 #if FBXSDK_VERSION_MAJOR < 2014

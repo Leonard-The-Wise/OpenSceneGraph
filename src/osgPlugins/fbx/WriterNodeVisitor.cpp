@@ -173,26 +173,28 @@ namespace pluginfbx
 		bool firstMatrixGet;
 		bool isFirstMatrix = (udc && udc->getUserValue("firstMatrix", firstMatrixGet));
 
-		if (isFirstMatrix || (!_ignoreBones && (skeleton || bone)))
+		// Set transforms for node
+		osg::Matrix matrix = node.getMatrix();
+
+		// Fix skeleton rotation
+		if (skeleton)
+		{
+			matrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+		}
+
+		// Create groups for nodes if they are bones or if we are ignoring bones
+		// so we can see matrix groups when no bone is present
+		if (isFirstMatrix || _ignoreBones || skeleton || bone)
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
-
-			// Set transforms for node
-			osg::Matrix matrix = node.getMatrix();
-
-			// Fix skeleton rotation
-			if (skeleton)
-			{
-				matrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-			}
 
 			osg::Vec3d pos, scl;
 			osg::Quat rot, so;
 
 			matrix.decompose(pos, rot, scl, so);
 			_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-			
+
 			// Ignoring scaling (see buildParentMatrixes in fbxWMesh too)
 			// _curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 

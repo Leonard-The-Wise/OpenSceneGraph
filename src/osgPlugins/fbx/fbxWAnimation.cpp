@@ -48,7 +48,7 @@ namespace pluginfbx
 		FbxAnimStack* animStack;
 		if (_pScene->GetSrcObjectCount<FbxAnimStack>() == 0)
 		{
-			animStack = FbxAnimStack::Create(_pScene, "Static Pose");
+			animStack = FbxAnimStack::Create(_pSdkManager, "Global Animations");
 			_pScene->SetCurrentAnimationStack(animStack);
 		}
 		else
@@ -150,8 +150,12 @@ namespace pluginfbx
 	void WriterNodeVisitor::createAnimationLayer(const osg::ref_ptr<osgAnimation::Animation> osgAnimation)
 	{
 		std::string animationName = osgAnimation->getName().c_str();
-		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pSdkManager, animationName.c_str());
-		getOrCreateAnimStack()->AddMember(fbxAnimLayer);
+
+		FbxAnimStack* animStack = FbxAnimStack::Create(_pScene, animationName.c_str());
+		_pScene->SetCurrentAnimationStack(animStack);
+		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, animationName.c_str());
+		animStack->AddMember(fbxAnimLayer);
+
 
 		for (auto& channel : osgAnimation->getChannels()) 
 		{

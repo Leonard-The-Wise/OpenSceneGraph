@@ -771,6 +771,7 @@ namespace pluginfbx
 			osg::Matrix mReal;
 			mReal.setRotate(rot);
 			mReal.setTrans(trans);
+			//mReal.postMultScale(scale);
 
 			return mult * mReal;
 		}
@@ -803,6 +804,8 @@ namespace pluginfbx
 		// Create a node for this mesh and apply it to Mesh Root
 		std::string meshName = geometry.getName();
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
+
+		//_curFbxNode->AddChild(meshNode);
 		_MeshesRoot->AddChild(meshNode);
 
 		// Make meshes snap to parent transformations

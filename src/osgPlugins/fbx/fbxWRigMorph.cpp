@@ -513,9 +513,8 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::buildMeshSkin()
 	{
-
 		if (_riggedMeshMap.size() > 0)
-			OSG_NOTICE << "Processing riggings and skins... " << std::endl;
+			OSG_NOTICE << "Processing rig and skinning... " << std::endl;
 
 		for (auto& entry : _riggedMeshMap)
 		{

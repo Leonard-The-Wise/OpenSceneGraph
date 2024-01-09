@@ -45,13 +45,16 @@ osgconv --format fbx
 ```
 osgconv file.osgjs file-export.fbx -O RotateXAxis=-90.0
 ```
-(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis. Default rotation is -180.0 and some models requires rotation of zero)
+(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis. Default rotation is 180.0, while many models uses -90.0 and some models requires rotation 90.0 or zero)
 
 In rare cases you may get an "out of bound indexes or vertexes", that usually means your model isn't vertex compressed. Since we can't programatically determine whether this model is compressed or not (depends on which version of sketchfab processor it was uploaded and time of upload), you must try different options manually.
 
 Defaultly, the plugin will try to decompress vertices and texcoords because most recent models use it, but if it is a legacy model and it fails to export or your vertices looks totally broken, try to export with the option `-O disableVertexDecompress` and it may fix the issue.
 
-Also, you can ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging, use it. Sometimes model placement is not aligned with skeleton. If you don't know which rotation and your model looks weird, try to put it on Rest Pose to see which rotation it uses, also if you use the option `-O IgnoreRigging` you won't get any deformer exported, but the export will mark all bones as normal transform groups, so you can see where the skeleton is without it affecting the base model itself.
+Also, you can ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging, use it. 
+
+Also, Sometimes model placement is not aligned with it's skeleton. If you don't know which rotation and your model looks weird, try to put it on Rest Pose to see which rotation it uses, or if you use the option `-O ExportOriginal`, so you won't get any deformer exported nor the model will be corrected on X-Axis (by default), but the exporter will mark all bones as normal transform groups, then you can see (eg: when opening the model in Blender) where the skeleton should be without it affecting the base model itself. After that, you will know the rotation amount you must put on `-O RotateAxis` parameter to easily realign the mesh.
+
 
 ### Pro tip:
 
@@ -60,7 +63,8 @@ If you want to see the uncompressed array data for files, just import the `.osgj
 osgconv file.osgjs file-export.osgjs
 ```
 
-This way you can edit the text file (Notepad++ preferred), and see if your data has integrity. 
+This way you can edit the text file (Notepad++ preferred), and see if your data has integrity or is complete (sometimes `file.osgjs` is not complete or have total integrity, hence your model may have incomplete vertices, or bones won't affect geometry properly, or animations won't play correctly, etc). 
+
 Or just export to FBX in ASCII format (also supported by FBX Plugin).
 
 ### Pro tip 2:
