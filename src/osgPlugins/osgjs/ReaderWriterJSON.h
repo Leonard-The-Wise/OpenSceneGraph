@@ -19,6 +19,8 @@ public:
         bool rebuildMaterials;
         bool ignoreGzExtension;
         bool useTimeHack;
+        bool decodeTextures;
+        bool decodeTexturesNoSave;
         std::vector<std::string> useSpecificBuffer;
         std::set<std::string> additionalSourceDirs;
         std::string baseLodURL;
@@ -35,6 +37,8 @@ public:
             rebuildMaterials = false;
             ignoreGzExtension = true;
             useTimeHack = false;
+            decodeTextures = false;
+            decodeTexturesNoSave = false;
         }
     };
 

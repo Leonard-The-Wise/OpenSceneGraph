@@ -26,10 +26,14 @@ public:
         supportsOption("TessellatePolygons", "(Read option) Tessellate mesh polygons. If the model contains concave polygons this may be necessary, however tessellating can be very slow and may erroneously produce triangle shards.");
         supportsOption("IgnoreRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
         supportsOption("IgnoreAnimations", "(Write option) Ignore animations.");
-        supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0 )");
+        supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0)");
         supportsOption("ExportOriginal", "(Write option) Export only base model with original rotations (usefull to identify rigging problems).");
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
         supportsOption("ExportFullHierarchy", "(Write option) Export models respecting the original full node hierarchy. Some models may need it.");
+        supportsOption("ScaleModel", "(Write option) Scale model on X, Y and Z by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0)");
+        supportsOption("ScaleSkeleton", "(Write option) Scale skeleton on X, Y and Z by given factor. Use like -O ScaleSkeleton=Factor (eg: ScaleSkeleton=100.0)");
+        supportsOption("ScaleAll", "(Write option) Scale model and Skeleton on X, Y and Z by given factor. Use like -O ScaleAll=Factor (eg: ScaleAll=100.0)");
+        supportsOption("FlipUVs", "(Write option) Flip Y axis of texture UV's.");
     }
 
     const char* className() const { return "FBX reader/writer"; }

@@ -301,7 +301,7 @@ namespace pluginfbx
 		mesh->AddPolygon(addPolygon(index_vert, tri.t3, tri.normalIndex3, drawableNum));
 	}
 
-	void WriterNodeVisitor::setControlPointAndNormalsAndUV(MapIndices& index_vert, FbxMesh* mesh, osg::Matrix& rotateMatrix)
+	void WriterNodeVisitor::setControlPointAndNormalsAndUV(MapIndices& index_vert, FbxMesh* mesh, osg::Matrix& transformMatrix)
 	{
 		mesh->InitControlPoints(index_vert.size());
 		FbxLayerElementNormal* lLayerElementNormal = FbxLayerElementNormal::Create(mesh, "");
@@ -366,14 +366,14 @@ namespace pluginfbx
 			case osg::Array::Vec4dArrayType:
 			{
 				const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basevecs))[vertexIndex];
-				osg::Vec4d vecf = vec * rotateMatrix;
+				osg::Vec4d vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
 			case osg::Array::Vec4ArrayType:
 			{
 				const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basevecs))[vertexIndex];
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -381,7 +381,7 @@ namespace pluginfbx
 			{
 				const osg::Vec4ub& vect = (*static_cast<const osg::Vec4ubArray*>(basevecs))[vertexIndex];
 				const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -389,7 +389,7 @@ namespace pluginfbx
 			{
 				const osg::Vec4us& vect = (*static_cast<const osg::Vec4usArray*>(basevecs))[vertexIndex];
 				const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -397,7 +397,7 @@ namespace pluginfbx
 			{
 				const osg::Vec4ui& vect = (*static_cast<const osg::Vec4uiArray*>(basevecs))[vertexIndex];
 				const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -405,7 +405,7 @@ namespace pluginfbx
 			{
 				const osg::Vec4b& vect = (*static_cast<const osg::Vec4bArray*>(basevecs))[vertexIndex];
 				const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -413,7 +413,7 @@ namespace pluginfbx
 			{
 				const osg::Vec4s& vect = (*static_cast<const osg::Vec4sArray*>(basevecs))[vertexIndex];
 				const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -421,7 +421,7 @@ namespace pluginfbx
 			{
 				const osg::Vec4i& vect = (*static_cast<const osg::Vec4iArray*>(basevecs))[vertexIndex];
 				const osg::Vec4 vec(vect.x(), vect.y(), vect.z(), vect.w());
-				osg::Vec4 vecf = vec * rotateMatrix;
+				osg::Vec4 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 				break;
 			}
@@ -429,14 +429,14 @@ namespace pluginfbx
 			case osg::Array::Vec3dArrayType:
 			{
 				const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basevecs))[vertexIndex];
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
 			case osg::Array::Vec3ArrayType:
 			{
 				const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(basevecs))[vertexIndex];
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -444,7 +444,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3ub& vect = (*static_cast<const osg::Vec3ubArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -452,7 +452,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3us& vect = (*static_cast<const osg::Vec3usArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -460,7 +460,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3ui& vect = (*static_cast<const osg::Vec3uiArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -468,7 +468,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3b& vect = (*static_cast<const osg::Vec3bArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -476,7 +476,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3s& vect = (*static_cast<const osg::Vec3sArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -484,7 +484,7 @@ namespace pluginfbx
 			{
 				const osg::Vec3i& vect = (*static_cast<const osg::Vec3iArray*>(basevecs))[vertexIndex];
 				const osg::Vec3 vec(vect.x(), vect.y(), vect.z());
-				osg::Vec3 vecf = vec * rotateMatrix;
+				osg::Vec3 vecf = vec * transformMatrix;
 				vertex.Set(vecf.x(), vecf.y(), vecf.z());
 				break;
 			}
@@ -509,28 +509,28 @@ namespace pluginfbx
 				case osg::Array::Vec4ArrayType:
 				{
 					const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basenormals))[normalIndex];
-					osg::Vec4 vecf = vec * rotateMatrix;
+					osg::Vec4 vecf = vec * transformMatrix;
 					normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 					break;
 				}
 				case osg::Array::Vec4dArrayType:
 				{
 					const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basenormals))[normalIndex];
-					osg::Vec4d vecf = vec * rotateMatrix;
+					osg::Vec4d vecf = vec * transformMatrix;
 					normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 					break;
 				}
 				case osg::Array::Vec3ArrayType:
 				{
 					const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(basenormals))[normalIndex];
-					osg::Vec3 vecf = vec * rotateMatrix;
+					osg::Vec3 vecf = vec * transformMatrix;
 					normal.Set(vecf.x(), vecf.y(), vecf.z());
 					break;
 				}
 				case osg::Array::Vec3dArrayType:
 				{
 					const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basenormals))[normalIndex];
-					osg::Vec3d vecf = vec * rotateMatrix;
+					osg::Vec3d vecf = vec * transformMatrix;
 					normal.Set(vecf.x(), vecf.y(), vecf.z());
 					break;
 				}
@@ -565,13 +565,15 @@ namespace pluginfbx
 					case osg::Array::Vec2ArrayType:
 					{
 						const osg::Vec2& vec = (*static_cast<const osg::Vec2Array*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), 1 - vec.y());
+						float vecY = _flipUVs ? 1.0 - vec.y() : vec.y();
+						texcoord.Set(vec.x(), vecY);
 						break;
 					}
 					case osg::Array::Vec2dArrayType:
 					{
 						const osg::Vec2d& vec = (*static_cast<const osg::Vec2dArray*>(basetexcoords))[vertexIndex];
-						texcoord.Set(vec.x(), 1 - vec.y());
+						double vecY = _flipUVs ? 1.0 - vec.y() : vec.y();
+						texcoord.Set(vec.x(), 1 - vecY);
 						break;
 					}
 					default:
@@ -610,28 +612,28 @@ namespace pluginfbx
 				case osg::Array::Vec4ArrayType:
 				{
 					const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(tangents))[vertexIndex];
-					osg::Vec4 vecf = vec * rotateMatrix;
+					osg::Vec4 vecf = vec * transformMatrix;
 					tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 					break;
 				}
 				case osg::Array::Vec4dArrayType:
 				{
 					const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(tangents))[vertexIndex];
-					osg::Vec4 vecf = vec * rotateMatrix;
+					osg::Vec4 vecf = vec * transformMatrix;
 					tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 					break;
 				}
 				case osg::Array::Vec3ArrayType:
 				{
 					const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(tangents))[vertexIndex];
-					osg::Vec3 vecf = vec * rotateMatrix;
+					osg::Vec3 vecf = vec * transformMatrix;
 					tangent.Set(vecf.x(), vecf.y(), vecf.z());
 					break;
 				}
 				case osg::Array::Vec3dArrayType:
 				{
 					const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(tangents))[vertexIndex];
-					osg::Vec3 vecf = vec * rotateMatrix;
+					osg::Vec3 vecf = vec * transformMatrix;
 					tangent.Set(vecf.x(), vecf.y(), vecf.z());
 					break;
 				}
@@ -826,21 +828,32 @@ namespace pluginfbx
 		}
 
 		// Option to rotate rigged and morphed meshes on X axis
-		osg::Matrix rotateMatrix;
+		osg::Matrix transformMatrix;
 
 		// Fix for rigged geometry under bones influence
 		if (!_ignoreBones && dynamic_cast<const RigGeometry*>(&geometry))
 		{
-			rotateMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS);
+			transformMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS);
 		}
 
 		// Addicional rotate axis based on parameters
 		osg::Quat q;
 		q.makeRotate(osg::DegreesToRadians(_rotateXAxis), X_AXIS);
-		rotateMatrix.preMultRotate(q);
+		transformMatrix.preMultRotate(q);
+
+		// Addicional rotation based on parameters.
+		// If we are exporting the full hierarchy, we need to compensate (divide) the scale amount of _scaleSkeleton factor)
+		// because we already scaled the node containing the meshes (skeleton)
+		double realScale = _scaleModel;
+		if (_exportFullHierarchy && hasSkeletonParent(geometry))
+		{
+			realScale /= (_scaleSkeleton == 0 ? 1 : _scaleSkeleton);
+		}
+
+		transformMatrix = transformMatrix * Matrix::scale(realScale, realScale, realScale);
 
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
-		setControlPointAndNormalsAndUV(index_vert, mesh, rotateMatrix);
+		setControlPointAndNormalsAndUV(index_vert, mesh, transformMatrix);
 		mesh->GenerateNormals(true);
 		mesh->GenerateTangentsDataForAllUVSets(true);
 
@@ -854,7 +867,7 @@ namespace pluginfbx
 		// Process morphed geometry
 		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
 		if (morph)
-			createMorphTargets(morph, mesh, rotateMatrix);
+			createMorphTargets(morph, mesh, transformMatrix);
 
 		// Look for morph geometries inside rig
 		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
@@ -862,7 +875,7 @@ namespace pluginfbx
 		{
 			const osgAnimation::MorphGeometry* rigMorph = dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry());
 			if (rigMorph)
-				createMorphTargets(rigMorph, mesh, rotateMatrix);
+				createMorphTargets(rigMorph, mesh, transformMatrix);
 		}
 
 		return meshNode;

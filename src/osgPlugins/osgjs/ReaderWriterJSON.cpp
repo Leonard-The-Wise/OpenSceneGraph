@@ -207,6 +207,14 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
             {
                 localOptions.useTimeHack = true;
             }
+            if (pre_equals == "decodeTextures")
+            {
+                localOptions.decodeTextures = true;
+            }
+            if (pre_equals == "decodeTexturesNoSave")
+            {
+                localOptions.decodeTexturesNoSave = true;
+            }
 
         }
         if (!options->getPluginStringData(std::string("baseLodURL")).empty())
@@ -282,6 +290,7 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
         nodeParser.setFileCache(fileCache);
         nodeParser.setTimeHack(options.useTimeHack);
         nodeParser.setFileBasePath(options.baseFilePath);
+        nodeParser.setDecodeTextures(options.decodeTextures, options.decodeTexturesNoSave);
 
         if (options.disableVertexDecompress)
             nodeParser.setNeedDecodeVertices(false);

@@ -976,7 +976,22 @@ osgText::Text::AlignmentType ParserHelper::getTextAlignmentFromString(const std:
 	return osgText::Text::AlignmentType::LEFT_TOP;
 }
 
+void ParserHelper::decodeImage(int width, const std::vector<unsigned char>& input, std::vector<unsigned char>& output)
+{
+	output.clear();
+	output.resize(input.size());
 
+	int n = width * width;
+	int r = 2 * n;
+	int a = 3 * n;
+	int o = 0;
+	for (int s = 0; s < n; ++s) {
+		output[o++] = input[s];
+		output[o++] = input[static_cast<size_t>(s) + n];
+		output[o++] = input[static_cast<size_t>(s) + r];
+		output[o++] = input[static_cast<size_t>(s) + a];
+	}
+}
 
 
 // PRIVATE METHODS
@@ -2272,3 +2287,5 @@ osg::ref_ptr<osg::Vec3Array> ParserHelper::decodeVectorOctahedral(const osg::ref
 
 	return returnVec;
 }
+
+

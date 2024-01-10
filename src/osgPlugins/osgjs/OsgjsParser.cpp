@@ -2009,6 +2009,39 @@ std::string OsgjsParser::getModelName() const
     return modelName;
 }
 
+void OsgjsParser::decodeTexture(const std::string& fileName, osg::ref_ptr<osg::Image>& image)
+{
+    std::vector<uint8_t> vec, vecOut;
+
+    unsigned char* imageData = image->data();
+    int imageSize = image->getTotalSizeInBytes();
+    int imageWidth = image->s();
+    int imageHeight = image->t();
+    int imageDept = image->r();
+    GLenum textureFormat = image->getInternalTextureFormat();
+    GLenum pixelFormat = image->getPixelFormat();
+
+    vec.resize(imageSize);
+    std::copy(imageData, imageData + imageSize, vec.begin());
+
+    int decodesize = sqrt(image->getTotalSizeInBytes() / 4);
+    ParserHelper::decodeImage(imageWidth, vec, vecOut);
+
+    image->setImage(imageWidth, imageHeight, imageDept, textureFormat, pixelFormat, GL_UNSIGNED_BYTE, const_cast<unsigned char*>(vecOut.data()), Image::NO_DELETE);
+
+    if (!_decodeTexturesNoSave)
+    {
+        if (osgDB::writeImageFile(*image, fileName))
+            OSG_NOTICE << "INFO: Decoded texture " << fileName << " and overwritten file." << std::endl;
+        else
+            OSG_WARN << "WARNING: Failed to save decoded texture " << fileName << " to disk." << std::endl;
+    }
+    else
+    {
+        OSG_NOTICE << "INFO: Decoded texture " << fileName << " without saving to disk." << std::endl;
+    }
+}
+
 ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
 {
     osg::ref_ptr<osg::Image> image;
@@ -2089,6 +2122,12 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
                 return nullptr;
             }
         }
+    }
+
+    // Post processing: Deinterleave images if necessary
+    if (_decodeTextures || _decodeTexturesNoSave)
+    {
+        decodeTexture(fileNameChanged, image);
     }
 
     _imageMap[fileNameChanged] = image;

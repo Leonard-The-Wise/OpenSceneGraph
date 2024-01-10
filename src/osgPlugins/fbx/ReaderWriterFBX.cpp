@@ -528,6 +528,9 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         bool ignoreAnimations(false);
         double rotateXAxis(0.0);
         bool exportFullHierarchy(false);
+        double scaleModel(1.0);
+        double scaleSkeleton(1.0);
+        bool flipUVs(false);
         std::string exportVersion;
         if (options)
         {
@@ -590,6 +593,23 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                     exportFullHierarchy = true;
                     rotateXAxis = 0.0;
                 }
+                else if (pre_equals == "ScaleModel")
+                {
+                    std::ignore = getSafeDouble(post_equals, scaleModel);
+                }
+                else if (pre_equals == "ScaleSkeleton")
+                {
+                    std::ignore = getSafeDouble(post_equals, scaleSkeleton);
+                }
+                else if (pre_equals == "ScaleAll")
+                {
+                    std::ignore = getSafeDouble(post_equals, scaleModel);
+                    std::ignore = getSafeDouble(post_equals, scaleSkeleton);
+                }
+                else if (pre_equals == "FlipUVs")
+                {
+                    flipUVs = true;
+                }
             }
         }
 
@@ -607,7 +627,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
 
         pluginfbx::WriterNodeVisitor writerNodeVisitor(pScene, pSdkManager, filename,
             options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
-            ignoreBones, ignoreAnimations, rotateXAxis, exportFullHierarchy);
+            ignoreBones, ignoreAnimations, rotateXAxis, exportFullHierarchy, scaleModel, scaleSkeleton, flipUVs);
 
         OSG_NOTICE << "[FBX] Exporting Scene..." << std::endl;
 

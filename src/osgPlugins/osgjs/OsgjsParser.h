@@ -128,6 +128,13 @@ namespace osgJSONParser
             _useTimeHack = use;
         }
 
+        inline void setDecodeTextures(bool deinterleaveSave, bool deinterleaveNoSave)
+        {
+            _decodeTextures = deinterleaveSave;
+            _decodeTexturesNoSave = deinterleaveNoSave;
+        }
+
+
 		osg::ref_ptr<osg::Group> parseObjectTree(const json& firstOsgNodeJSON);
 
 	private:
@@ -137,6 +144,9 @@ namespace osgJSONParser
         bool _firstDecodedTexture = true;
         bool _needDecodeVertices = true;
         bool _useTimeHack = false;
+        bool _decodeTextures = false;
+        bool _decodeTexturesNoSave = false;
+
         std::string _filesBasePath;
 
         // Materials from materialInfo.txt
@@ -204,6 +214,7 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Object> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
 
         std::string getModelName() const;
+        void decodeTexture(const std::string& fileName, osg::ref_ptr<osg::Image>& image);
         osg::ref_ptr<osg::Image> getOrCreateImage(const std::string& fileName);
 
         void parseExternalMaterials(const osg::ref_ptr<osg::Geometry>& geometry);

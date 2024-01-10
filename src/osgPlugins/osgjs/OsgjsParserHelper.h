@@ -53,6 +53,8 @@ namespace osgJSONParser
 
 		static osgText::Text::AlignmentType getTextAlignmentFromString(const std::string& textAlignment);
 
+		static void decodeImage(int width, const std::vector<unsigned char>& input, std::vector<unsigned char>& output);
+
 	private:
 		static bool getPrimitiveType(const json& currentJSONNode, osg::PrimitiveSet::Type& outPrimitiveType);
 		static inline int64_t varintSigned(uint64_t input);

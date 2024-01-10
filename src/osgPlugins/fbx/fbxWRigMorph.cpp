@@ -130,7 +130,7 @@ namespace pluginfbx
 		}
 	}
 
-	void WriterNodeVisitor::createMorphTargets(const osgAnimation::MorphGeometry* morphGeometry, FbxMesh* mesh, const osg::Matrix& rotateMatrix)
+	void WriterNodeVisitor::createMorphTargets(const osgAnimation::MorphGeometry* morphGeometry, FbxMesh* mesh, const osg::Matrix& transformMatrix)
 	{
 		FbxBlendShape* fbxBlendShape = FbxBlendShape::Create(_pSdkManager, morphGeometry->getName().c_str());
 		mesh->AddDeformer(fbxBlendShape);
@@ -162,28 +162,28 @@ namespace pluginfbx
 				case Array::Vec4dArrayType:
 				{
 					osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(vertices)->at(j);
-					osg::Vec4d vecf = vec * rotateMatrix;
+					osg::Vec4d vecf = vec * transformMatrix;
 					fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 					break;
 				}
 				case Array::Vec4ArrayType:
 				{
 					osg::Vec4 vec = dynamic_cast<const Vec4Array*>(vertices)->at(j);
-					osg::Vec4d vecf = vec * rotateMatrix;
+					osg::Vec4d vecf = vec * transformMatrix;
 					fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w());
 					break;
 				}
 				case Array::Vec3dArrayType:
 				{
 					osg::Vec3d vec = dynamic_cast<const Vec3dArray*>(vertices)->at(j);
-					osg::Vec3d vecf = vec * rotateMatrix;
+					osg::Vec3d vecf = vec * transformMatrix;
 					fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z());
 					break;
 				}
 				case Array::Vec3ArrayType:
 				{
 					osg::Vec3 vec = dynamic_cast<const Vec3Array*>(vertices)->at(j);
-					osg::Vec3d vecf = vec * rotateMatrix;
+					osg::Vec3d vecf = vec * transformMatrix;
 					fbxControlPoints[j] = FbxVector4(vecf.x(), vecf.y(), vecf.z());
 					break;
 				}
@@ -227,28 +227,28 @@ namespace pluginfbx
 					case Array::Vec4dArrayType:
 					{
 						osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(normals)->at(j);
-						osg::Vec4d vecf = vec * rotateMatrix;
+						osg::Vec4d vecf = vec * transformMatrix;
 						layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
 						break;
 					}
 					case Array::Vec4ArrayType:
 					{
 						osg::Vec4 vec = dynamic_cast<const Vec4Array*>(normals)->at(j);
-						osg::Vec4 vecf = vec * rotateMatrix;
+						osg::Vec4 vecf = vec * transformMatrix;
 						layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
 						break;
 					}
 					case Array::Vec3dArrayType:
 					{
 						osg::Vec3d vec = dynamic_cast<const Vec3dArray*>(normals)->at(j);
-						osg::Vec3 vecf = vec * rotateMatrix;
+						osg::Vec3 vecf = vec * transformMatrix;
 						layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
 						break;
 					}
 					case Array::Vec3ArrayType:
 					{
 						osg::Vec3 vec = dynamic_cast<const Vec3Array*>(normals)->at(j);
-						osg::Vec3 vecf = vec * rotateMatrix;
+						osg::Vec3 vecf = vec * transformMatrix;
 						layerElementNormal->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
 						break;
 					}
@@ -343,28 +343,28 @@ namespace pluginfbx
 					case Array::Vec4dArrayType:
 					{
 						osg::Vec4d vec = dynamic_cast<const Vec4dArray*>(tangents)->at(j);
-						osg::Vec4d vecf = vec * rotateMatrix;
+						osg::Vec4d vecf = vec * transformMatrix;
 						layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
 						break;
 					}
 					case Array::Vec4ArrayType:
 					{
 						osg::Vec4 vec = dynamic_cast<const Vec4Array*>(tangents)->at(j);
-						osg::Vec4 vecf = vec * rotateMatrix;
+						osg::Vec4 vecf = vec * transformMatrix;
 						layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z(), vecf.w()));
 						break;
 					}
 					case Array::Vec3dArrayType:
 					{
 						osg::Vec3d vec = dynamic_cast<const Vec3dArray*>(tangents)->at(j);
-						osg::Vec3d vecf = vec * rotateMatrix;
+						osg::Vec3d vecf = vec * transformMatrix;
 						layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
 						break;
 					}
 					case Array::Vec3ArrayType:
 					{
 						osg::Vec3 vec = dynamic_cast<const Vec3Array*>(tangents)->at(j);
-						osg::Vec3 vecf = vec * rotateMatrix;
+						osg::Vec3 vecf = vec * transformMatrix;
 						layerTangents->GetDirectArray().SetAt(j, FbxVector4(vecf.x(), vecf.y(), vecf.z()));
 						break;
 					}

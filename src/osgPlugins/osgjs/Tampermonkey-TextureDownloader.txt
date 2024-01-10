@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         sketchfab
-// @version      0.9.1.1
-// @description  download sketchfab textures only
-// @author       Marin - fix downloading multiple textures with same name for different model parts
+// @name         SketchfabTextureDownloader
+// @version      0.9.2
+// @description  Download Sketchfab models and/or textures!
+// @author       Marin - 01/2024 - Download textures with same name for different objects
+// @support      https://discord.gg/JBJRDB5euG
 // @match        *://*sketchfab.com/*
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jszip-utils/0.0.2/jszip-utils.min.js
@@ -18,11 +19,9 @@ let folder = zip.folder('collection');
 var button_dw = false;
 var func_drawGeometry = /(this\._stateCache\.drawGeometry\(this\._graphicContext,t\))/g;
 var fund_drawArrays = /t\.drawArrays\(t\.TRIANGLES,0,6\)/g;
-//var func_renderInto1 = /x\.renderInto\(n,S,y/g;
-var func_renderInto1 = /A\.renderInto\(n,E,R/g; //20 jun 2023 fix
+var func_renderInto1 = /A\.renderInto\(n,E,R/g;
 var func_renderInto2 = /g\.renderInto=function\(e,i,r/g;
 var func_getResourceImage = /getResourceImage:function\(e,t\){/g;
-var func_encodeVertex = /encodeDirection:function\(t\){/g;
 
 var func_test = /apply:function\(e\){var t=e instanceof r\.Geometry;/g
 
@@ -57,7 +56,7 @@ var addbtnfunc;
             console.log("[UserScript]add btn dwnld");
             var btn = document.createElement("a");
             btn.setAttribute("class", "control");
-            btn.innerHTML = "<pre style='color:blue;'>Download</pre>";
+            btn.innerHTML = "<pre style='font-family:impact;font-size:36px;text-shadow: 1px 1px black;color:#1caad9;'>CLICK TO DOWNLOAD</pre>";
             btn.addEventListener("click", dodownload , false);
             p.appendChild(btn);
             button_dw = true;
@@ -70,17 +69,17 @@ var addbtnfunc;
     var dodownload = function() {
         console.log("[UserScript]download");
         var idx = 0;
-//        window.allmodel.forEach(function(obj)
-//        {
-//            var mdl = {
-//                name: "model_"+idx,
-//                obj:parseobj(obj)
-//            }
-//            console.log(mdl);
-//            dosavefile(mdl);
-//            idx++;
-//
-//        })
+        window.allmodel.forEach(function(obj)
+        {
+            var mdl = {
+                name: "model_"+idx,
+                obj:parseobj(obj)
+            }
+            console.log(mdl);
+            dosavefile(mdl);
+            idx++;
+
+        })
         PackAll();
     }
 
@@ -121,17 +120,15 @@ var addbtnfunc;
                 attr.TexCoord5 ? attr.TexCoord5._elements :
                 attr.TexCoord6 ? attr.TexCoord6._elements :
                 attr.TexCoord7 ? attr.TexCoord7._elements :
-                attr.TexCoord8 ? attr.TexCoord8._elements : [],
+                attr.TexCoord8 ? attr.TexCoord8._elements :  [],
                 primitives: list,
             };
         }
 
         var dosavefile = function(mdl)
         {
+            return; // We don't save models here
             var obj = mdl.obj;
-
-            //console.log("TEST");
-            //console.log(obj);
 
             var str = '';
             str += 'mtllib ' + mdl.name + '.mtl\n';
@@ -158,7 +155,6 @@ var addbtnfunc;
                 }
                 str += '\n';
             }
-            //str += 'usemtl ' + mdl.name + '\n';
             str += 's on \n';
 
             var vn = obj.normal.length != 0;
@@ -213,7 +209,6 @@ var addbtnfunc;
                  window.allmodel.push(obj)
                  console.log(obj);
              }
-            //console.log(obj);
         }
 
 
@@ -260,10 +255,6 @@ var addbtnfunc;
                     console.log(e);
                     saveimage_to_list(url_image, filename_image);
                 }
-                else
-                {
-                    //console.log(e);
-                }
 
                 return obr;
             }
@@ -279,12 +270,7 @@ var addbtnfunc;
 
             if(!saveimagecache2[url])
             {
-                //console.log("rejected:"+url);
                 return;
-            }
-            else
-            {
-                //console.log("saved texture:"+url);
             }
 
 
@@ -328,17 +314,17 @@ var addbtnfunc;
             var fname = fn.exec(saveimagecache2[url].name)[1];
 
             var name = fname + ".png";
-
-            console.log("saved texture to blob " + name);
             canvas.toBlob(function(blob) {
                 var fn = /^([\w\- ]+)/;
                 var uniqueName = fn.exec(name)[1] + ".png";
                 var uniqueId = 1;
-                while (objects.hasOwnProperty(uniqueName)) {
-                    uniqueName = fn.exec(name)[1] + "-" + uniqueId + ".png";
+               while (objects.hasOwnProperty(uniqueName)) {
+                   uniqueName = fn.exec(name)[1] + "-" + uniqueId + ".png";
+                   uniqueId++;
                 }
                 objects[uniqueName] = blob;
             },"image/png");
+            console.log("Texture saved to Blob: "+name);
         }
 
 })();
@@ -447,15 +433,12 @@ var addbtnfunc;
                             req.send('');
                             var jstext = req.responseText;
                             var ret = func_renderInto1.exec(jstext);
-                            var index;
-                            var head;
-                            var tail;
 
                             if (ret)
                             {
-                                index = ret.index + ret[0].length;
-                                head = jstext.slice(0, index);
-                                tail = jstext.slice(index);
+                                var index = ret.index + ret[0].length;
+                                var head = jstext.slice(0, index);
+                                var tail = jstext.slice(index);
                                 jstext = head + ",i" + tail;
                                 console.log("[UserScript] Injection: patch_0 injected successful " + srimgc.src);
                             }
@@ -464,24 +447,22 @@ var addbtnfunc;
 
                             if (ret)
                             {
-                                index = ret.index + ret[0].length;
-                                head = jstext.slice(0, index);
-                                tail = jstext.slice(index);
+                                var index = ret.index + ret[0].length;
+                                var head = jstext.slice(0, index);
+                                var tail = jstext.slice(index);
                                 jstext = head + ",image_data" + tail;
                                 console.log("[UserScript] Injection: patch_1 injected successful " + srimgc.src);
                                 if (!func_renderInto1.exec(jstext))
-                                {
                                      console.log("[UserScript] But patch_0 failed " + srimgc.src);
-                                }
                             }
 
                             ret = fund_drawArrays.exec(jstext);
 
                             if (ret)
                             {
-                                index = ret.index + ret[0].length;
-                                head = jstext.slice(0, index);
-                                tail = jstext.slice(index);
+                                var index = ret.index + ret[0].length;
+                                var head = jstext.slice(0, index);
+                                var tail = jstext.slice(index);
                                 jstext = head + ",window.drawhookimg(t,image_data)" + tail;
                                 console.log("[UserScript] Injection: patch_2 injected successful " + srimgc.src);
                             }
@@ -490,9 +471,9 @@ var addbtnfunc;
 
                             if (ret)
                             {
-                                index = ret.index + ret[0].length;
-                                head = jstext.slice(0, index);
-                                tail = jstext.slice(index);
+                                var index = ret.index + ret[0].length;
+                                var head = jstext.slice(0, index);
+                                var tail = jstext.slice(index);
                                 jstext = head + "e = window.drawhookcanvas(e,this._imageModel);" + tail;
                                 console.log("[UserScript] Injection: patch_3 injected successful " + srimgc.src);
                             }
@@ -508,18 +489,6 @@ var addbtnfunc;
                                 console.log("[UserScript] Injection: patch_4 injected successful " + srimgc.src);
                                 setTimeout(addbtnfunc, 3000);
                             }
-
-                            ret = func_encodeVertex.exec(jstext);
-
-                            if (ret)
-                            {
-                                index = ret.index + ret[0].length;
-                                head = jstext.slice(0, index);
-                                tail = jstext.slice(index);
-                                //jstext = head + "debugger;" + tail;
-                                console.log("[UserScript] Te peguei! " + srimgc.src);
-                            }
-
                             //ret = func_test.exec(jstext)
                             var idx = 0;
                             // while (ret = func_test.exec(jstext))

@@ -62,6 +62,17 @@ namespace pluginfbx
 		return getRealUpdateCallback(callback->getNestedCallback());		
 	}
 
+	bool WriterNodeVisitor::hasSkeletonParent(const osg::Node& object)
+	{
+		if (dynamic_cast<const Skeleton*>(&object))
+			return true;
+
+		if (object.getNumParents() == 0)
+			return false;
+
+		return hasSkeletonParent(*object.getParent(0));
+	}
+
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
 	{
 		ref_ptr<RigGeometry> rigGeometry = dynamic_cast<RigGeometry*>(&geometry);
@@ -183,13 +194,20 @@ namespace pluginfbx
 		// Set transforms for node
 		osg::Matrix matrix = node.getMatrix();
 
-		// Fix for sketchfab coordinates
+		// Fix for sketchfab coordinates + adicional scale based on parameters
 		if (isFirstMatrix)
 		{
 			osg::Matrix matrix2;
 			matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 			matrix.preMult(matrix2);
 			node.setMatrix(matrix);
+
+		}
+
+		// Scale skeletons based on parameter. Only 1 per hierarchy is scaled.
+		if (skeleton && skeleton->getNumParents() > 0 && !hasSkeletonParent(*skeleton->getParent(0)))
+		{
+			matrix = matrix * Matrix::scale(_scaleSkeleton, _scaleSkeleton, _scaleSkeleton);
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
@@ -231,9 +249,12 @@ namespace pluginfbx
 		}
 
 		// Process UpdateMatrixTransform and UpdateBone Callbacks last
-		ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
-		if (nodeCallback)
-			applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
+		if (!_ignoreAnimations)
+		{
+			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
+			if (nodeCallback)
+				applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
+		}
 
 		traverse(node);
 
