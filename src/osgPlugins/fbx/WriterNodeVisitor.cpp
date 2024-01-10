@@ -236,31 +236,28 @@ namespace pluginfbx
 		osg::Quat rot, so;
 		FbxAMatrix mat;
 
-		//if (isFirstMatrix || _ignoreBones || _exportFullHierarchy || skeleton || bone)
-		//{
-		//	_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
-		//	parent->AddChild(_curFbxNode);
+		if (isFirstMatrix || _ignoreBones || _exportFullHierarchy || skeleton || bone)
+		{
+			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
+			parent->AddChild(_curFbxNode);
 
-		//	matrix.decompose(pos, rot, scl, so);
-		//	FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-		//	mat.SetQ(q);
-		//	FbxVector4 vec4 = mat.GetR();
+			if (skeleton && !_exportFullHierarchy) // Need to reconstruct skeleton transforms for non-full hierarchy
+			{
+				Matrix matrixSkeletonTransform;
+				if (skeleton->getNumParents() > 0)
+					matrixSkeletonTransform = buildParentMatrices(*skeleton->getParent(0));
+				matrix = matrixSkeletonTransform * matrix;
+			}
 
-		//	_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-		//	_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
-		//	_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
-		//}
-		_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
-		parent->AddChild(_curFbxNode);
+			matrix.decompose(pos, rot, scl, so);
+			FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+			mat.SetQ(q);
+			FbxVector4 vec4 = mat.GetR();
 
-		matrix.decompose(pos, rot, scl, so);
-		FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-		mat.SetQ(q);
-		FbxVector4 vec4 = mat.GetR();
-
-		_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-		_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
-		_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+			_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+			_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+		}
 
 		if (isFirstMatrix)
 		{

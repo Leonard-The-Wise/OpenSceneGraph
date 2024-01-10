@@ -842,7 +842,7 @@ namespace pluginfbx
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry
-		if (dynamic_cast<const RigGeometry*>(&geometry))
+		if (!_exportFullHierarchy && dynamic_cast<const RigGeometry*>(&geometry))
 		{
 			transformMatrix = getMatrixFromSkeletonToGeometry(geometry);
 		}
