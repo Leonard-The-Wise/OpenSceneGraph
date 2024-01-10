@@ -230,8 +230,6 @@ namespace pluginfbx
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
 		// so we can see matrix groups when no bone is present.
-		// But if we aren't creating all matrixes, at least we must apply previous
-		// transformations to bones (or current node), etc.
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
 		FbxAMatrix mat;
@@ -241,7 +239,9 @@ namespace pluginfbx
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
 
-			if (skeleton && !_exportFullHierarchy) // Need to reconstruct skeleton transforms for non-full hierarchy
+			// Need to reconstruct skeleton transforms for non-full hierarchy
+			if (skeleton && !_exportFullHierarchy
+				&& (skeleton->getNumParents() == 0 || skeleton->getNumParents() > 0 && !hasSkeletonParent(*skeleton->getParent(0)))) 
 			{
 				Matrix matrixSkeletonTransform;
 				if (skeleton->getNumParents() > 0)
