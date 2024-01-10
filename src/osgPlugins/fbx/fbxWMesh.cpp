@@ -755,26 +755,10 @@ namespace pluginfbx
 		}
 	}
 
-	static osg::Matrix buildParentMatrixes(const osg::Node& object)
+
+	void WriterNodeVisitor::snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode)
 	{
-		osg::Matrix mult;
-		if (object.getNumParents() > 0)
-		{
-			mult = buildParentMatrixes(*object.getParent(0));
-		}
-
-		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
-		{
-			osg::Matrix m = matrixObj->getMatrix();
-			return mult * m;
-		}
-
-		return mult;
-	}
-
-	static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode)
-	{
-		osg::Matrix matrix = buildParentMatrixes(geometry);
+		osg::Matrix matrix = buildParentMatrices(geometry);
 
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;

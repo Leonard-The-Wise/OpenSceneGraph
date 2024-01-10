@@ -73,6 +73,23 @@ namespace pluginfbx
 		return hasSkeletonParent(*object.getParent(0));
 	}
 
+	osg::Matrix WriterNodeVisitor::buildParentMatrices(const osg::Node& object)
+	{
+		osg::Matrix mult;
+		if (object.getNumParents() > 0)
+		{
+			mult = buildParentMatrices(*object.getParent(0));
+		}
+
+		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
+		{
+			osg::Matrix m = matrixObj->getMatrix();
+			return mult * m;
+		}
+
+		return mult;
+	}
+
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
 	{
 		ref_ptr<RigGeometry> rigGeometry = dynamic_cast<RigGeometry*>(&geometry);
@@ -205,31 +222,32 @@ namespace pluginfbx
 		}
 
 		// Scale skeletons based on parameter. Only 1 per hierarchy is scaled.
-		if (skeleton && skeleton->getNumParents() > 0 && !hasSkeletonParent(*skeleton->getParent(0)))
+		if (skeleton && (skeleton->getNumParents() == 0 || skeleton->getNumParents() > 0 && !hasSkeletonParent(*skeleton->getParent(0))))
 		{
 			matrix = matrix * Matrix::scale(_scaleSkeleton, _scaleSkeleton, _scaleSkeleton);
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
-		// so we can see matrix groups when no bone is present
+		// so we can see matrix groups when no bone is present.
+		// But if we aren't creating all matrixes, at least we must apply previous
+		// transformations to bones (or current node), etc.
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+
 		if (isFirstMatrix || _ignoreBones || _exportFullHierarchy || skeleton || bone)
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
 
-			osg::Vec3d pos, scl;
-			osg::Quat rot, so;
-
 			matrix.decompose(pos, rot, scl, so);
-			_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
-
 			FbxAMatrix mat;
 			FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
 			mat.SetQ(q);
 			FbxVector4 vec4 = mat.GetR();
 
+			_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
 			_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 		}
 
 		if (isFirstMatrix)
@@ -249,7 +267,7 @@ namespace pluginfbx
 		}
 
 		// Process UpdateMatrixTransform and UpdateBone Callbacks last
-		if (!_ignoreAnimations)
+		if (!_ignoreAnimations && !skeleton)
 		{
 			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
 			if (nodeCallback)

@@ -205,6 +205,10 @@ namespace pluginfbx
 
         static bool hasSkeletonParent(const osg::Node& object);
 
+        static osg::Matrix buildParentMatrices(const osg::Node& object);
+
+        static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
+
         /**
         *  Fill the faces field of the mesh and call buildMesh().
         *  \param name the name to assign to the Fbx Mesh
