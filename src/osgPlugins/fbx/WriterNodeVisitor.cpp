@@ -84,7 +84,7 @@ namespace pluginfbx
 		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
 		{
 			osg::Matrix m = matrixObj->getMatrix();
-			return mult * m;
+			return m * mult;
 		}
 
 		return mult;
