@@ -53,11 +53,13 @@ Defaultly, the plugin will try to decompress vertices and texcoords because most
 
 You can also ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging, use it.
 
-And also, by default we "compact" the OpenSceneGraph hierarchy nodes, by placing all meshes on a single Root and then applying the skeleton on it's own hierarchy. This usually works but not for every model. So if anything goes wrong, you can try to export with the `-O ExportFullHierarchy` option.
+And also, by default we try to "compact" the OpenSceneGraph hierarchy nodes, by placing all meshes on a single Root and then applying the skeleton on it's own hierarchy. This usually works but not for every model. So if anything goes wrong, you can try to export with the `-O ExportFullHierarchy` option.
 
 Finally, if everything is failing: like, your rigging won't export correctly, meshes looks weirdly rotated or distorted, you may want to use `-O ExportOriginal`, so NO PROCESSING will be done on the original hierarchy. This also disables exporting the skeleton, but it WILL reconstruct all bone nodes as normal "group" nodes (visible in blender like a series of black dots in the air - just click the dots and you'll select the corresponding group), so you can still visualize how it would be like. And also will skip animations, so you can see exactly what the scene looks like originally and make the appropriate adjust on the export parameters.
 
 I had to do this way, because every model has its own peculiarity, many of them are made on different tools with different coordinate and metric systems (XYZ, or ZXY, or YXZ and some units are in cm, others in m, etc) and the model file don't have this information inside. Sketchfab uses some metadata to correct them for rendering, which we can't yet process. Hence the need for adjustments.
+
+What I recommend you to do is to begin exporting models with `-O ExportOriginal` and incrementally change options later, like for example, turning off `-O ExportOriginal` (to disable full hierarchy) but enabling `-O IgnoreRigging`. And then, `-O IgnoreAnimations` if something fails, etc., this way you'll have a baseline for what parameters to use, what rotations you'll need to apply for the model to match the skeleton, etc., rather than trying to figure out everything at once. Sorry if this process can't be automated, because OpenSceneGraph and WebGL processes models much differently and has numerous peculiarities and also Sketchfab uses metadata to further process models before displaying which we cannot replicate so easily, so not every export will be trivial. And for more refined adjustments you always have a standard 3D editor anyway.
 
 ### Extra tip:
 

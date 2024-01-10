@@ -121,11 +121,6 @@ namespace pluginfbx
         virtual void apply(osg::Group& node);
         virtual void apply(osg::MatrixTransform& node);
 
-        //virtual void apply(osg::Drawable& node);
-        //virtual void apply(osgAnimation::Skeleton& node);
-        //virtual void apply(osgAnimation::Bone& node);
-
-
         void traverse(osg::Node& node)
         {
             osg::NodeVisitor::traverse(node);
@@ -208,6 +203,8 @@ namespace pluginfbx
         static osg::Matrix buildParentMatrices(const osg::Node& object);
 
         static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
+
+        static osg::Matrix getMatrixFromSkeletonToGeometry(const osg::Node& node);
 
         /**
         *  Fill the faces field of the mesh and call buildMesh().
@@ -298,7 +295,7 @@ namespace pluginfbx
         typedef std::map<osg::ref_ptr<osgAnimation::RigGeometry>, FbxNode*> RiggedMeshMap;      // Maps OSG Rigged Geometry to FBX meshes
         typedef std::map<osg::ref_ptr<osgAnimation::MorphGeometry>, FbxNode*> MorphedMeshMap;   // Maps OSG Morphed Geometry to FBX meshes
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
-        typedef std::unordered_map<std::string, BonePair> BoneNodeMap;                                 // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
+        typedef std::unordered_map<std::string, BonePair> BoneNodeMap;                                     // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
         typedef std::unordered_map<std::string, std::shared_ptr<UpdateMatrixNodes>> MatrixAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
 
         RiggedMeshMap _riggedMeshMap;
@@ -309,6 +306,9 @@ namespace pluginfbx
 
         // Keep track of created materials
         std::unordered_map<const osg::Material*, MaterialParser*> _materialMap;
+
+        // Keep track of transform matrices
+        std::deque<std::pair<std::string, osg::Matrix>> _matrixStack;
 
     };
 

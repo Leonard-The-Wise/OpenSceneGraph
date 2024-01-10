@@ -1668,7 +1668,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
             {
                 for (unsigned int i = 0; i < t->getNumElements(); ++i)
                 {
-                    (*t)[i] = (*t)[i] * i;
+                    (*t)[i] = TIMEHACK * i; // (*t)[i] * i;
                 }
             }
         }
@@ -1749,7 +1749,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
             {
                 for (unsigned int i = 0; i < t->getNumElements(); ++i)
                 {
-                    (*t)[i] = (*t)[i] * i;
+                    (*t)[i] = TIMEHACK * i; // (*t)[i] * i;
                 }
             }
         }

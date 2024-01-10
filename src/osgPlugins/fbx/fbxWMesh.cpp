@@ -776,6 +776,26 @@ namespace pluginfbx
 		meshNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 	}
 
+	osg::Matrix WriterNodeVisitor::getMatrixFromSkeletonToGeometry(const osg::Node& node)
+	{
+		osg::Matrix retMatrix;
+		if (dynamic_cast<const Skeleton*>(&node))
+		{
+			return dynamic_cast<const Skeleton*>(&node)->getMatrix();
+		}
+		else if (dynamic_cast<const MatrixTransform*>(&node))
+		{
+			if (node.getNumParents() > 0)
+				return getMatrixFromSkeletonToGeometry(*node.getParent(0)) * dynamic_cast<const MatrixTransform*>(&node)->getMatrix();
+			else
+				return dynamic_cast<const MatrixTransform*>(&node)->getMatrix();
+		}
+		else if (node.getNumParents() > 0)
+			return getMatrixFromSkeletonToGeometry(*node.getParent(0));
+
+		return retMatrix;
+	}
+
 	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser)
 	{
 		// Create a node for this mesh and apply it to Mesh Root
@@ -785,11 +805,11 @@ namespace pluginfbx
 		FbxNode* meshParent = _exportFullHierarchy ? _curFbxNode : _MeshesRoot;
 		meshParent->AddChild(meshNode);
 
-		if (!_exportFullHierarchy)
-		{
-			// Make meshes snap to parent transformations
-			snapMeshToParent(geometry, meshNode);
-		}
+		//if (!_exportFullHierarchy)
+		//{
+		//	// Make meshes snap to parent transformations
+		//	snapMeshToParent(geometry, meshNode);
+		//}
 
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());
 
@@ -814,18 +834,24 @@ namespace pluginfbx
 		// Option to rotate rigged and morphed meshes on X axis
 		osg::Matrix transformMatrix;
 
-		// Fix for rigged geometry under bones influence
-		if (!_ignoreBones && dynamic_cast<const RigGeometry*>(&geometry))
+		// For all ordinary geometry, compute matrix from transform.
+		if (!_exportFullHierarchy && _matrixStack.size() > 0)
 		{
-			transformMatrix.makeRotate(osg::inDegrees(-90.0), osg::X_AXIS);
+			std::string matrixName = _matrixStack.back().first;
+			transformMatrix = _matrixStack.back().second;
 		}
 
-		// Addicional rotate axis based on parameters
+		// Fix for rigged geometry, get matrix from skeleton to geometry
+		if (dynamic_cast<const RigGeometry*>(&geometry))
+		{
+			transformMatrix = getMatrixFromSkeletonToGeometry(geometry);
+		}
+
+		// Additional rotate axis based on parameters
 		osg::Quat q;
 		q.makeRotate(osg::DegreesToRadians(_rotateXAxis), X_AXIS);
 		transformMatrix.preMultRotate(q);
 
-		// Addicional rotation based on parameters.
 		// If we are exporting the full hierarchy, we need to compensate (divide) the scale amount of _scaleSkeleton factor)
 		// because we already scaled the node containing the meshes (skeleton)
 		double realScale = _scaleModel;

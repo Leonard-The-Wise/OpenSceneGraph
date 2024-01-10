@@ -112,7 +112,7 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
     if (options)
     {
         if (!options->getOptionString().empty())
-            osg::notify(osg::NOTICE) << "Parsing options: " << options->getOptionString() << std::endl;
+            osg::notify(osg::NOTICE) << "Parsing options:" << options->getOptionString() << std::endl;
         std::istringstream iss(options->getOptionString());
         std::string opt;
         while (iss >> opt)
