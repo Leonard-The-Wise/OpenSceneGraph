@@ -2288,8 +2288,8 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
         if (!verticesConverted)
         {
-            OSG_WARN << "WARNING: Failed to decode vertex array! Try to import model with flag -O disableIndexDecompress (or turn it off if you already enabled it)" << std::endl;
-            return;
+            OSG_FATAL << "FATAL: Failed to decode vertex array! Try to import model with flag -O disableVertexDecompress (or turn it off if you already enabled it)" << std::endl;
+            throw ("Exiting");
         }
 
         geometry->setVertexArray(verticesConverted);
