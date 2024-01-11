@@ -2024,7 +2024,6 @@ void OsgjsParser::decodeTexture(const std::string& fileName, osg::ref_ptr<osg::I
     vec.resize(imageSize);
     std::copy(imageData, imageData + imageSize, vec.begin());
 
-    int decodesize = sqrt(image->getTotalSizeInBytes() / 4);
     ParserHelper::decodeImage(imageWidth, vec, vecOut);
 
     image->setImage(imageWidth, imageHeight, imageDept, textureFormat, pixelFormat, GL_UNSIGNED_BYTE, const_cast<unsigned char*>(vecOut.data()), Image::NO_DELETE);

@@ -776,7 +776,7 @@ namespace pluginfbx
 		meshNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 	}
 
-	osg::Matrix WriterNodeVisitor::getMatrixFromSkeletonToGeometry(const osg::Node& node)
+	osg::Matrix WriterNodeVisitor::getMatrixFromSkeletonToNode(const osg::Node& node)
 	{
 		osg::Matrix retMatrix;
 		if (dynamic_cast<const Skeleton*>(&node))
@@ -786,12 +786,12 @@ namespace pluginfbx
 		else if (dynamic_cast<const MatrixTransform*>(&node))
 		{
 			if (node.getNumParents() > 0)
-				return getMatrixFromSkeletonToGeometry(*node.getParent(0)) * dynamic_cast<const MatrixTransform*>(&node)->getMatrix();
+				return dynamic_cast<const MatrixTransform*>(&node)->getMatrix() * getMatrixFromSkeletonToNode(*node.getParent(0));
 			else
 				return dynamic_cast<const MatrixTransform*>(&node)->getMatrix();
 		}
 		else if (node.getNumParents() > 0)
-			return getMatrixFromSkeletonToGeometry(*node.getParent(0));
+			return getMatrixFromSkeletonToNode(*node.getParent(0));
 
 		return retMatrix;
 	}
@@ -839,9 +839,9 @@ namespace pluginfbx
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry
-		if (!_exportFullHierarchy && rig && !rigMorph)
+		if (rig && !rigMorph)
 		{
-			transformMatrix = getMatrixFromSkeletonToGeometry(geometry);
+			transformMatrix = getMatrixFromSkeletonToNode(geometry);
 		}
 
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]

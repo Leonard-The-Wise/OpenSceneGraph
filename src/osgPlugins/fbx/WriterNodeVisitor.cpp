@@ -214,7 +214,7 @@ namespace pluginfbx
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
 
 		if (skeleton)
-			nodeName = node.getName().empty() ? "Armature" : node.getName();
+			nodeName = node.getName().empty() ? "Mesh Skeleton" : node.getName();
 		else if (bone)
 			nodeName = node.getName().empty() ? "DefaultBone" : node.getName();
 		else
@@ -252,6 +252,11 @@ namespace pluginfbx
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
+
+			if (skeleton)
+			{
+				_skeletonNodes.emplace(_curFbxNode);
+			}
 
 			// Need to reconstruct skeleton transforms for non-full hierarchy
 			if (skeleton && !_exportFullHierarchy

@@ -147,6 +147,30 @@ namespace pluginfbx
 		}
 	}
 
+	void AddFloatKeyframes(osgAnimation::FloatLinearChannel* transformChannel,
+		FbxBlendShapeChannel* blendShapeChannel, FbxAnimLayer* fbxAnimLayer)
+	{
+		if (!transformChannel || !blendShapeChannel)
+		{
+			return;
+		}
+		FbxAnimCurve* curve = blendShapeChannel->DeformPercent.GetCurve(fbxAnimLayer, true);
+
+		osgAnimation::FloatKeyframeContainer* keyframes = transformChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+
+		for (unsigned int i = 0; i < keyframes->size(); ++i)
+		{
+			const osgAnimation::FloatKeyframe& keyframe = (*keyframes)[i];
+
+			FbxTime fbxTime;
+			fbxTime.SetSecondDouble(keyframe.getTime());
+
+			float value = keyframe.getValue();
+
+			curve->KeySet(curve->KeyAdd(fbxTime), fbxTime, value, FbxAnimCurveDef::eInterpolationConstant);
+		}
+	}
+
 	void WriterNodeVisitor::createAnimationLayer(const osg::ref_ptr<osgAnimation::Animation> osgAnimation)
 	{
 		std::string animationName = osgAnimation->getName().c_str();
@@ -156,27 +180,55 @@ namespace pluginfbx
 		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, animationName.c_str());
 		animStack->AddMember(fbxAnimLayer);
 
+		bool NotImplemented1(false), NotImplemented2(false);
 
 		for (auto& channel : osgAnimation->getChannels()) 
 		{
-			std::string targetBoneName = channel->getTargetName();
+			std::string targetName = channel->getTargetName();
 
-			// FIXME: Add Morph target
-			auto boneAnimCurveNodeIter = _matrixAnimCurveMap.find(targetBoneName);
-			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end())
+			auto boneAnimCurveNodeIter = _matrixAnimCurveMap.find(targetName);
+			auto morphAnimNodeIter = _blendShapeAnimations.find(targetName);
+			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end() && morphAnimNodeIter == _blendShapeAnimations.end())
 			{
 				continue;
 			}
 
-			auto& boneAnimCurveNodes = boneAnimCurveNodeIter->second;
+			if (boneAnimCurveNodeIter != _matrixAnimCurveMap.end())
+			{
+				auto& boneAnimCurveNodes = boneAnimCurveNodeIter->second;
 
-			if (auto transformChannel = dynamic_pointer_cast<Vec3LinearChannel>(channel)) 
+				if (auto transformChannel = dynamic_pointer_cast<Vec3LinearChannel>(channel))
+				{
+					AddVec3Keyframes(transformChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer, transformChannel->getName());
+				}
+				else if (auto rotateChannel = dynamic_pointer_cast<QuatSphericalLinearChannel>(channel))
+				{
+					AddQuatSlerpKeyframes(rotateChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer);
+				}
+			} 
+			else if (morphAnimNodeIter != _blendShapeAnimations.end())
 			{
-				AddVec3Keyframes(transformChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer, transformChannel->getName());
+
+				if (auto morphChannel = dynamic_pointer_cast<FloatLinearChannel>(channel))
+				{
+					AddFloatKeyframes(morphChannel, morphAnimNodeIter->second, fbxAnimLayer);
+				}
 			}
-			else if (auto rotateChannel = dynamic_pointer_cast<QuatSphericalLinearChannel>(channel))
+
+			// TODO: Add these channels (examples needed)
+			else if (auto floatCubicChannel = dynamic_pointer_cast<FloatCubicBezierChannel>(channel))
 			{
-				AddQuatSlerpKeyframes(rotateChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer);
+				if (!NotImplemented1) // Avoid message spam
+					OSG_WARN << "WARNING: Animations based on FloatCubicBezierChannel are not yet implemented!" << std::endl;
+
+				NotImplemented1 = true;
+			}
+			else if (auto vec3CubicChannel = dynamic_pointer_cast<Vec3CubicBezierChannel>(channel))
+			{
+				if (!NotImplemented2) // Avoid message spam
+					OSG_WARN << "WARNING: Animations based on Vec3CubicBezierChannel are not yet implemented!" << std::endl;
+
+				NotImplemented2 = true;
 			}
 		}
 	}

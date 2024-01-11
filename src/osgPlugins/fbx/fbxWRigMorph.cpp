@@ -15,6 +15,7 @@
 
 #include <climits>                     // required for UINT_MAX
 #include <cassert>
+#include <map>
 #include <osg/CullFace>
 #include <osg/MatrixTransform>
 #include <osg/NodeVisitor>
@@ -64,6 +65,10 @@ namespace pluginfbx
 		// For any matrixTransform, applies rotations, scales and translations to it
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&matrixTransform);
 
+		osg::Matrix nodeMatrix;
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+
 		if (_exportFullHierarchy || (!_ignoreBones && bone))
 		{
 			// Should have only 1 of each or a matrix...
@@ -71,68 +76,49 @@ namespace pluginfbx
 			{
 				if (auto translateElement = dynamic_pointer_cast<StackedTranslateElement>(stackedTransform))
 				{
-					FbxDouble3 translation(translateElement->getTranslate().x(),
-						translateElement->getTranslate().y(),
-						translateElement->getTranslate().z());
-					fbxNode->LclTranslation.Set(translation);
+					nodeMatrix.preMultTranslate(translateElement->getTranslate());
 				}
 				else if (auto rotateElement = dynamic_pointer_cast<StackedQuaternionElement>(stackedTransform))
 				{
-					osg::Quat rot = rotateElement->getQuaternion();
-					FbxAMatrix mat;
-					FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-					mat.SetQ(q);
-					FbxVector4 vec4 = mat.GetR();
-					fbxNode->LclRotation.Set(vec4);
+					nodeMatrix.preMultRotate(rotateElement->getQuaternion());
 				}
 				else if (auto scaleElement = dynamic_pointer_cast<StackedScaleElement>(stackedTransform))
 				{
-					// Associe scaleElement com scaleCurveNode
-					FbxDouble3 scale(scaleElement->getScale().x(),
-						scaleElement->getScale().y(),
-						scaleElement->getScale().z());
-
-					fbxNode->LclScaling.Set(scale);
+					nodeMatrix.preMultScale(scaleElement->getScale());
 				}
 				else if (auto rotateAxisElement = dynamic_pointer_cast<StackedRotateAxisElement>(stackedTransform))
 				{
 					osg::Vec3 axis = rotateAxisElement->getAxis();
 					float angle = rotateAxisElement->getAngle();
-
-					osg::Quat rot;
-					rot.makeRotate(angle, axis);
-
-					FbxAMatrix mat;
-					FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-					mat.SetQ(q);
-					FbxVector4 vec4 = mat.GetR();
-					fbxNode->LclRotation.Set(vec4);
+					osg::Quat rotQuat;
+					rotQuat.makeRotate(angle, axis);
+					nodeMatrix.preMultRotate(rotQuat);
 				}
 				else if (auto matrixElement = dynamic_pointer_cast<StackedMatrixElement>(stackedTransform))
 				{
-					osg::Matrix matrix = matrixElement->getMatrix();
-					osg::Vec3d pos, scl;
-					osg::Quat rot, so;
-
-					matrix.decompose(pos, rot, scl, so);
-					_curFbxNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-					_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
-
-					FbxAMatrix mat;
-
-					FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-					mat.SetQ(q);
-					FbxVector4 vec4 = mat.GetR();
-
-					_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+					nodeMatrix = matrixElement->getMatrix() * nodeMatrix;
 				}
 			}
+
+			// Apply accumulated transforms.
+			nodeMatrix.decompose(pos, rot, scl, so);
+			FbxDouble3 translation(pos.x(), pos.y(), pos.z());
+			FbxDouble3 scale(scl.x(), scl.y(), scl.z());
+			FbxAMatrix mat;
+			FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+			mat.SetQ(q);
+			FbxVector4 rotation = mat.GetR();
+
+			fbxNode->LclTranslation.Set(translation);
+			fbxNode->LclScaling.Set(scale);
+			fbxNode->LclRotation.Set(rotation);
 		}
 	}
 
 	void WriterNodeVisitor::createMorphTargets(const osgAnimation::MorphGeometry* morphGeometry, FbxMesh* mesh, const osg::Matrix& transformMatrix)
 	{
-		FbxBlendShape* fbxBlendShape = FbxBlendShape::Create(_pSdkManager, morphGeometry->getName().c_str());
+		std::string morphGeometryName = morphGeometry->getName();
+		FbxBlendShape* fbxBlendShape = FbxBlendShape::Create(_pSdkManager, morphGeometryName.c_str());
 		mesh->AddDeformer(fbxBlendShape);
 
 		bool vertexFailedNotice(false);
@@ -140,6 +126,8 @@ namespace pluginfbx
 		{
 			const osg::Geometry* osgMorphTarget = morphGeometry->getMorphTarget(i).getGeometry();
 			FbxBlendShapeChannel* fbxChannel = FbxBlendShapeChannel::Create(_pSdkManager, osgMorphTarget->getName().c_str());
+
+			_blendShapeAnimations.emplace(osgMorphTarget->getName(), fbxChannel);
 
 			std::stringstream ss;
 			ss << osgMorphTarget->getName().c_str() << "_" << i;
@@ -463,17 +451,21 @@ namespace pluginfbx
 		}
 	}
 
-	void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh)
+	void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh, std::set<std::string>& emptyBoneNames)
 	{
 		FbxSkin* skinDeformer = FbxSkin::Create(_pSdkManager, "");
 
+		// Map all used bones to influence maps
 		for (const auto& influence : vim)
 		{
 			const std::string& boneName = influence.first;
 
 			BonePair bonePair;
 			if (_boneNodeSkinMap.find(boneName) != _boneNodeSkinMap.end())
+			{
 				bonePair = _boneNodeSkinMap.at(boneName);
+				emptyBoneNames.erase(boneName); // Mark bone as "found", ereasing from empty list
+			}
 
 			ref_ptr<osgAnimation::Bone> bone = bonePair.first;
 			FbxNode* fbxBoneNode = bonePair.second;
@@ -514,11 +506,49 @@ namespace pluginfbx
 		fbxMesh->AddDeformer(skinDeformer);
 	}
 
+	void WriterNodeVisitor::buildBindPose()
+	{
+		FbxPose* pose = FbxPose::Create(_pSdkManager, "Initial Pose");
+		pose->SetIsBindPose(true);
+
+		for (auto& entry : _boneNodeSkinMap)
+		{
+			BonePair bonePair = entry.second;
+			FbxNode* fbxBoneNode = bonePair.second;
+
+			FbxMatrix matrix = fbxBoneNode->EvaluateGlobalTransform();
+			int nodeIndex = pose->Add(fbxBoneNode, matrix);
+
+			if (nodeIndex == -1)
+				OSG_WARN << "WARNING: Failed to add node to Bind Pose: " << fbxBoneNode->GetName() << std::endl;
+		}
+
+		for (auto& skeleton : _skeletonNodes)
+		{
+			FbxMatrix matrix = skeleton->EvaluateGlobalTransform();
+			int nodeIndex = pose->Add(skeleton, matrix);
+
+			if (nodeIndex == -1)
+				OSG_WARN << "WARNING: Failed to add skeleton to Bind Pose: " << skeleton->GetName() << std::endl;
+		}
+
+		_pScene->AddPose(pose);
+	}
+
 	void WriterNodeVisitor::buildMeshSkin()
 	{
 		if (_riggedMeshMap.size() > 0)
 			OSG_NOTICE << "Processing rig and skinning... " << std::endl;
+		else
+			return;
 
+		std::set<std::string> emptyBoneNames;
+
+		// Make a set of known bone names to see if all are used
+		for (auto& nodeSkin : _boneNodeSkinMap)
+			emptyBoneNames.emplace(nodeSkin.first);
+
+		// Process meshes skinning
 		for (auto& entry : _riggedMeshMap)
 		{
 			const osgAnimation::VertexInfluenceMap* vim = entry.first->getInfluenceMap();
@@ -533,14 +563,32 @@ namespace pluginfbx
 			for (int index = 0; index < attributeCount; index++) {
 				FbxNodeAttribute* attribute = meshNode->GetNodeAttributeByIndex(index);
 
-				if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eMesh) {
+				if (attribute && attribute->GetAttributeType() == FbxNodeAttribute::eMesh) 
+				{
 					mesh = FbxCast<FbxMesh>(attribute);
 					break;
 				}
 			}
 
 			if (mesh)
-				applySkinning(*vim, mesh);
+			{
+				applySkinning(*vim, mesh, emptyBoneNames);
+			}
+			else
+				OSG_WARN << "WARNING: Vertex Influence without corresponding mesh" << std::endl;
+
+		}
+
+		// Construct bind pose
+		buildBindPose();
+
+		if (emptyBoneNames.size() > 0)
+		{
+			OSG_DEBUG << "DEBUG: The following bones are not influencing any vertex:" << std::endl;
+			for (auto& bone : emptyBoneNames)
+			{
+				OSG_DEBUG << "   - " << bone << std::endl;
+			}
 		}
 	}
 

@@ -204,7 +204,7 @@ namespace pluginfbx
 
         static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
 
-        static osg::Matrix getMatrixFromSkeletonToGeometry(const osg::Node& node);
+        static osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
         /**
         *  Fill the faces field of the mesh and call buildMesh().
@@ -217,7 +217,9 @@ namespace pluginfbx
         FbxNode* buildMesh(const osg::Geometry& geometry,
             const MaterialParser* materialParser);
 
-        void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
+        void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh, std::set<std::string>& emptyBoneNames);
+
+        void buildBindPose();
 
         void buildMeshSkin();
 
@@ -296,11 +298,13 @@ namespace pluginfbx
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
         typedef std::unordered_map<std::string, BonePair> BoneNodeMap;                                     // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
         typedef std::unordered_map<std::string, std::shared_ptr<UpdateMatrixNodes>> MatrixAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
+        typedef std::unordered_map<std::string, FbxBlendShapeChannel*> BlendShapeAnimMap;
 
         RiggedMeshMap _riggedMeshMap;
         MorphedMeshMap _MorphedMeshMap;
         BoneNodeMap _boneNodeSkinMap;
         MatrixAnimCurveMap _matrixAnimCurveMap;
+        BlendShapeAnimMap _blendShapeAnimations;
         osg::Matrix _firstMatrix;
 
         // Keep track of created materials
@@ -308,6 +312,9 @@ namespace pluginfbx
 
         // Keep track of transform matrices
         std::deque<std::pair<std::string, osg::Matrix>> _matrixStack;
+
+        // Keep track of created Skeletons
+        std::set<FbxNode*> _skeletonNodes;
 
     };
 
