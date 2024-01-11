@@ -800,7 +800,7 @@ namespace pluginfbx
 	{
 		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
 		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
-		const osgAnimation::MorphGeometry* rigMorph = dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry());
+		const osgAnimation::MorphGeometry* rigMorph = rig ? dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry()) : nullptr;
 
 		// Create a node for this mesh and apply it to Mesh Root
 		std::string meshName = geometry.getName();
@@ -835,8 +835,7 @@ namespace pluginfbx
 		// For all ordinary geometry, compute matrix from transform.
 		if (!_exportFullHierarchy && _matrixStack.size() > 0)
 		{
-			std::string matrixName = _matrixStack.back().first;
-			transformMatrix = _matrixStack.back().second;
+			transformMatrix = buildParentMatrices(geometry);
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry
