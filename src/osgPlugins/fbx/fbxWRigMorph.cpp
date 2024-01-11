@@ -61,7 +61,7 @@ namespace pluginfbx
 
 		_matrixAnimCurveMap.emplace(updateMatrixName, newMatrixAnim);
 
-		// For any matrixTransform that is a bone, applies rotations, scales and translations to it
+		// For any matrixTransform, applies rotations, scales and translations to it
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&matrixTransform);
 
 		if (_exportFullHierarchy || (!_ignoreBones && bone))

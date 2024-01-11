@@ -798,18 +798,16 @@ namespace pluginfbx
 
 	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser)
 	{
+		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
+		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
+		const osgAnimation::MorphGeometry* rigMorph = dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry());
+
 		// Create a node for this mesh and apply it to Mesh Root
 		std::string meshName = geometry.getName();
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
 
 		FbxNode* meshParent = _exportFullHierarchy ? _curFbxNode : _MeshesRoot;
 		meshParent->AddChild(meshNode);
-
-		//if (!_exportFullHierarchy)
-		//{
-		//	// Make meshes snap to parent transformations
-		//	snapMeshToParent(geometry, meshNode);
-		//}
 
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());
 
@@ -842,7 +840,7 @@ namespace pluginfbx
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry
-		if (!_exportFullHierarchy && dynamic_cast<const RigGeometry*>(&geometry))
+		if (!_exportFullHierarchy && rig && !rigMorph)
 		{
 			transformMatrix = getMatrixFromSkeletonToGeometry(geometry);
 		}
@@ -875,15 +873,12 @@ namespace pluginfbx
 		}
 
 		// Process morphed geometry
-		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
 		if (morph)
 			createMorphTargets(morph, mesh, transformMatrix);
 
 		// Look for morph geometries inside rig
-		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
 		if (rig)
 		{
-			const osgAnimation::MorphGeometry* rigMorph = dynamic_cast<const osgAnimation::MorphGeometry*>(rig->getSourceGeometry());
 			if (rigMorph)
 				createMorphTargets(rigMorph, mesh, transformMatrix);
 		}
