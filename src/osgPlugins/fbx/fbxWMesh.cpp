@@ -844,21 +844,6 @@ namespace pluginfbx
 			transformMatrix = getMatrixFromSkeletonToGeometry(geometry);
 		}
 
-		// Additional rotate axis based on parameters
-		osg::Quat q;
-		q.makeRotate(osg::DegreesToRadians(_rotateXAxis), X_AXIS);
-		transformMatrix.preMultRotate(q);
-
-		// If we are exporting the full hierarchy, we need to compensate (divide) the scale amount of _scaleSkeleton factor)
-		// because we already scaled the node containing the meshes (skeleton)
-		double realScale = _scaleModel;
-		if (_exportFullHierarchy && hasSkeletonParent(geometry))
-		{
-			realScale /= (_scaleSkeleton == 0 ? 1 : _scaleSkeleton);
-		}
-
-		transformMatrix = transformMatrix * Matrix::scale(realScale, realScale, realScale);
-
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
 		setControlPointAndNormalsAndUV(index_vert, mesh, transformMatrix);
 		mesh->GenerateNormals(true);

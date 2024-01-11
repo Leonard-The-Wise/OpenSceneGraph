@@ -94,7 +94,6 @@ namespace pluginfbx
             double rotateXAxis,
             bool exportFullHierarchy,
             double scaleModel,
-            double scaleSkeleton,
             bool flipUVs) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
             _pSdkManager(pSdkManager),
@@ -113,7 +112,6 @@ namespace pluginfbx
             _rotateXAxis(rotateXAxis),
             _exportFullHierarchy(exportFullHierarchy),
             _scaleModel(scaleModel),
-            _scaleSkeleton(scaleSkeleton),
             _flipUVs(flipUVs)
         {}
 
@@ -202,6 +200,8 @@ namespace pluginfbx
 
         static osg::Matrix buildParentMatrices(const osg::Node& object);
 
+        void applyGlobalTransforms(FbxNode* RootNode);
+
         static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
 
         static osg::Matrix getMatrixFromSkeletonToGeometry(const osg::Node& node);
@@ -282,7 +282,6 @@ namespace pluginfbx
         double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = 180.0º)
         bool _exportFullHierarchy;              // Tell the export engine to not bypass node hierarchy
         double _scaleModel;                     // Scales model by a given factor
-        double _scaleSkeleton;                  // Scales skeleton by a given factor
         bool _flipUVs;                          // Flip UVs on Y Axis
 
         ///Maintain geode state between visits to the geometry

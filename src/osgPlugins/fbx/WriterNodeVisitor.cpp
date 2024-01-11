@@ -90,6 +90,26 @@ namespace pluginfbx
 		return mult;
 	}
 
+	void WriterNodeVisitor::applyGlobalTransforms(FbxNode* RootNode)
+	{
+		osg::Matrix matrix;
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+		FbxAMatrix mat;
+
+		matrix.makeRotate(osg::DegreesToRadians(_rotateXAxis - 90.0), X_AXIS);
+		matrix.postMultScale(Vec3(_scaleModel, _scaleModel, _scaleModel));
+		
+		matrix.decompose(pos, rot, scl, so);
+		FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+		mat.SetQ(q);
+		FbxVector4 vec4 = mat.GetR();
+
+		RootNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+		RootNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+		RootNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+	}
+
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
 	{
 		ref_ptr<RigGeometry> rigGeometry = dynamic_cast<RigGeometry*>(&geometry);
@@ -166,8 +186,7 @@ namespace pluginfbx
 			//ignore the root node to maintain same hierarchy
 			_firstNodeProcessed = true;
 
-			_MeshesRoot = _curFbxNode;
-
+			FbxNode* RootNode = _curFbxNode;
 			
 			traverse(node);
 
@@ -183,6 +202,8 @@ namespace pluginfbx
 						applyAnimations(getRealUpdateCallback(nodeCallback));
 				}
 			}
+
+			applyGlobalTransforms(RootNode);
 		}
 	}
 
@@ -212,20 +233,13 @@ namespace pluginfbx
 		osg::Matrix matrix = node.getMatrix();
 		_matrixStack.push_back(std::make_pair(nodeName, matrix));
 
-		// Fix for sketchfab coordinates + adicional scale based on parameters
+		// Fix for sketchfab coordinates
 		if (isFirstMatrix)
 		{
 			osg::Matrix matrix2;
 			matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 			matrix.preMult(matrix2);
 			node.setMatrix(matrix);
-
-		}
-
-		// Scale skeletons based on parameter. Only 1 per hierarchy is scaled.
-		if (skeleton && (skeleton->getNumParents() == 0 || skeleton->getNumParents() > 0 && !hasSkeletonParent(*skeleton->getParent(0))))
-		{
-			matrix = matrix * Matrix::scale(_scaleSkeleton, _scaleSkeleton, _scaleSkeleton);
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones

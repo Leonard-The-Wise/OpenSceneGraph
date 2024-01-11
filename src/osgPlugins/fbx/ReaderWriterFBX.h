@@ -31,8 +31,6 @@ public:
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
         supportsOption("ExportFullHierarchy", "(Write option) Export models respecting the original full node hierarchy. Some models may need it.");
         supportsOption("ScaleModel", "(Write option) Scale model on X, Y and Z by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0)");
-        supportsOption("ScaleSkeleton", "(Write option) Scale skeleton on X, Y and Z by given factor. Use like -O ScaleSkeleton=Factor (eg: ScaleSkeleton=100.0)");
-        supportsOption("ScaleAll", "(Write option) Scale model and Skeleton on X, Y and Z by given factor. Use like -O ScaleAll=Factor (eg: ScaleAll=100.0)");
         supportsOption("FlipUVs", "(Write option) Flip Y axis of texture UV's.");
     }
 
