@@ -298,14 +298,14 @@ namespace pluginfbx
         typedef std::pair<osg::ref_ptr<osgAnimation::Bone>, FbxNode*> BonePair;
         typedef std::unordered_map<std::string, BonePair> BoneNodeMap;                                     // Map Bone name to respective OSG Bone and FBX Bone Node (FbxSkeleton)
         typedef std::unordered_map<std::string, std::shared_ptr<UpdateMatrixNodes>> MatrixAnimCurveMap;    // Maps updateBone names to corresponding bones and FbxNode
-        typedef std::unordered_map<std::string, FbxBlendShapeChannel*> BlendShapeAnimMap;
+        typedef std::map<std::string, FbxBlendShapeChannel*> BlendShapeAnimMap;
 
         RiggedMeshMap _riggedMeshMap;
         MorphedMeshMap _MorphedMeshMap;
         BoneNodeMap _boneNodeSkinMap;
         MatrixAnimCurveMap _matrixAnimCurveMap;
         BlendShapeAnimMap _blendShapeAnimations;
-        osg::Matrix _firstMatrix;
+        FbxNode* _firstMatrix;
 
         // Keep track of created materials
         std::unordered_map<const osg::Material*, MaterialParser*> _materialMap;

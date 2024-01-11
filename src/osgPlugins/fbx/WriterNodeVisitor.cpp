@@ -92,22 +92,32 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::applyGlobalTransforms(FbxNode* RootNode)
 	{
-		osg::Matrix matrix;
+		FbxAMatrix mainTransform = _firstMatrix->EvaluateGlobalTransform();
+
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
-		FbxAMatrix mat;
 
-		matrix.makeRotate(osg::DegreesToRadians(_rotateXAxis - 90.0), X_AXIS);
-		matrix.postMultScale(Vec3(_scaleModel, _scaleModel, _scaleModel));
-		
-		matrix.decompose(pos, rot, scl, so);
-		FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-		mat.SetQ(q);
-		FbxVector4 vec4 = mat.GetR();
+		osg::Matrix matrixOsg;
+		matrixOsg.makeRotate(osg::DegreesToRadians(_rotateXAxis), X_AXIS);
+		matrixOsg.postMultScale(Vec3(_scaleModel, _scaleModel, _scaleModel));
+		matrixOsg.decompose(pos, rot, scl, so);
 
-		RootNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-		RootNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
-		RootNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+		FbxQuaternion rotationQuat(rot.x(), rot.y(), rot.z(), rot.w());
+		FbxVector4 translate(0, 0, 0);
+		FbxVector4 scale(scl.x(), scl.y(), scl.z());
+
+		FbxAMatrix matMultiply;
+		matMultiply.SetTQS(translate, rotationQuat, scale);
+
+		mainTransform = mainTransform * matMultiply;
+
+		FbxVector4 rotationFinal = mainTransform.GetR();
+		FbxVector4 positionFinal = mainTransform.GetT();
+		FbxVector4 scaleFinal = mainTransform.GetS();
+
+		_firstMatrix->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+		_firstMatrix->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+		_firstMatrix->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
 	}
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
@@ -240,6 +250,8 @@ namespace pluginfbx
 			matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 			matrix.preMult(matrix2);
 			node.setMatrix(matrix);
+
+			_firstMatrix = _curFbxNode;
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones

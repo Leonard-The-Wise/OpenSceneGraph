@@ -125,12 +125,19 @@ namespace pluginfbx
 		for (unsigned int i = 0; i < morphGeometry->getMorphTargetList().size(); ++i)
 		{
 			const osg::Geometry* osgMorphTarget = morphGeometry->getMorphTarget(i).getGeometry();
-			FbxBlendShapeChannel* fbxChannel = FbxBlendShapeChannel::Create(_pSdkManager, osgMorphTarget->getName().c_str());
+			std::string morphTargetName = osgMorphTarget->getName();
+			FbxBlendShapeChannel* fbxChannel = FbxBlendShapeChannel::Create(_pSdkManager, morphTargetName.c_str());
+			fbxBlendShape->AddBlendShapeChannel(fbxChannel);
 
-			_blendShapeAnimations.emplace(osgMorphTarget->getName(), fbxChannel);
+			if (_blendShapeAnimations.find(morphTargetName) != _blendShapeAnimations.end())
+			{
+				OSG_WARN << "Found duplicate morph target: " << morphTargetName << ". Ignoring..." << std::endl;
+				continue;
+			}
+			_blendShapeAnimations.emplace(morphTargetName, fbxChannel);
 
 			std::stringstream ss;
-			ss << osgMorphTarget->getName().c_str() << "_" << i;
+			ss << morphTargetName << "_" << i;
 			FbxShape* fbxShape = FbxShape::Create(_pSdkManager, ss.str().c_str());
 			fbxChannel->AddTargetShape(fbxShape);
 
