@@ -265,9 +265,10 @@ namespace pluginfbx
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
 
-			if (skeleton)
+
+			if (skeleton || bone)
 			{
-				_skeletonNodes.emplace(_curFbxNode);
+				_skeletonNodes.push_back(_curFbxNode);
 			}
 
 			// Need to reconstruct skeleton transforms for non-full hierarchy

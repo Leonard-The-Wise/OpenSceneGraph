@@ -151,7 +151,7 @@ namespace osgJSONParser
         std::string _filesBasePath;
 
         // Materials from model_info.json and texture_info.json
-        MaterialFile _meshMaterials2;
+        MaterialFile2 _meshMaterials2;
 
         std::set<std::string> _notFoundTextures; // Keep track of not found textures to avoid multiple warnings
 

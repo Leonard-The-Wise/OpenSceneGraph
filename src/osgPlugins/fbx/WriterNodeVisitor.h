@@ -321,8 +321,8 @@ namespace pluginfbx
         // Keep track of transform matrices
         std::deque<std::pair<std::string, osg::Matrix>> _matrixStack;
 
-        // Keep track of created Skeletons
-        std::set<FbxNode*> _skeletonNodes;
+        // Keep track of created Skeletons and bones
+        std::vector<FbxNode*> _skeletonNodes;
 
     };
 

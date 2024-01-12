@@ -515,31 +515,38 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::buildBindPose()
 	{
-		FbxPose* pose = FbxPose::Create(_pSdkManager, "Initial Pose");
+		FbxPose* pose = FbxPose::Create(_pScene, "Initial Pose");
 		pose->SetIsBindPose(true);
 
-		for (auto& entry : _boneNodeSkinMap)
+		for (auto& fbxBoneNode : _skeletonNodes)
 		{
-			BonePair bonePair = entry.second;
-			FbxNode* fbxBoneNode = bonePair.second;
-
 			FbxMatrix matrix = fbxBoneNode->EvaluateGlobalTransform();
 			int nodeIndex = pose->Add(fbxBoneNode, matrix);
 
 			if (nodeIndex == -1)
 				OSG_WARN << "WARNING: Failed to add node to Bind Pose: " << fbxBoneNode->GetName() << std::endl;
 		}
-
-		for (auto& skeleton : _skeletonNodes)
-		{
-			FbxMatrix matrix = skeleton->EvaluateGlobalTransform();
-			int nodeIndex = pose->Add(skeleton, matrix);
-
-			if (nodeIndex == -1)
-				OSG_WARN << "WARNING: Failed to add skeleton to Bind Pose: " << skeleton->GetName() << std::endl;
-		}
-
 		_pScene->AddPose(pose);
+
+		FbxUserNotification* status = FbxUserNotification::Create(_pSdkManager, "", "");
+		bool success = pose->IsValidBindPoseVerbose(_pScene->GetRootNode(), status);
+
+		if (!success)
+		{
+			int numNotifications = status->GetNbEntries();
+
+			for (int i = 0; i < numNotifications; ++i) 
+			{
+				const FbxAccumulatorEntry* entry = status->GetEntry(i);
+				OSG_WARN << "Bind pose error: " << entry->GetDescription() << std::endl;
+				
+				for (int j = 0; j < entry->GetDetailsCount(); j++)
+				{
+					OSG_WARN << "      - " << entry->GetDetail(j)->Buffer() << std::endl;
+				}
+				
+			}
+		}
 	}
 
 	void WriterNodeVisitor::buildMeshSkin()

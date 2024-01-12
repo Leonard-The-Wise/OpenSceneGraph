@@ -2208,7 +2208,7 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, cons
         for (auto& channel : knownMaterial.Channels)
         {
             std::string channelName = channel.first;
-            ChannelInfo channelInfo = channel.second;
+            ChannelInfo2 channelInfo = channel.second;
 
             if (!channelInfo.Enable)
                 continue;

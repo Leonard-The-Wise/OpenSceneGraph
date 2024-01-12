@@ -5,13 +5,167 @@
 #include "OsgjsParserHelper.h"
 #include "MaterialParser.h"
 
+#include "jpcre2.hpp"
+
+const std::string COMMENT = R"(^\/\/.+)";
+const std::string MESHNAME = R"(^Mesh \"(?'MeshName'\w+)\" uses material \"(?'MaterialName'\w+)\" and has UniqueID \"(?'UniqueID'\d+)\")";
+const std::string MATERIALNAME = R"(^Material \"(?'MaterialName'\w+)\" has ID (?'ID'[\w-]+))";
+const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'FlipAxis'Flipped\s*\w+)\)))?(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|()]*))";
+
+const jpcre2::select<char>::Regex commentRegEx(COMMENT, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex meshNameRegEx(MESHNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex materialNameRegEx(MATERIALNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+const jpcre2::select<char>::Regex materialLineRegEx(MATERIALLINE, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+
+typedef jpcre2::select<char> pcre2;
+
 using namespace osgJSONParser;
 using namespace nlohmann;
 
+constexpr auto MATERIALINFO_FILE = "materialInfo.txt";
 
-TextureInfo parseTexture(const json& textureInfoDoc)
+
+bool MaterialFile::readMaterialFile(const std::string& filePath)
 {
-	TextureInfo returnTexture;
+	std::string fileName = osgDB::findDataFile(filePath);
+	pcre2::VecNas captureGroup;
+
+	pcre2::RegexMatch regexMatch;
+	regexMatch.addModifier("gm");
+	regexMatch.setNamedSubstringVector(&captureGroup);
+
+	osgDB::ifstream ifs(fileName.c_str());
+
+	if (ifs.is_open())
+	{
+		std::string line;
+		while (std::getline(ifs, line))
+		{
+			if (line.empty())
+				continue;
+
+			regexMatch.setSubject(line);
+
+			// First try parse as comment
+			regexMatch.setRegexObject(&commentRegEx);
+			size_t count = regexMatch.match();
+
+			if (count > 0)
+				continue;
+
+			// Try parse as mesh
+			regexMatch.setRegexObject(&meshNameRegEx);
+			count = regexMatch.match();
+
+			if (count > 0)
+			{
+				MeshInfo newMesh;
+				std::string meshName = captureGroup[0]["MeshName"];
+				newMesh.MaterialName = captureGroup[0]["MaterialName"];
+				newMesh.UniqueID = stoi(captureGroup[0]["UniqueID"]);
+
+				Meshes[meshName] = newMesh;
+
+				continue;
+			}
+
+			// Try parse as Material
+			regexMatch.setRegexObject(&materialNameRegEx);
+			count = regexMatch.match();
+
+			if (count > 0)
+			{
+				MaterialInfo newMaterial;
+				newMaterial.ID = captureGroup[0]["ID"];
+				std::string materialName = captureGroup[0]["MaterialName"];
+
+				// Try to build materialList
+				regexMatch.setRegexObject(&materialLineRegEx);
+
+				// Doing double read, but since file has an empty line between objects this is not a problem.
+				while (count > 0 && std::getline(ifs, line))
+				{
+					regexMatch.setSubject(line);
+					count = regexMatch.match();
+
+					if (count > 0)
+					{
+						// Try to find parameter in parameters map.
+						if (newMaterial.KnownLayerNames.find(captureGroup[0]["TextureLayerName"]) != newMaterial.KnownLayerNames.end())
+						{
+							newMaterial.KnownLayerNames.at(captureGroup[0]["TextureLayerName"]) = captureGroup[0]["FileOrParam"];
+						}
+						else
+						{
+							OSG_WARN << "WARNING: Found unknown texture parameter: " << captureGroup[0]["TextureLayerName"] << std::endl;
+						}
+					}
+				}
+
+				Materials[materialName] = newMaterial;
+			}
+		}
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+
+const std::string MaterialInfo::getImageName(std::string layerName) const
+{
+	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
+		return std::string();
+
+	std::string ext = osgDB::getLowerCaseFileExtension(KnownLayerNames.at(layerName));
+	if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "tga" || ext == "tiff" || ext == "bmp" || ext == "gif"
+		|| ext == "dds" || ext == "pic" || ext == "rgb")
+		return KnownLayerNames.at(layerName);
+
+	return std::string();
+}
+
+const osg::Vec4 MaterialInfo::getVector(std::string layerName) const
+{
+	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
+		return osg::Vec4();
+
+	std::stringstream strVec;
+	strVec << KnownLayerNames.at(layerName);
+	std::string strPart;
+	std::vector<double> dvec;
+
+	while (std::getline(strVec, strPart, '|'))
+	{
+		double d;
+		if (ParserHelper::getSafeDouble(strPart, d))
+			dvec.push_back(d);
+	}
+
+	if (dvec.size() == 3)
+		return osg::Vec4(dvec[0], dvec[1], dvec[2], 1);
+
+	return osg::Vec4();
+}
+
+double MaterialInfo::getDouble(std::string layerName) const
+{
+	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
+		return -1.0;
+
+	double d;
+	if (!ParserHelper::getSafeDouble(KnownLayerNames.at(layerName), d))
+		return -1.0;
+
+	return d;
+}
+
+
+TextureInfo2 parseTexture(const json& textureInfoDoc)
+{
+	TextureInfo2 returnTexture;
 
 	if (textureInfoDoc.contains("uid"))
 		returnTexture.UID = textureInfoDoc["uid"].get<std::string>();
@@ -40,9 +194,9 @@ TextureInfo parseTexture(const json& textureInfoDoc)
 	return returnTexture;
 }
 
-static ChannelInfo parseChannel(const json& channelValue)
+static ChannelInfo2 parseChannel(const json& channelValue)
 {
-	ChannelInfo returnInfo;
+	ChannelInfo2 returnInfo;
 
 	if (channelValue.contains("enable"))
 	{
@@ -72,7 +226,7 @@ static ChannelInfo parseChannel(const json& channelValue)
 	return returnInfo;
 }
 
-bool MaterialFile::readMaterialFile(const std::string& viewerInfoFileName, const std::string& textureInfoFileName)
+bool MaterialFile2::readMaterialFile(const std::string& viewerInfoFileName, const std::string& textureInfoFileName)
 {
 
 	std::string viewerInfoName = osgDB::findDataFile(viewerInfoFileName);
@@ -95,10 +249,21 @@ bool MaterialFile::readMaterialFile(const std::string& viewerInfoFileName, const
 	if (!parseViewerInfo(viewerInfoDoc))
 		return false;
 
-	return parseTextureInfo(textureInfoDoc);
+	if (!parseTextureInfo(textureInfoDoc))
+		return false;
+
+	std::string material1Path = osgDB::getFilePath(viewerInfoFileName);
+	if (!material1Path.empty())
+		material1Path.push_back('/');
+
+	material1Path += MATERIALINFO_FILE;
+
+	mergeWithMaterial1(material1Path);
+
+	return true;
 }
 
-bool MaterialFile::parseViewerInfo(const json& viewerInfoDoc)
+bool MaterialFile2::parseViewerInfo(const json& viewerInfoDoc)
 {
 	if (!viewerInfoDoc.contains("options"))
 		return false;
@@ -115,7 +280,7 @@ bool MaterialFile::parseViewerInfo(const json& viewerInfoDoc)
 		{
 			if (materialItem.value().is_object())
 			{
-				MaterialInfo material;
+				MaterialInfo2 material;
 				std::string materialName;
 				auto& itemValue = materialItem.value();
 				if (itemValue.contains("name"))
@@ -138,7 +303,7 @@ bool MaterialFile::parseViewerInfo(const json& viewerInfoDoc)
 					{
 						if (knownChannelNames.find(channel.key()) != knownChannelNames.end())
 						{
-							ChannelInfo channelInfo = parseChannel(channel.value());
+							ChannelInfo2 channelInfo = parseChannel(channel.value());
 							material.Channels[channel.key()] = channelInfo;
 
 						}
@@ -157,7 +322,7 @@ bool MaterialFile::parseViewerInfo(const json& viewerInfoDoc)
 	return true;
 }
 
-bool MaterialFile::parseTextureInfo(const json& textureInfoDoc)
+bool MaterialFile2::parseTextureInfo(const json& textureInfoDoc)
 {
 	if (!textureInfoDoc.contains("results"))
 		return false;
@@ -175,10 +340,10 @@ bool MaterialFile::parseTextureInfo(const json& textureInfoDoc)
 
 			for (auto& material : _materials)
 			{
-				MaterialInfo& materialInfo = material.second;
+				MaterialInfo2& materialInfo = material.second;
 				for (auto& materialChannel : materialInfo.Channels)
 				{
-					ChannelInfo& channelInfo = materialChannel.second;
+					ChannelInfo2& channelInfo = materialChannel.second;
 					if (channelInfo.Texture.UID == textureUID)
 					{
 						channelInfo.Texture.Name = textureName;
@@ -189,4 +354,30 @@ bool MaterialFile::parseTextureInfo(const json& textureInfoDoc)
 	}
 
 	return true;;
+}
+
+void osgJSONParser::MaterialFile2::mergeWithMaterial1(const std::string& fileName)
+{
+	MaterialFile materialFile;
+
+	if (!materialFile.readMaterialFile(fileName))
+	{
+		OSG_NOTICE << "INFO: Could not read" << fileName << ". Models may miss materials and textures." << std::endl;
+		return;
+	}
+
+	std::map<std::string, MeshInfo> meshInfo1 = materialFile.getMeshes();
+
+	for (auto& mesh : meshInfo1)
+	{
+		std::string meshName1 = mesh.first;
+		std::string materialName1 = mesh.second.MaterialName;
+
+		// find existing material in _materials
+		if (_materials.find(materialName1) != _materials.end())
+		{
+			// Make a copy of material and save new mesh
+			_materials[meshName1] = _materials.at(materialName1);
+		}
+	}
 }
