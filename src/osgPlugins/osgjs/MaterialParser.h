@@ -1,66 +1,98 @@
 #pragma once
 
-
 namespace osgJSONParser
 {
+	struct TextureInfo {
+		std::string UID;
+		std::string Name;
+		std::string WrapS;
+		std::string WrapT;
+		std::string MagFilter;
+		std::string MinFilter;
+		int TexCoordUnit;
+		std::string TextureTarget;
+		std::string InternalFormat;
 
-	struct MeshInfo
-	{
-		int UniqueID;
-		std::string MaterialName;
+		TextureInfo() :
+			TexCoordUnit(0)
+		{};
 	};
 
-	struct MaterialInfo
-	{
-		std::string ID;
-		std::unordered_map<std::string, std::string> KnownLayerNames = 
-		{
-			{"Albedo", ""},
-			{"AO", ""},
-			{"Opacity", ""},
-			{"Bump map", "" },
-			{"Emission", ""},
-			{"Normal", ""},
-			{"Diffuse", ""},
-			{"Roughness", ""},
-			{"Specular", ""},
-			{"SpecularPBR", ""},
-			{"Specular F0", ""},
-			{"Displacement", ""},
-			{"Metalness", ""},
-			{"Diffuse colour", ""},
-			{"Glossiness", ""},
-			{"Specular colour", ""},
-			{"Diffuse intensity", ""},
-			{"Specular hardness", ""},
-			{"Clear coat normal", ""},
-			{"Clear coat roughness", ""},
-		};
+	struct ChannelInfo {
+		bool Enable;
+		bool FlipY;
+		double Factor;
+		std::vector<double> Color;
+		TextureInfo Texture;
 
-	public:
-		const std::string getImageName(std::string layerName) const;
-		const osg::Vec4 getVector(std::string layerName) const;
-		double getDouble(std::string layerName) const;
+		ChannelInfo() :
+			Enable(false),
+			FlipY(false),
+			Factor(0)
+		{};
+	};
+
+	struct MaterialInfo {
+		std::string ID;
+		std::string Name;
+		int Version;
+		std::unordered_map<std::string, ChannelInfo> Channels;
 	};
 
 	class MaterialFile
 	{
 	public:
 
-		MaterialFile() {};
+		typedef std::map<std::string, MaterialInfo> Materials;
 
-		bool readMaterialFile(const std::string& filePath);
-
-		inline const std::map<std::string, MeshInfo>& getMeshes() const {
-			return Meshes;
+		MaterialFile():
+			knownChannelNames{ 
+			"AOPBR", 
+			"Sheen",
+			"Matcap",
+			"BumpMap",
+			"Opacity",
+			"AlbedoPBR",
+			"AlphaMask",
+			"CavityPBR",
+			"ClearCoat",
+			"EmitColor",
+			"NormalMap",
+			"Anisotropy",
+			"DiffusePBR",
+			"SpecularF0",
+			"SpecularPBR",
+			"DiffuseColor",
+			"Displacement",
+			"MetalnessPBR",
+			"RoughnessPBR",
+			"GlossinessPBR",
+			"SpecularColor",
+			"SheenRoughness",
+			"DiffuseIntensity",
+			"SpecularHardness",
+			"ClearCoatNormalMap",
+			"ClearCoatRoughness",
+			"SubsurfaceScattering",
+			"SubsurfaceTranslucency",
 		}
-		inline const std::map<std::string, MaterialInfo>& getMaterials() const {
-			return Materials;
+		{};
+
+		bool readMaterialFile(const std::string& viewerInfoFileName, const std::string& textureInfoFileName);
+
+		inline const Materials getMaterials() {
+			return _materials;
 		}
 
 	private:
 
-		std::map<std::string, MeshInfo> Meshes;
-		std::map<std::string, MaterialInfo> Materials;
+		const std::set<std::string> knownChannelNames;
+		Materials _materials;
+
+		bool parseViewerInfo(const nlohmann::json& viewerInfoDoc);
+
+		bool parseTextureInfo(const nlohmann::json& textureInfoDoc);
+
+
 	};
 }

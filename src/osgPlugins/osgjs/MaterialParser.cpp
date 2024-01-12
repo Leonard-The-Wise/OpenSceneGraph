@@ -1,157 +1,192 @@
 
 #include "pch.h"
+#include "json.hpp"
 
 #include "OsgjsParserHelper.h"
 #include "MaterialParser.h"
-#include "jpcre2.hpp"
-
-const std::string COMMENT = R"(^\/\/.+)";
-const std::string MESHNAME = R"(^Mesh \"(?'MeshName'\w+)\" uses material \"(?'MaterialName'\w+)\" and has UniqueID \"(?'UniqueID'\d+)\")";
-const std::string MATERIALNAME = R"(^Material \"(?'MaterialName'\w+)\" has ID (?'ID'[\w-]+))";
-const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'FlipAxis'Flipped\s*\w+)\)))?(\s*+(\((?'TexCoord'UV\d+)\)))?(\s*+(\((?'Parameter'[\w\s\d=,]*)\)))*+:\s(?'FileOrParam'[\w.,+-|()]*))";
-
-const jpcre2::select<char>::Regex commentRegEx(COMMENT, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
-const jpcre2::select<char>::Regex meshNameRegEx(MESHNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
-const jpcre2::select<char>::Regex materialNameRegEx(MATERIALNAME, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
-const jpcre2::select<char>::Regex materialLineRegEx(MATERIALLINE, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
-
-typedef jpcre2::select<char> pcre2;
 
 using namespace osgJSONParser;
+using namespace nlohmann;
 
-bool MaterialFile::readMaterialFile(const std::string& filePath)
+
+TextureInfo parseTexture(const json& textureInfoDoc)
 {
-	std::string fileName = osgDB::findDataFile(filePath);
-	pcre2::VecNas captureGroup;
+	TextureInfo returnTexture;
 
-	pcre2::RegexMatch regexMatch;
-	regexMatch.addModifier("gm");
-	regexMatch.setNamedSubstringVector(&captureGroup);
+	if (textureInfoDoc.contains("uid"))
+		returnTexture.UID = textureInfoDoc["uid"].get<std::string>();
 
-	osgDB::ifstream ifs(fileName.c_str());
+	if (textureInfoDoc.contains("wrapS"))
+		returnTexture.WrapS = textureInfoDoc["wrapS"].get<std::string>();
 
-	if (ifs.is_open())
+	if (textureInfoDoc.contains("wrapT"))
+		returnTexture.WrapT = textureInfoDoc["wrapT"].get<std::string>();
+
+	if (textureInfoDoc.contains("magFilter"))
+		returnTexture.MagFilter = textureInfoDoc["magFilter"].get<std::string>();
+
+	if (textureInfoDoc.contains("minFilter"))
+		returnTexture.MinFilter = textureInfoDoc["minFilter"].get<std::string>();
+
+	if (textureInfoDoc.contains("texCoordUnit"))
+		returnTexture.TexCoordUnit = textureInfoDoc["texCoordUnit"].get<int>();
+
+	if (textureInfoDoc.contains("textureTarget"))
+		returnTexture.TextureTarget = textureInfoDoc["textureTarget"].get<std::string>();
+
+	if (textureInfoDoc.contains("internalFormat"))
+		returnTexture.InternalFormat = textureInfoDoc["internalFormat"].get<std::string>();
+
+	return returnTexture;
+}
+
+static ChannelInfo parseChannel(const json& channelValue)
+{
+	ChannelInfo returnInfo;
+
+	if (channelValue.contains("enable"))
 	{
-		std::string line;
-		while (std::getline(ifs, line))
+		returnInfo.Enable = channelValue["enable"].get<bool>();
+	}
+
+	if (channelValue.contains("factor"))
+	{
+		returnInfo.Factor = channelValue["factor"].get<double>();
+	}
+
+	if (channelValue.contains("color") && channelValue["color"].is_array())
+	{
+		returnInfo.Color.resize(3);
+		for (int i = 0; i < 3 && i < channelValue["color"].size(); ++i)
 		{
-			if (line.empty())
-				continue;
+			returnInfo.Color[i] = channelValue["color"][i].get<double>();
+		}
+	}
 
-			regexMatch.setSubject(line);
+	if (channelValue.contains("texture") && channelValue["texture"].is_object())
+	{
+		returnInfo.Texture = parseTexture(channelValue["texture"]);
 
-			// First try parse as comment
-			regexMatch.setRegexObject(&commentRegEx);
-			size_t count = regexMatch.match();
+	}
 
-			if (count > 0)
-				continue;
+	return returnInfo;
+}
 
-			// Try parse as mesh
-			regexMatch.setRegexObject(&meshNameRegEx);
-			count = regexMatch.match();
+bool MaterialFile::readMaterialFile(const std::string& viewerInfoFileName, const std::string& textureInfoFileName)
+{
 
-			if (count > 0)
+	std::string viewerInfoName = osgDB::findDataFile(viewerInfoFileName);
+	std::string textureInfoName = osgDB::findDataFile(textureInfoFileName);
+
+	if (viewerInfoName.empty() || textureInfoName.empty())
+		return false;
+
+	std::ifstream viewerStream(viewerInfoName.c_str());
+	std::ifstream textureStream(textureInfoName.c_str());
+	json viewerInfoDoc;
+	json textureInfoDoc;
+
+	if (!viewerStream.is_open() || !textureStream.is_open())
+		return false;
+
+	viewerStream >> viewerInfoDoc;
+	textureStream >> textureInfoDoc;
+
+	if (!parseViewerInfo(viewerInfoDoc))
+		return false;
+
+	return parseTextureInfo(textureInfoDoc);
+}
+
+bool MaterialFile::parseViewerInfo(const json& viewerInfoDoc)
+{
+	if (!viewerInfoDoc.contains("options"))
+		return false;
+
+	if (!viewerInfoDoc["options"].is_object())
+		return false;
+
+	const json& options = viewerInfoDoc["options"];
+	if (options.contains("materials") && options["materials"].is_object())
+	{
+		const json& materials = options["materials"];
+
+		for (auto& materialItem : materials.items())
+		{
+			if (materialItem.value().is_object())
 			{
-				MeshInfo newMesh;
-				std::string meshName = captureGroup[0]["MeshName"];
-				newMesh.MaterialName = captureGroup[0]["MaterialName"];
-				newMesh.UniqueID = stoi(captureGroup[0]["UniqueID"]);
-
-				Meshes[meshName] = newMesh;
-
-				continue;
-			}
-
-			// Try parse as Material
-			regexMatch.setRegexObject(&materialNameRegEx);
-			count = regexMatch.match();
-
-			if (count > 0)
-			{
-				MaterialInfo newMaterial;
-				newMaterial.ID = captureGroup[0]["ID"];
-				std::string materialName = captureGroup[0]["MaterialName"];
-
-				// Try to build materialList
-				regexMatch.setRegexObject(&materialLineRegEx);
-
-				// Doing double read, but since file has an empty line between objects this is not a problem.
-				while (count > 0 && std::getline(ifs, line))
+				MaterialInfo material;
+				std::string materialName;
+				auto& itemValue = materialItem.value();
+				if (itemValue.contains("name"))
 				{
-					regexMatch.setSubject(line);
-					count = regexMatch.match();
+					materialName = itemValue["name"].get<std::string>();
+					material.Name = materialName;
+				}
+				else
+					return false;
 
-					if (count > 0)
+				if (itemValue.contains("version"))
+					material.Version = itemValue["version"].get<int>();
+
+				if (itemValue.contains("id"))
+					material.ID = itemValue["id"].get<std::string>();
+
+				if (itemValue.contains("channels") && itemValue["channels"].is_object())
+				{
+					for (auto& channel : itemValue["channels"].items())
 					{
-						// Try to find parameter in parameters map.
-						if (newMaterial.KnownLayerNames.find(captureGroup[0]["TextureLayerName"]) != newMaterial.KnownLayerNames.end())
+						if (knownChannelNames.find(channel.key()) != knownChannelNames.end())
 						{
-							newMaterial.KnownLayerNames.at(captureGroup[0]["TextureLayerName"]) = captureGroup[0]["FileOrParam"];
+							ChannelInfo channelInfo = parseChannel(channel.value());
+							material.Channels[channel.key()] = channelInfo;
+
 						}
 						else
 						{
-							OSG_WARN << "WARNING: Found unknown texture parameter: " << captureGroup[0]["TextureLayerName"] << std::endl;
+							OSG_WARN << "WARNING: Unknown material layer name: " << channel.key() << std::endl;
 						}
 					}
 				}
 
-				Materials[materialName] = newMaterial;
+				_materials[materialName] = material;
 			}
 		}
-	}
-	else
-	{
-		return false;
 	}
 
 	return true;
 }
 
-const std::string osgJSONParser::MaterialInfo::getImageName(std::string layerName) const
+bool MaterialFile::parseTextureInfo(const json& textureInfoDoc)
 {
-	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
-		return std::string();
+	if (!textureInfoDoc.contains("results"))
+		return false;
 
-	std::string ext = osgDB::getLowerCaseFileExtension(KnownLayerNames.at(layerName));
-	if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "tga" || ext == "tiff" || ext == "bmp" || ext == "gif"
-		|| ext == "dds" || ext == "pic" || ext == "rgb")
-		return KnownLayerNames.at(layerName);
+	if (!textureInfoDoc["results"].is_array())
+		return false;
 
-	return std::string();
-}
-
-const osg::Vec4 osgJSONParser::MaterialInfo::getVector(std::string layerName) const
-{
-	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
-		return osg::Vec4();
-
-	std::stringstream strVec; 
-	strVec << KnownLayerNames.at(layerName);
-	std::string strPart;
-	std::vector<double> dvec;
-
-	while (std::getline(strVec, strPart, '|')) 
+	// Recover texture names
+	for (auto& texture : textureInfoDoc["results"])
 	{
-		double d;
-		if (ParserHelper::getSafeDouble(strPart, d))
-			dvec.push_back(d);
+		if (texture.is_object())
+		{
+			std::string textureName = texture["name"];
+			std::string textureUID = texture["uid"];
+
+			for (auto& material : _materials)
+			{
+				MaterialInfo& materialInfo = material.second;
+				for (auto& materialChannel : materialInfo.Channels)
+				{
+					ChannelInfo& channelInfo = materialChannel.second;
+					if (channelInfo.Texture.UID == textureUID)
+					{
+						channelInfo.Texture.Name = textureName;
+					}
+				}
+			}
+		}
 	}
 
-	if (dvec.size() == 3)
-		return osg::Vec4(dvec[0], dvec[1], dvec[2], 1);
-
-	return osg::Vec4();
-}
-
-double osgJSONParser::MaterialInfo::getDouble(std::string layerName) const
-{
-	if (KnownLayerNames.find(layerName) == KnownLayerNames.end())
-		return -1.0;
-
-	double d;
-	if (!ParserHelper::getSafeDouble(KnownLayerNames.at(layerName), d))
-		return -1.0;
-
-	return d;
+	return true;;
 }

@@ -76,11 +76,11 @@ constexpr auto MODELINFO_FILE = "model_info.json";
 
 void OsgjsParser::buildMaterialFiles() 
 {
-    std::string materialFile = _filesBasePath.empty() ? std::string("materialInfo.txt") : _filesBasePath + std::string("\\materialInfo.txt");
-
-    if (!_meshMaterials.readMaterialFile(materialFile))
+    std::string viewerInfoFile = _filesBasePath.empty() ? std::string("viewer_info.json") : _filesBasePath + std::string("\\viewer_info.json");
+    std::string textureInfoFile = _filesBasePath.empty() ? std::string("texture_info.json") : _filesBasePath + std::string("\\texture_info.json");
+    if (!_meshMaterials2.readMaterialFile(viewerInfoFile, textureInfoFile))
     {
-        OSG_WARN << "INFO: Could not load '" << materialFile << "'. Models may be exported without textures." << std::endl;
+        OSG_NOTICE << "INFO: Could not read '" << viewerInfoFile << "' or '" << textureInfoFile << "'. Models will be exported without textures." << std::endl;
     }
 }
 
@@ -471,9 +471,11 @@ ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std
     }
 
     // Create a group node
-    ref_ptr<Node> newObject;
+    ref_ptr<Group> newObject;
     if (isGeode)
+    {
         newObject = new Geode;
+    }
     else
         newObject = new Group;
 
@@ -481,6 +483,18 @@ ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std
     newObject->setName(name);
 
     lookForChildren(newObject, currentJSONNode, isGeode ? UserDataContainerType::ShapeAttributes : UserDataContainerType::UserData, nodeKey);
+
+    // If a Node has a stateset (grabbed in lookForChildren) with a material, applies the same material to all children geometry
+    osg::StateSet* meshState = newObject->getStateSet();
+    if (meshState)
+    {
+        const osg::Material* mat = dynamic_cast<const osg::Material*>(meshState->getAttribute(osg::StateAttribute::MATERIAL));
+        if (mat && newObject->getNumChildren() > 0)
+        {
+            std::string matName = mat->getName();
+            CascadeMaterials(newObject, matName);
+        }
+    }
 
     return newObject;
 }
@@ -2133,81 +2147,95 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
     return image;
 }
 
+void OsgjsParser::CascadeMaterials(osg::Node* node, const std::string& rootMaterialName)
+{
+    if (auto pGeometry = dynamic_cast<Geometry*>(node))
+    {
+        ref_ptr<Geometry> geometry = pGeometry;
+        parseExternalMaterials(geometry, rootMaterialName);
+    }
+    else if (auto pGroup = dynamic_cast<Group*>(node))
+    {
+        for (unsigned int i = 0; i < pGroup->getNumChildren(); ++i)
+        {
+            CascadeMaterials(pGroup->getChild(i), rootMaterialName);
+        }
+    }
+}
 
-void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry)
+void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, const std::string& materialNameOverride)
 {
     // Only process materials that have external references
-    std::string meshName = geometry->getName();
-    if (_meshMaterials.getMeshes().find(meshName) == _meshMaterials.getMeshes().end())
+    std::string materialName = geometry->getName();
+
+    // Override name (for geodes applying materials to children meshes)
+    if (!materialNameOverride.empty())
+        materialName = materialNameOverride;
+
+    auto& knownMaterials = _meshMaterials2.getMaterials();
+
+    if (knownMaterials.find(materialName) == knownMaterials.end())
         return;
 
-    // Check for missing materials and create one if necessary
+    auto& knownMaterial = knownMaterials.at(materialName);
+
+    // And only process uncreated materials 
     osg::StateSet* meshState = geometry->getOrCreateStateSet();
     const osg::Material* mat = dynamic_cast<const osg::Material*>(meshState->getAttribute(osg::StateAttribute::MATERIAL));
+    if (mat)
+        return;
 
-    if (!mat)
+    // Look for pre-existing shared materials
+    if (_materialMap.find(materialName) != _materialMap.end() )
     {
-        // Search for existing materials
-        std::string materialName = _meshMaterials.getMeshes().at(meshName).MaterialName;
+        meshState->setAttribute(_materialMap[materialName], StateAttribute::MATERIAL);
 
-        if (!materialName.empty() && _materialMap.find(materialName) != _materialMap.end())
+        // Pick missing textures for material
+        postProcessStateSet(meshState);
+    }
+    else
+    {
+        ref_ptr<Material> newMaterial = new Material;
+        newMaterial->setName(materialName);
+
+        meshState->setAttribute(newMaterial, StateAttribute::MATERIAL);
+        _materialMap[materialName] = newMaterial;
+
+        // Pick missing textures for material
+        postProcessStateSet(meshState);
+
+        // Read all channels from KnownMaterial
+        for (auto& channel : knownMaterial.Channels)
         {
-            meshState->setAttribute(_materialMap[materialName], StateAttribute::MATERIAL);
+            std::string channelName = channel.first;
+            ChannelInfo channelInfo = channel.second;
 
-            // Pick missing textures for material
-            postProcessStateSet(meshState);
-        }
-        else if (!materialName.empty())
-        {
-            ref_ptr<Material> newMaterial = new Material;
-            newMaterial->setName(materialName);
+            if (!channelInfo.Enable)
+                continue;
 
-            meshState->setAttribute(newMaterial, StateAttribute::MATERIAL);
-            _materialMap[materialName] = newMaterial;
+            Vec4 color;
+            double factor(0);
 
-            // Pick missing textures for material
-            postProcessStateSet(meshState);
+            if (channelInfo.Color.size() == 3)
+                color = Vec4(channelInfo.Color[0], channelInfo.Color[1], channelInfo.Color[2], 1);
+            factor = channelInfo.Factor;
 
-            // Try to Read known properties from _meshMaterials.
-            if (_meshMaterials.getMaterials().find(materialName) != _meshMaterials.getMaterials().end())
-            {
-                MaterialInfo meshMaterial = _meshMaterials.getMaterials().at(materialName);
-
-                Vec4 albedoDiffuse, normal, specularMetal, emission;
-                double opacity(1.0), glossiness(0.0);
-
-                albedoDiffuse = meshMaterial.getVector("Albedo");
-                if (albedoDiffuse == Vec4())
-                    albedoDiffuse = meshMaterial.getVector("Diffuse");
-                if (albedoDiffuse == Vec4())
-                    albedoDiffuse = meshMaterial.getVector("Diffuse colour");
-
-                normal = meshMaterial.getVector("Normal");
-
-                specularMetal = meshMaterial.getVector("Metalness");
-                if (specularMetal == Vec4())
-                    specularMetal = meshMaterial.getVector("Specular");
-                if (specularMetal == Vec4())
-                    specularMetal = meshMaterial.getVector("SpecularPBR");
-                if (specularMetal == Vec4())
-                    specularMetal = meshMaterial.getVector("Specular F0");
-                if (specularMetal == Vec4())
-                    specularMetal = meshMaterial.getVector("Specular colour");
-
-                emission = meshMaterial.getVector("Emission");
-
-                opacity = meshMaterial.getDouble("Opacity");
-                opacity = opacity == -1 ? 1 : opacity;
-
-                glossiness = meshMaterial.getDouble("Glossiness");
-                glossiness = glossiness == -1 ? 0 : glossiness;
-
-                newMaterial->setDiffuse(Material::FRONT, albedoDiffuse);
-                newMaterial->setSpecular(Material::FRONT, specularMetal);
-                newMaterial->setEmission(Material::FRONT, emission);
-                newMaterial->setTransparency(Material::FRONT, static_cast<float>(opacity));
-                newMaterial->setShininess(Material::FRONT, glossiness);
-            }
+            // Big IF for known channels. Notice one channel may affect multiple Phong surfaces
+            if (channelName == "AOPBR" || channelName == "CavityPBR")
+                newMaterial->setAmbient(Material::FRONT, color);
+            if (channelName == "AlbedoPBR" || channelName == "DiffusePBR" || channelName == "DiffuseColor" 
+                || channelName == "CavityPBR" || channelName == "DiffuseIntensity")
+                newMaterial->setDiffuse(Material::FRONT, color);
+            if (channelName == "Sheen" || channelName == "ClearCoat" || channelName == "SpecularF0" || channelName == "SpecularPBR" ||
+                channelName == "SpecularColor" || channelName == "MetalnessPBR" || channelName == "SpecularHardness")
+                newMaterial->setSpecular(Material::FRONT, color);
+            if (channelName == "Opacity" || channelName == "AlphaMask")
+                newMaterial->setTransparency(Material::FRONT, static_cast<float>(factor));
+            if (channelName == "EmitColor")
+                newMaterial->setEmission(Material::FRONT, color);
+            if (channelName == "GlossinessPBR" || channelName == "RoughnessPBR" || channelName == "SheenRoughness")
+                newMaterial->setShininess(Material::FRONT, factor);
+            // if (channelName == "BumpMap" || channelName == "NormalMap" || channelName == "ClearCoatNormalMap")
         }
     }
 }
@@ -2385,7 +2413,6 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     }
 }
 
-
 void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const json* currentJSONNode)
 {
 #ifdef DEBUG
@@ -2408,48 +2435,55 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
     std::string materialName = material->getName();
     std::unordered_set<std::string> unfoundTextures;
 
-    std::map<std::string, MaterialInfo>::const_iterator materialInfo = _meshMaterials.getMaterials().find(materialName);
-    if (materialInfo != _meshMaterials.getMaterials().end())
+    auto knownMaterials = _meshMaterials2.getMaterials();
+    auto knownMaterial = knownMaterials.find(materialName);
+    if (knownMaterial != knownMaterials.end())
     {
-        for (auto& knownLayer : materialInfo->second.KnownLayerNames)
+        auto& materialEntry = knownMaterial->second;
+
+        // Get all channels' textures.
+        for (auto& channel : materialEntry.Channels)
         {
-            // Use getImageName to ensure the field contains a valid file name (may be a vector or number either)
-            if (!materialInfo->second.getImageName(knownLayer.first).empty())
+            auto& textureInfo = channel.second.Texture;
+            std::string channelName = channel.first;
+            if (!channel.second.Enable || textureInfo.Name.empty())
+                continue;
+
+            // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
+            // or because they may be incorrectly named from Sketchfab
+            std::string filename = textureInfo.Name;
+            std::string realFileName;
+            if (!_fileCache.fileExistsInDirs(filename, realFileName))
             {
-                // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
-                // because they may be incorrectly renamed from Sketchfab
-                std::string filename = knownLayer.second;
-                std::string realFileName;
-                if (!_fileCache.fileExistsInDirs(filename, realFileName))
+                filename = FileCache::stripAllExtensions(filename) + std::string(".png");
+            }
+
+            if (_fileCache.fileExistsInDirs(filename, realFileName))
+            {
+                // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
+                std::string origExt = osgDB::getLowerCaseFileExtension(realFileName);
+                std::string fileNameChanged = FileCache::stripAllExtensions(realFileName) + std::string(".") + origExt;
+                if (realFileName != fileNameChanged && std::rename(realFileName.c_str(), fileNameChanged.c_str()) == 0)
                 {
-                    filename = FileCache::stripAllExtensions(filename) + std::string(".png");
+                    OSG_NOTICE << "INFO: Texture " << realFileName << " renamed to " << fileNameChanged << std::endl;
+                    realFileName = fileNameChanged;
                 }
 
-                if (_fileCache.fileExistsInDirs(filename, realFileName))
+                material->setUserValue(std::string("textureLayer_") + channel.first, realFileName);
+                unfoundTextures.emplace(realFileName);
+            }
+            else
+            {
+                if (_notFoundTextures.find(filename) == _notFoundTextures.end())
                 {
-                    // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
-                    std::string origExt = osgDB::getLowerCaseFileExtension(realFileName);
-                    std::string fileNameChanged = FileCache::stripAllExtensions(realFileName) + std::string(".") + origExt;
-                    if (realFileName != fileNameChanged && std::rename(realFileName.c_str(), fileNameChanged.c_str()) == 0)
-                    {
-                        OSG_NOTICE << "INFO: Texture " << realFileName << " renamed to " << fileNameChanged << std::endl;
-                        realFileName = fileNameChanged;
-                    }
-
-                    material->setUserValue(std::string("textureLayer_") + knownLayer.first, realFileName);
-                    unfoundTextures.emplace(realFileName);
-                }
-                else
-                {
-                    if (_notFoundTextures.find(filename) == _notFoundTextures.end())
-                    {
-                        OSG_WARN << "WARNING: Could not find " << filename << " from model_info.txt" << std::endl;
-                        _notFoundTextures.emplace(filename);
-                    }
+                    OSG_WARN << "WARNING: Could not find texture: " << filename << std::endl;
+                    _notFoundTextures.emplace(filename);
                 }
             }
         }
     }
+    else
+        return;
 
     // First, search for pre-created textures on StateSet
     for (unsigned int i = 0; i < stateset->getNumTextureAttributeLists(); i++)

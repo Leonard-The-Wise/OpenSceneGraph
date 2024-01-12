@@ -67,6 +67,7 @@ namespace osgJSONParser
                 { "osgAnimation.Bone", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgMatrixTransform(json, nodeKey); }},
                 { "osg.ComputeBoundingBoxCallback", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseComputeBoundingBoxCallback(json, nodeKey); }},
 
+                // bypassing material processing (pick from external JSONs)
                 { "osg.Material", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgMaterial(json, nodeKey); }},
                 { "osg.Texture", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgTexture(json, nodeKey); }},
                 { "osg.BlendFunc", [this](const json& json, const std::string& nodeKey) -> osg::ref_ptr<osg::Object> {return this->parseOsgBlendFunc(json, nodeKey); }},
@@ -149,8 +150,9 @@ namespace osgJSONParser
 
         std::string _filesBasePath;
 
-        // Materials from materialInfo.txt
-        MaterialFile _meshMaterials;
+        // Materials from model_info.json and texture_info.json
+        MaterialFile _meshMaterials2;
+
         std::set<std::string> _notFoundTextures; // Keep track of not found textures to avoid multiple warnings
 
         // Keep track of Materials, Textures and Images
@@ -217,7 +219,8 @@ namespace osgJSONParser
         void decodeTexture(const std::string& fileName, osg::ref_ptr<osg::Image>& image);
         osg::ref_ptr<osg::Image> getOrCreateImage(const std::string& fileName);
 
-        void parseExternalMaterials(const osg::ref_ptr<osg::Geometry>& geometry);
+        void CascadeMaterials(osg::Node* node, const std::string& rootMaterialName);
+        void parseExternalMaterials(const osg::ref_ptr<osg::Geometry>& geometry, const std::string& materialNameOverride = "");
         void postProcessGeometry(const osg::ref_ptr<osg::Geometry>& geometry, const json& currentJSONNode, const osg::ref_ptr<osg::Array>& indices = nullptr);
         void postProcessStateSet(const osg::ref_ptr<osg::StateSet>& stateset, const json* currentJSONNode = nullptr);
 

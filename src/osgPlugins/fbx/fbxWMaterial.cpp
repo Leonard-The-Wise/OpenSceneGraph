@@ -208,20 +208,21 @@ namespace pluginfbx
 			std::ignore = material->getUserValue(std::string("textureLayer_") + knownLayer, materialFile);
 			if (materialFile == textureFile)
 			{
-				if (knownLayer == "Albedo" || knownLayer == "Diffuse" || knownLayer == "Diffuse colour")
+				if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" || 
+					knownLayer == "CavityPBR" || knownLayer == "DiffuseIntensity")
 					return MaterialSurfaceLayer::Diffuse;
-				else if (knownLayer == "Normal" || knownLayer == "Bump map")
+				else if (knownLayer == "NormalMap" || knownLayer == "BumpMap" || knownLayer == "ClearCoatNormalMap")
 					return MaterialSurfaceLayer::NormalMap;
-				else if (knownLayer == "SpecularPBR" || knownLayer == "Specular F0" || knownLayer == "Specular colour" || knownLayer == "Specular hardness" ||
-					knownLayer == "Metalness")
+				else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor" || knownLayer == "SpecularHardness" ||
+					knownLayer == "MetalnessPBR" || knownLayer == "ClearCoat" || knownLayer == "Sheen")
 					return MaterialSurfaceLayer::Specular;
 				else if (knownLayer == "Displacement")
 					return MaterialSurfaceLayer::DisplacementColor;
-				else if (knownLayer == "Emission")
+				else if (knownLayer == "EmitColor")
 					return MaterialSurfaceLayer::Emissive;
-				else if (knownLayer == "Glossiness" || knownLayer == "Roughness")
+				else if (knownLayer == "GlossinessPBR" || knownLayer == "RoughnessPBR" || knownLayer == "SheenRoughness")
 					return MaterialSurfaceLayer::Shininess;
-				else if (knownLayer == "Opacity")
+				else if (knownLayer == "Opacity" || knownLayer == "AlphaMask")
 					return MaterialSurfaceLayer::Transparency;
 			}
 		}
