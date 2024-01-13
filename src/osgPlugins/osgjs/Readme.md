@@ -2,9 +2,9 @@
 
 ## DISCLAIMER
 
-This plugin was made for educational purposes only. If you are a student or enthusiast ainimg to improve, feel free to use this plugin. Otherwise, I do NOT endorse piracy. Making models requires a good amount of time, talent and effort, and such are to be rewarded. So, please, buy the models you'll effectively use and support your 3D artists.
+This plugin was made for educational purposes only. If you are a student or enthusiast ainimg to improve, feel free to use this plugin. Otherwise, making models requires a good amount of time, talent and effort, and such are to be rewarded. So, please, buy the models you'll effectively use and support your 3D artists.
 
-Also, this software is provided 'as-is', that means no warranties whatsoever. This is a WIP. And also, you shall not pay for it. It is free software, no one should be selling it.
+Also, this software is provided 'as-is', that means no warranties whatsoever. This is a WIP. And also, you shall not pay for it. It is free software, no one should be selling it! However, if you'd like to support me, you may [buy me a coffe](https://www.buymeacoffee.com/theillusionist).
 
 ## INSTRUCTIONS
 
@@ -17,10 +17,11 @@ Also, this software is provided 'as-is', that means no warranties whatsoever. Th
 
 - Also, I did notice that Sketchfab Ripper (at least V 1.18) is downloading broken textures, so included on this package is a Tampermonkey script to download Sketchfab textures (tampermonkey extension for Chrome avaliable [here](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=pt-BR). In this script, model exportation is disabled, since it is intended to work with the original .osgjs, not a .obj file (that doesn't support rigging and animations). So use it to grab textures and place either on `textures` folder or directly into your model's folder. 
 
-If some texture is missing from the model, it may be because of same texture names for different objects. So, I also added another version of the script that download "duplicate" textures. All duplicate textures are followed by a number at the end of file. Just open them to certify if it is duplicated or a unique one and rename it according to what materialInfo.txt provides for that model part (mesh).
+This script may download "duplicate" textures. But they are not actually duplicate. This happens because Sketchfab separate some texture channels (like Alpha Opacity of Albedo) on a different texture with the same name. So, all "duplicate" textures are followed by a number at the end of file. Just open them to certify which part of the texture that channel is and adjust the texture on a painting software (like Gimp or Photoshop) accordingly.
 
-The plugin will detect any missing texture files if materialInfo.txt is avaliable and inform you.
+The plugin will detect any missing texture files if materialInfo.txt is avaliable and inform you. Notice however that material processing is experimental. Sketchfab uses a custom material system that is for now impossible to replicate in FBX format (duue to FBX SDK not supporting PBR based materials). So Material importing may work for just a few models, but at least some textures may be placed on a right channel and it is the easiest part to fix. Check your UVs though. Many models require `-O FlipUVs` to export correctly.
 
+Also, normals and tangent data are being reconstructed on the fly, since for now the plugin can't decode the originals.
 
 2. Usage
 
@@ -47,7 +48,7 @@ osgconv --format fbx
 ```
 osgconv file.osgjs file-export.fbx -O RotateXAxis=-90.0
 ```
-(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis. Default rotation is 180.0, while many models uses -90.0 and some models requires rotation 90.0 or zero)
+(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis.
 
 In rare cases you may get an "out of bound indexes or vertexes", that usually means your model isn't vertex compressed (this was actually the default for OSGJS original format, but not for sketchfab's format). Since we can't programatically determine whether this model is compressed or not (depends on which version of sketchfab processor it was uploaded and time of upload), you must try different options manually.
 
@@ -63,9 +64,12 @@ What I recommend you to do is to begin exporting models with default options, an
 
 ### Extra tip:
 
-Many times, animation data is broken (not the plugin's fault, the animation files have incorrect data), so animations may not present accurately or not play at all. So I made a hack to try and fix them, by adding custom keyframing into time arrays. Use `-O useTimeHack` on export and try it out to see if your animations are back up again. Tested with a few models only, not 100% accurate.
+Many times, animation data is broken (not the plugin's fault, the animation files have incorrect data), so animations may not present accurately or not play at all. So I made a hack to try and fix them, by adding custom keyframing into time arrays. Use `-O useTimeHack` on export and try it out to see if your animations are back up again. Tested with a few models only, and it's not 100% accurate in no way.
 
 ### Extra tip 2:
 
-For some models I'm getting inconsistent results while importing to Blender. So use FBXReview or other Autodesk product (like 3ds Max or Maya) to see if the problem is with the export or the import plugin.
+If for some models you get inconsistent results while importing to Blender, try opening it on FBXReview or other Autodesk product (like 3ds Max or Maya) to see if the problem is with the export or the import plugin.
 
+That's all I know for now.
+
+Cheers.

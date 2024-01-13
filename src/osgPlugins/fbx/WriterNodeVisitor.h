@@ -204,15 +204,20 @@ namespace pluginfbx
 
         void createMorphTargets(const osgAnimation::MorphGeometry* morphGeom, FbxMesh* mesh, const osg::Matrix& rotateMatrix);
 
-        static bool hasSkeletonParent(const osg::Node& object);
+        const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback> callback);
 
-        static osg::Matrix buildParentMatrices(const osg::Node& object);
+        bool hasSkeletonParent(const osg::Node& object);
+
+        osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback);
+
+        osg::Matrix buildParentMatrices(const osg::Node& object);
+
+        osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
         void applyGlobalTransforms(FbxNode* RootNode);
 
-        static void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
+        void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
 
-        static osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
         /**
         * Build geometry triangles and control points (vertices)

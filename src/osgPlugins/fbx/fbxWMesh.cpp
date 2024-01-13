@@ -356,9 +356,9 @@ namespace pluginfbx
 
 			if (vertexIndex >= basevecs->getNumElements())
 			{
-				OSG_WARN << "FATAL: Found vertex index out of bounds. Try to import model with flag -O disableVertexDecompress (or turn it off if you already enabled it)."
-					<< "[Geometry: " << geometryName << "]" << std::endl;
-				throw "Exiting without saving.";
+				OSG_WARN << "WARNING: Found vertex index out of bounds. Try to import model with flag -O disableVertexDecompress or turn it off if you already enabled it." << std::endl
+					<< "If it not work, geometry [" << geometryName << "]" << " may become incomplete or broken." << std::endl;
+				break;
 			}
 
 			switch (basevecs->getType())
@@ -565,14 +565,14 @@ namespace pluginfbx
 					case osg::Array::Vec2ArrayType:
 					{
 						const osg::Vec2& vec = (*static_cast<const osg::Vec2Array*>(basetexcoords))[vertexIndex];
-						float vecY = _flipUVs ? 1.0 - vec.y() : vec.y();
+						float vecY = _flipUVs ? vec.y() : 1.0 - vec.y(); // We flip UVs by default, so here we invert the logic.
 						texcoord.Set(vec.x(), vecY);
 						break;
 					}
 					case osg::Array::Vec2dArrayType:
 					{
 						const osg::Vec2d& vec = (*static_cast<const osg::Vec2dArray*>(basetexcoords))[vertexIndex];
-						double vecY = _flipUVs ? 1.0 - vec.y() : vec.y();
+						double vecY = _flipUVs ? vec.y() : 1.0 - vec.y();
 						texcoord.Set(vec.x(), 1 - vecY);
 						break;
 					}
@@ -774,26 +774,6 @@ namespace pluginfbx
 		FbxVector4 vec4 = mat.GetR();
 
 		meshNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
-	}
-
-	osg::Matrix WriterNodeVisitor::getMatrixFromSkeletonToNode(const osg::Node& node)
-	{
-		osg::Matrix retMatrix;
-		if (dynamic_cast<const Skeleton*>(&node))
-		{
-			return dynamic_cast<const Skeleton*>(&node)->getMatrix();
-		}
-		else if (dynamic_cast<const MatrixTransform*>(&node))
-		{
-			if (node.getNumParents() > 0)
-				return dynamic_cast<const MatrixTransform*>(&node)->getMatrix() * getMatrixFromSkeletonToNode(*node.getParent(0));
-			else
-				return dynamic_cast<const MatrixTransform*>(&node)->getMatrix();
-		}
-		else if (node.getNumParents() > 0)
-			return getMatrixFromSkeletonToNode(*node.getParent(0));
-
-		return retMatrix;
 	}
 
 	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix)

@@ -144,18 +144,26 @@ namespace osgJSONParser
 			return _materials;
 		}
 
+		inline std::map<std::string, TextureInfo2> getTextureMap()
+		{
+			return _textureMap;
+		}
+
+		void renameTexture(const std::string& originalFile, const std::string& modifiedFile);
+
 	private:
 
 		const std::set<std::string> knownChannelNames;
 		Materials _materials;
 		MaterialFile _materialFile1;
+		std::map<std::string, TextureInfo2> _textureMap;
+
+		void makeTextureMap();
 
 		bool parseViewerInfo(const nlohmann::json& viewerInfoDoc);
 
 		bool parseTextureInfo(const nlohmann::json& textureInfoDoc);
 
 		void mergeWithMaterial1(const std::string& fileName);
-
-
 	};
 }

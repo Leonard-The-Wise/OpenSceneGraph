@@ -76,12 +76,12 @@ void FileCache::setCache(const std::set<std::string>& fileNames)
 
         if (!found)
         {
-            OSG_WARN << "WARNING: Resource file " << fileName << " not found." << std::endl;
+            OSG_WARN << "WARNING: Resource file " << fileNameStripped << " not found." << std::endl;
             globalBroken = true;
         }
         else if (error)
         {
-            OSG_WARN << "WARNING: Could not read " << fileName << ". Check if file is compressed or you have permissions." << std::endl;
+            OSG_WARN << "WARNING: Could not read " << fileNameStripped << ". Check if file is compressed or you have permissions." << std::endl;
         }
     }
 

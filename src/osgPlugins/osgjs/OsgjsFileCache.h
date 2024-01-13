@@ -22,6 +22,11 @@ namespace osgJSONParser
 
 		bool fileExistsInDirs(const std::string& filename, std::string& realFilePath);
 
+		inline const std::set<std::string> getExtraDirs()
+		{
+			return _extraDirSearch;
+		}
+
 	private:
 
 		std::set<std::string> _extraDirSearch;

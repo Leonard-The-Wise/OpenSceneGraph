@@ -164,7 +164,7 @@ namespace osgJSONParser
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;
         const std::unordered_set<std::string> drawableNodes;
 
-        void buildMaterialFiles();
+        void buildMaterialAndtextures();
 
         void lookForChildren(osg::ref_ptr<osg::Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey);
 
@@ -217,6 +217,7 @@ namespace osgJSONParser
 
         std::string getModelName() const;
         void decodeTexture(const std::string& fileName, osg::ref_ptr<osg::Image>& image);
+        void createTextureMap(const std::map<std::string, TextureInfo2>& textureMap);
         osg::ref_ptr<osg::Image> getOrCreateImage(const std::string& fileName);
 
         void CascadeMaterials(osg::Node* node, const std::string& rootMaterialName);

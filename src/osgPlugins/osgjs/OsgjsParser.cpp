@@ -53,7 +53,7 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 
     rootNode->setName("OSGJS-Imported-Scene");
 
-    buildMaterialFiles();
+    buildMaterialAndtextures();
 
     OSG_NOTICE << "Parsing Scene tree..." << std::endl;
     if (parseObject(rootNode, firstOsgNodeJSON, "JSON Root"))
@@ -74,14 +74,20 @@ constexpr auto TIMEHACK = 0.0333333351;
 
 constexpr auto MODELINFO_FILE = "model_info.json";
 
-void OsgjsParser::buildMaterialFiles() 
+void OsgjsParser::buildMaterialAndtextures() 
 {
     std::string viewerInfoFile = _filesBasePath.empty() ? std::string("viewer_info.json") : _filesBasePath + std::string("\\viewer_info.json");
     std::string textureInfoFile = _filesBasePath.empty() ? std::string("texture_info.json") : _filesBasePath + std::string("\\texture_info.json");
     if (!_meshMaterials2.readMaterialFile(viewerInfoFile, textureInfoFile))
     {
         OSG_NOTICE << "INFO: Could not read '" << viewerInfoFile << "' or '" << textureInfoFile << "'. Models will be exported without textures." << std::endl;
+        return;
     }
+
+    std::map<std::string, TextureInfo2> textureMap = _meshMaterials2.getTextureMap();
+    OSG_NOTICE << "Resolving scene textures... [" << textureMap.size() << "]" << std::endl;
+    
+    createTextureMap(textureMap);
 }
 
 void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey)
@@ -1078,13 +1084,15 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
 
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
 
+
     if (!name.empty())
     {
+        // Try original file name, then changed to .png
         if (_textureMap.find(name) != _textureMap.end())
             return _textureMap[name];
     }
 
-    std::string fileName = currentJSONNode.contains("File") ? currentJSONNode["File"].get<std::string>() : "";
+    std::string fileName = currentJSONNode.contains("File") ? osgDB::getSimpleFileName(currentJSONNode["File"].get<std::string>()) : "";
     ref_ptr<Image> image = getOrCreateImage(fileName);
 
     if (!image)
@@ -2055,6 +2063,45 @@ void OsgjsParser::decodeTexture(const std::string& fileName, osg::ref_ptr<osg::I
     }
 }
 
+void OsgjsParser::createTextureMap(const std::map<std::string, TextureInfo2>& textureMap)
+{
+    for (auto& textureName : textureMap)
+    {
+        std::string filename = textureName.first;
+        std::string realFileName;
+        ref_ptr<Image> textureImage;
+
+        // First, search image as original name. If not found, change it to .png
+        if (!_fileCache.fileExistsInDirs(filename, realFileName))
+        {
+            filename = FileCache::stripAllExtensions(filename) + std::string(".png");
+        }
+
+        // Then, load texture (cleanup sketchfab names)
+        if (_fileCache.fileExistsInDirs(filename, realFileName))
+        {
+            std::string origExt = osgDB::getLowerCaseFileExtension(realFileName);
+            std::string fileNameChanged = FileCache::stripAllExtensions(realFileName) + std::string(".") + origExt;
+            std::string textureDir = osgDB::getFilePath(realFileName);
+            if (!textureDir.empty())
+                textureDir.push_back('\\');
+
+            if (realFileName != (textureDir + fileNameChanged) && std::rename(realFileName.c_str(), (textureDir + fileNameChanged).c_str()) == 0)
+            {
+                OSG_NOTICE << "INFO: Texture " << osgDB::getSimpleFileName(realFileName) << " renamed to " << fileNameChanged << std::endl;
+                realFileName = fileNameChanged;
+                _meshMaterials2.renameTexture(textureName.first, osgDB::getSimpleFileName(realFileName));
+            }
+            else
+                _meshMaterials2.renameTexture(textureName.first, osgDB::getSimpleFileName(realFileName));
+
+            textureImage = getOrCreateImage(realFileName);
+        }
+        else
+            OSG_WARN << "WARNING: Missing texture file " << textureName.first << std::endl;
+    }
+}
+
 ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
 {
     osg::ref_ptr<osg::Image> image;
@@ -2066,76 +2113,58 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
     std::string fileNameOrig = fileName;
     std::string fileNameChanged = fileName;
     std::string realOrigFileName;
-    if (_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName))
+
+    // Search in dirs
+    if (!_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName))
+        return nullptr;
+
+    // First try to read original file name. If unsuccessfull, then retry as .png
+    // (need to temporarily rename file. If successful, rename becomes permanent because of later export)
+    fileNameChanged = realOrigFileName;
+    image = osgDB::readImageFile(realOrigFileName);
+
+    if (!image)
     {
-        // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
-        std::string origExt = osgDB::getLowerCaseFileExtension(realOrigFileName);
-        fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".") + origExt;
-        if (std::rename(realOrigFileName.c_str(), fileNameChanged.c_str()) == 0)
+        std::string fileExt = osgDB::getLowerCaseFileExtension(realOrigFileName);
+
+        if (fileExt == "png")
         {
-            realOrigFileName = fileNameChanged;
-        }
-
-        // First try to read original file name. If unsuccessfull, then retry as .png
-        // (need to temporarily rename file. If success, then rename becomes permanent)
-        image = osgDB::readImageFile(realOrigFileName);
-        if (!image)
-        {
-            std::string fileExt = osgDB::getLowerCaseFileExtension(realOrigFileName);
-
-            if (fileExt == "png")
-            {
-                OSG_WARN << "Unsuported texture format: " << realOrigFileName << std::endl;
-                return nullptr;
-            }
-            else // if (fileExt == "tga" || fileExt == "tiff" || fileExt == "jpg" || fileExt == "jpeg")
-            {
-                fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".png");
-
-                if (std::rename(realOrigFileName.c_str(), fileNameChanged.c_str()) != 0)
-                {
-                    OSG_WARN << "Could not process file: " << realOrigFileName << std::endl;
-                    return nullptr;
-                }
-
-                if (osgDB::fileExists(fileNameChanged))
-                {
-                    image = osgDB::readImageFile(fileNameChanged);
-                }
-
-                if (!image)
-                {
-                    OSG_WARN << "Unsuported texture format: " << realOrigFileName << std::endl;
-                    std::ignore = std::rename(fileNameChanged.c_str(), realOrigFileName.c_str());
-                    return nullptr;
-                }
-                else
-                {
-                    OSG_NOTICE << "INFO: Texture " << realOrigFileName << " was actually a PNG image. Renamed to " << fileNameChanged << std::endl;
-                }
-            }
-        }
-    }
-    else if (osgDB::getLowerCaseFileExtension(realOrigFileName) != "png")
-    {
-        fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".png");
-
-        if (!osgDB::fileExists(fileNameChanged))
-        {
-            OSG_WARN << "WARNING: Could not find either " << realOrigFileName << " or " << fileNameChanged << " on model's path." << std::endl;
+            OSG_WARN << "Unsuported texture format: " << realOrigFileName << std::endl;
             return nullptr;
         }
-        else
+
+        else // if (fileExt == "tga" || fileExt == "tiff" || fileExt == "jpg" || fileExt == "jpeg")
         {
-            image = osgDB::readImageFile(fileNameChanged);
+            fileNameChanged = FileCache::stripAllExtensions(realOrigFileName) + std::string(".png");
+            std::string textureDir = osgDB::getFilePath(realOrigFileName);
+            if (!textureDir.empty())
+                textureDir.push_back('\\');
+
+            if (std::rename(realOrigFileName.c_str(), (textureDir + fileNameChanged).c_str()) != 0)
+            {
+                OSG_WARN << "Could not process file: " << realOrigFileName << std::endl;
+                return nullptr;
+            }
+
+            if (osgDB::fileExists(textureDir + fileNameChanged))
+            {
+                image = osgDB::readImageFile(textureDir + fileNameChanged);
+            }
 
             if (!image)
             {
-                OSG_WARN << "Unsuported texture format: " << fileNameChanged << std::endl;
+                OSG_WARN << "Unsuported texture format: " << realOrigFileName << std::endl;
+                std::ignore = std::rename((textureDir + fileNameChanged).c_str(), realOrigFileName.c_str());
                 return nullptr;
+            }
+            else
+            {
+                OSG_NOTICE << "INFO: " << osgDB::getSimpleFileName(realOrigFileName) << " renamed to " << osgDB::getSimpleFileName(fileNameChanged) << std::endl;
+                _meshMaterials2.renameTexture(osgDB::getSimpleFileName(fileNameOrig), osgDB::getSimpleFileName(fileNameChanged));
             }
         }
     }
+
 
     // Post processing: Deinterleave images if necessary
     if (_decodeTextures || _decodeTexturesNoSave)
@@ -2143,6 +2172,7 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
         decodeTexture(fileNameChanged, image);
     }
 
+    fileNameChanged = osgDB::getSimpleFileName(fileNameChanged);
     _imageMap[fileNameChanged] = image;
     return image;
 }
@@ -2248,11 +2278,12 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
     std::string geometryName = geometry->getName();
-    ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
-    ref_ptr<Array> texCoordOriginals = geometry->getTexCoordArray(0);
     int texCoordNum = geometry->getTexCoordArrayList().size();
     texCoordNum = texCoordNum;
 #endif // DEBUG
+
+    ref_ptr<Array> verticesOriginals = geometry->getVertexArray();
+    ref_ptr<Array> texCoordOriginals = geometry->getTexCoordArray(0);
 
     // Check for user data
     ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(geometry->getUserData());
@@ -2303,7 +2334,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     else
         realIndices = indices;
 
-    if (success[0] && success[3])
+    if (verticesOriginals && success[0] && success[3])
     {
         if (!realIndices)
         {
@@ -2311,7 +2342,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
             return;
         }
 
-        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, geometry->getVertexArray(), vtx_bbl, vtx_h);
+        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, verticesOriginals, vtx_bbl, vtx_h);
 
         if (!verticesConverted)
         {
@@ -2321,7 +2352,6 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
         geometry->setVertexArray(verticesConverted);
     }
-
     
     for (int i = 0; i < 32; i++)
     {
@@ -2342,7 +2372,6 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
         if (success[6] && success[8])
         {
-
             if (!realIndices)
             {
                 OSG_DEBUG << "WARNING: Encoded TextCoord array contains unsupported DrawPrimitive type." << std::endl;
@@ -2449,37 +2478,8 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
             if (!channel.second.Enable || textureInfo.Name.empty())
                 continue;
 
-            // Look for original file. If not found, set to alternative, because we change unsuported formats to .png
-            // or because they may be incorrectly named from Sketchfab
-            std::string filename = textureInfo.Name;
-            std::string realFileName;
-            if (!_fileCache.fileExistsInDirs(filename, realFileName))
-            {
-                filename = FileCache::stripAllExtensions(filename) + std::string(".png");
-            }
-
-            if (_fileCache.fileExistsInDirs(filename, realFileName))
-            {
-                // Sketchfab cleanup: leaves only the last extension for textures (sometimes they get multiple ones).
-                std::string origExt = osgDB::getLowerCaseFileExtension(realFileName);
-                std::string fileNameChanged = FileCache::stripAllExtensions(realFileName) + std::string(".") + origExt;
-                if (realFileName != fileNameChanged && std::rename(realFileName.c_str(), fileNameChanged.c_str()) == 0)
-                {
-                    OSG_NOTICE << "INFO: Texture " << realFileName << " renamed to " << fileNameChanged << std::endl;
-                    realFileName = fileNameChanged;
-                }
-
-                material->setUserValue(std::string("textureLayer_") + channel.first, realFileName);
-                unfoundTextures.emplace(realFileName);
-            }
-            else
-            {
-                if (_notFoundTextures.find(filename) == _notFoundTextures.end())
-                {
-                    OSG_WARN << "WARNING: Could not find texture: " << filename << std::endl;
-                    _notFoundTextures.emplace(filename);
-                }
-            }
+            material->setUserValue(std::string("textureLayer_") + channel.first, textureInfo.Name);
+            unfoundTextures.emplace(textureInfo.Name);
         }
     }
     else
@@ -2506,12 +2506,6 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
         {
             stateset->setTextureAttribute(j++, _textureMap[unfoundTexture], StateAttribute::TEXTURE);
             continue;
-        }
-
-        if (_firstDecodedTexture)
-        {
-            OSG_NOTICE << "Loading textures..." << std::endl;
-            _firstDecodedTexture = false;
         }
 
         ref_ptr<Image> image = getOrCreateImage(unfoundTexture);

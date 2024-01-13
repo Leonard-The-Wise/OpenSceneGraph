@@ -44,7 +44,7 @@ using namespace osgAnimation;
 namespace pluginfbx
 {
 
-	const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback> callback)
+	const osg::ref_ptr<osg::Callback> WriterNodeVisitor::getRealUpdateCallback(const osg::ref_ptr<osg::Callback> callback)
 	{
 		if (!callback)
 			return nullptr;
@@ -96,21 +96,110 @@ namespace pluginfbx
 		return reinterpret_cast<FbxSkeleton*>(nodeAttribute)->GetSkeletonType();
 	}
 
-	osg::Matrix WriterNodeVisitor::buildParentMatrices(const osg::Node& object)
+	osg::Matrix WriterNodeVisitor::getAnimatedMatrixTransform(const osg::ref_ptr<Callback> callback)
 	{
-		osg::Matrix mult;
-		if (object.getNumParents() > 0)
+		const ref_ptr<UpdateMatrixTransform> umt = dynamic_pointer_cast<UpdateMatrixTransform>(callback);
+
+		osg::Matrix nodeMatrix;
+
+		if (!umt)
+			return nodeMatrix;
+
+		auto& stackedTransforms = umt->getStackedTransforms();
+
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+
+		// Should have only 1 of each or a matrix...
+		for (auto& stackedTransform : stackedTransforms)
 		{
-			mult = buildParentMatrices(*object.getParent(0));
+			if (auto translateElement = dynamic_pointer_cast<StackedTranslateElement>(stackedTransform))
+			{
+				nodeMatrix.preMultTranslate(translateElement->getTranslate());
+			}
+			else if (auto rotateElement = dynamic_pointer_cast<StackedQuaternionElement>(stackedTransform))
+			{
+				nodeMatrix.preMultRotate(rotateElement->getQuaternion());
+			}
+			else if (auto scaleElement = dynamic_pointer_cast<StackedScaleElement>(stackedTransform))
+			{
+				nodeMatrix.preMultScale(scaleElement->getScale());
+			}
+			else if (auto rotateAxisElement = dynamic_pointer_cast<StackedRotateAxisElement>(stackedTransform))
+			{
+				osg::Vec3 axis = rotateAxisElement->getAxis();
+				float angle = rotateAxisElement->getAngle();
+				osg::Quat rotQuat;
+				rotQuat.makeRotate(angle, axis);
+				nodeMatrix.preMultRotate(rotQuat);
+			}
+			else if (auto matrixElement = dynamic_pointer_cast<StackedMatrixElement>(stackedTransform))
+			{
+				nodeMatrix = matrixElement->getMatrix() * nodeMatrix;
+			}
 		}
 
-		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&object))
+		return nodeMatrix;
+	}
+
+	osg::Matrix WriterNodeVisitor::buildParentMatrices(const osg::Node& node)
+	{
+		osg::Matrix mult;
+		if (node.getNumParents() > 0)
+		{
+			mult = buildParentMatrices(*node.getParent(0));
+		}
+
+		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&node))
 		{
 			osg::Matrix m = matrixObj->getMatrix();
+
+			// Check to see if it is animated.
+			ref_ptr<Callback> callback = const_cast<Callback*>(node.getUpdateCallback());
+			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(callback);
+
+			//if (!_ignoreAnimations && nodeCallback)
+			if (nodeCallback)
+			{
+				m = getAnimatedMatrixTransform(nodeCallback);
+			}
+
 			return m * mult;
 		}
 
 		return mult;
+	}
+
+	osg::Matrix WriterNodeVisitor::getMatrixFromSkeletonToNode(const osg::Node& node)
+	{
+		osg::Matrix retMatrix;
+		if (dynamic_cast<const Skeleton*>(&node))
+		{
+			return dynamic_cast<const Skeleton*>(&node)->getMatrix();
+		}
+		else if (dynamic_cast<const MatrixTransform*>(&node))
+		{
+			osg::Matrix nodeMatrix = dynamic_cast<const MatrixTransform*>(&node)->getMatrix();
+
+			// Check to see if it is animated.
+			ref_ptr<Callback> callback = const_cast<Callback*>(node.getUpdateCallback());
+			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(callback);
+
+			//if (!_ignoreAnimations && nodeCallback)
+			if (nodeCallback)
+			{
+				nodeMatrix = getAnimatedMatrixTransform(nodeCallback);
+			}
+
+			if (node.getNumParents() > 0)
+				return nodeMatrix * getMatrixFromSkeletonToNode(*node.getParent(0));
+			else
+				return nodeMatrix;
+		}
+		else if (node.getNumParents() > 0)
+			return getMatrixFromSkeletonToNode(*node.getParent(0));
+
+		return retMatrix;
 	}
 
 	void WriterNodeVisitor::applyGlobalTransforms(FbxNode* RootNode)
@@ -247,7 +336,7 @@ namespace pluginfbx
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
 
 		FbxNode* parent = _curFbxNode;
-		bool NodeHasBoneParent = isNodeASkeleton(parent);
+		// bool NodeHasBoneParent = isNodeASkeleton(parent);
 
 		if (skeleton)
 			nodeName = node.getName().empty() ? "Armature" : node.getName();
@@ -270,12 +359,11 @@ namespace pluginfbx
 		// Fix for sketchfab coordinates
 		if (isFirstMatrix)
 		{
-			osg::Matrix matrix2;
-			matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-			matrix.preMult(matrix2);
+			matrix.makeIdentity();
+			//osg::Matrix matrix2;
+			//matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+			//matrix.preMult(matrix2);
 			node.setMatrix(matrix);
-
-			_firstMatrixNode = _curFbxNode;
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
@@ -288,7 +376,6 @@ namespace pluginfbx
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
-
 
 			if (skeleton || bone)
 			{
@@ -317,6 +404,7 @@ namespace pluginfbx
 
 		if (isFirstMatrix)
 		{
+			_firstMatrixNode = _curFbxNode;
 			_MeshesRoot = _curFbxNode;
 			_firstMatrix = matrix;
 		}
@@ -338,7 +426,8 @@ namespace pluginfbx
 		}
 
 		// Process UpdateMatrixTransform and UpdateBone Callbacks last
-		if (!_ignoreAnimations && !skeleton)
+//		if (!_ignoreAnimations && !skeleton)
+		if (!skeleton)
 		{
 			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
 			if (nodeCallback)

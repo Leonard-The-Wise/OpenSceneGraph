@@ -260,6 +260,8 @@ bool MaterialFile2::readMaterialFile(const std::string& viewerInfoFileName, cons
 
 	mergeWithMaterial1(material1Path);
 
+	makeTextureMap();
+
 	return true;
 }
 
@@ -378,6 +380,54 @@ void osgJSONParser::MaterialFile2::mergeWithMaterial1(const std::string& fileNam
 		{
 			// Make a copy of material and save new mesh
 			_materials[meshName1] = _materials.at(materialName1);
+		}
+	}
+}
+
+void osgJSONParser::MaterialFile2::renameTexture(const std::string& originalFile, const std::string& modifiedFile)
+{
+	// Rename texture on material map
+	for (auto& material : _materials)
+	{
+		// Run through all materials and rename matching textures.
+		MaterialInfo2& mInfo = material.second;
+		for (auto& channel : mInfo.Channels)
+		{
+			// Make a copy
+			if (channel.second.Texture.Name == originalFile)
+			{
+				TextureInfo2 texture = channel.second.Texture;
+				texture.Name = modifiedFile;
+				channel.second.Texture = texture;
+			}
+		}
+	}
+
+	// Rename texture on texture map
+	if (_textureMap.find(originalFile) != _textureMap.end())
+	{
+		TextureInfo2 newTexture = _textureMap[originalFile];
+		_textureMap[modifiedFile] = newTexture;
+		_textureMap.erase(originalFile);
+	}
+
+
+}
+
+void MaterialFile2::makeTextureMap()
+{
+	for (auto& material : _materials)
+	{
+		// Get all textures.
+		MaterialInfo2& mInfo = material.second;
+		for (auto& channel : mInfo.Channels)
+		{
+			if (!channel.second.Enable)
+				continue;
+
+			TextureInfo2& texture = channel.second.Texture;
+			if (!texture.Name.empty())
+				_textureMap[texture.Name] = texture;
 		}
 	}
 }
