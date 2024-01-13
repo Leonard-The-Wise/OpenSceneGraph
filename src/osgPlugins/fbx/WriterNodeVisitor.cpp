@@ -73,6 +73,29 @@ namespace pluginfbx
 		return hasSkeletonParent(*object.getParent(0));
 	}
 
+	static bool isNodeASkeleton(FbxNode* pNode)
+	{
+		if (pNode == nullptr) {
+			return false;
+		}
+
+		FbxNodeAttribute* nodeAttribute = pNode->GetNodeAttribute();
+
+		if (nodeAttribute == nullptr) 
+		{
+			return false;
+		}
+		return nodeAttribute->GetAttributeType() == FbxNodeAttribute::eSkeleton;
+	}
+
+	static FbxSkeleton::EType getSkeletonType(FbxNode* pNode)
+	{
+		FbxNodeAttribute* nodeAttribute = pNode->GetNodeAttribute();
+		assert(reinterpret_cast<FbxSkeleton*>(nodeAttribute));
+
+		return reinterpret_cast<FbxSkeleton*>(nodeAttribute)->GetSkeletonType();
+	}
+
 	osg::Matrix WriterNodeVisitor::buildParentMatrices(const osg::Node& object)
 	{
 		osg::Matrix mult;
@@ -92,7 +115,7 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::applyGlobalTransforms(FbxNode* RootNode)
 	{
-		FbxAMatrix mainTransform = _firstMatrix->EvaluateGlobalTransform();
+		FbxAMatrix mainTransform = _firstMatrixNode->EvaluateGlobalTransform();
 
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
@@ -115,9 +138,9 @@ namespace pluginfbx
 		FbxVector4 positionFinal = mainTransform.GetT();
 		FbxVector4 scaleFinal = mainTransform.GetS();
 
-		_firstMatrix->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
-		_firstMatrix->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
-		_firstMatrix->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+		_firstMatrixNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+		_firstMatrixNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+		_firstMatrixNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
 	}
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
@@ -223,14 +246,15 @@ namespace pluginfbx
 		ref_ptr<Skeleton> skeleton = dynamic_cast<Skeleton*>(&node);
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
 
+		FbxNode* parent = _curFbxNode;
+		bool NodeHasBoneParent = isNodeASkeleton(parent);
+
 		if (skeleton)
-			nodeName = node.getName().empty() ? "Mesh Skeleton" : node.getName();
+			nodeName = node.getName().empty() ? "Armature" : node.getName();
 		else if (bone)
 			nodeName = node.getName().empty() ? "DefaultBone" : node.getName();
 		else
 			nodeName = node.getName().empty() ? "DefaultTransform" : node.getName();
-
-		FbxNode* parent = _curFbxNode;
 
 		// Get custom parameter on node to first Matrix. If we are the first, also save the current transform
 		// for later (_firstMatrixPostProcess)
@@ -251,7 +275,7 @@ namespace pluginfbx
 			matrix.preMult(matrix2);
 			node.setMatrix(matrix);
 
-			_firstMatrix = _curFbxNode;
+			_firstMatrixNode = _curFbxNode;
 		}
 
 		// Create groups for nodes if they are bones or if we are ignoring bones
@@ -294,6 +318,7 @@ namespace pluginfbx
 		if (isFirstMatrix)
 		{
 			_MeshesRoot = _curFbxNode;
+			_firstMatrix = matrix;
 		}
 
 		// Process Skeleton and Bones and create nodes before continuing
@@ -302,6 +327,11 @@ namespace pluginfbx
 			FbxSkeleton* fbxSkel = FbxSkeleton::Create(_curFbxNode, skeleton ? "RootNode" : nodeName.c_str());
 			fbxSkel->SetSkeletonType(skeleton ? FbxSkeleton::eRoot : FbxSkeleton::eLimbNode);
 			_curFbxNode->SetNodeAttribute(fbxSkel);
+
+			//if (NodeHasBoneParent && getSkeletonType(parent) == FbxSkeleton::eEffector)
+			//{
+			//	reinterpret_cast<FbxSkeleton*>(parent->GetNodeAttribute())->SetSkeletonType(FbxSkeleton::eLimb);
+			//}
 
 			if (bone)
 				_boneNodeSkinMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));

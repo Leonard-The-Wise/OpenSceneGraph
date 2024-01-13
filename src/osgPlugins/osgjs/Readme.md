@@ -68,3 +68,4 @@ Many times, animation data is broken (not the plugin's fault, the animation file
 ### Extra tip 2:
 
 For some models I'm getting inconsistent results while importing to Blender. So use FBXReview or other Autodesk product (like 3ds Max or Maya) to see if the problem is with the export or the import plugin.
+

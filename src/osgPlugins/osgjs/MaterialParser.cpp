@@ -95,10 +95,10 @@ bool MaterialFile::readMaterialFile(const std::string& filePath)
 						{
 							newMaterial.KnownLayerNames.at(captureGroup[0]["TextureLayerName"]) = captureGroup[0]["FileOrParam"];
 						}
-						else
-						{
-							OSG_WARN << "WARNING: Found unknown texture parameter: " << captureGroup[0]["TextureLayerName"] << std::endl;
-						}
+						//else
+						//{
+						//	OSG_WARN << "WARNING: Found unknown texture parameter: " << captureGroup[0]["TextureLayerName"] << std::endl;
+						//}
 					}
 				}
 

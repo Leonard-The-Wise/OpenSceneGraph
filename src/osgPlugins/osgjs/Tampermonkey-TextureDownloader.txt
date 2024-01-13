@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         SketchfabTextureDownloader
+// @name         SketchfabTextureRepeated
 // @version      0.9.2
 // @description  Download Sketchfab models and/or textures!
 // @author       Marin - 01/2024 - Download textures with same name for different objects
@@ -22,6 +22,7 @@ var fund_drawArrays = /t\.drawArrays\(t\.TRIANGLES,0,6\)/g;
 var func_renderInto1 = /A\.renderInto\(n,E,R/g;
 var func_renderInto2 = /g\.renderInto=function\(e,i,r/g;
 var func_getResourceImage = /getResourceImage:function\(e,t\){/g;
+var func_texture = /loadLUV:function\(\){/g;
 
 var func_test = /apply:function\(e\){var t=e instanceof r\.Geometry;/g
 
@@ -252,7 +253,6 @@ var addbtnfunc;
                 });
                 if(!saveimagecache2[url_image])
                 {
-                    console.log(e);
                     saveimage_to_list(url_image, filename_image);
                 }
 
@@ -318,13 +318,19 @@ var addbtnfunc;
                 var fn = /^([\w\- ]+)/;
                 var uniqueName = fn.exec(name)[1] + ".png";
                 var uniqueId = 1;
-               while (objects.hasOwnProperty(uniqueName)) {
-                   uniqueName = fn.exec(name)[1] + "-" + uniqueId + ".png";
+                if (objects.hasOwnProperty(uniqueName) && objects[uniqueName].size == blob.size)
+                {
+                    console.log("Texture " + uniqueName + " already saved.");
+                    return;
+                }
+                while (objects.hasOwnProperty(uniqueName))
+                {
+                   uniqueName = fn.exec(name)[1] + "." + uniqueId + ".png";
                    uniqueId++;
                 }
                 objects[uniqueName] = blob;
             },"image/png");
-            console.log("Texture saved to Blob: "+name);
+            console.log("Texture saved to Blob: " + name);
         }
 
 })();
@@ -489,6 +495,18 @@ var addbtnfunc;
                                 console.log("[UserScript] Injection: patch_4 injected successful " + srimgc.src);
                                 setTimeout(addbtnfunc, 3000);
                             }
+
+                            ret = func_texture.exec(jstext);
+
+                            if (ret)
+                            {
+                                var index = ret.index + ret[0].length;
+                                var head = jstext.slice(0, index);
+                                var tail = jstext.slice(index);
+                                //jstext = head + ";debugger;" + tail;
+                                console.log("[UserScript] Injection: patch_3 injected successful " + srimgc.src);
+                            }
+
                             //ret = func_test.exec(jstext)
                             var idx = 0;
                             // while (ret = func_test.exec(jstext))

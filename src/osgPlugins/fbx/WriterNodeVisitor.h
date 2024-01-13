@@ -215,15 +215,14 @@ namespace pluginfbx
         static osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
         /**
-        *  Fill the faces field of the mesh and call buildMesh().
-        *  \param name the name to assign to the Fbx Mesh
-        *  \param geometryList is the list of geometries which contains the vertices and faces.
-        *  \param listTriangles contain all the mesh's faces.
-        *  \param texcoords tell us if we have to handle texture coordinates.
-        *  \return the new mesh node 
-        */ 
-        FbxNode* buildMesh(const osg::Geometry& geometry,
-            const MaterialParser* materialParser);
+        * Build geometry triangles and control points (vertices)
+        * \param geometry is the osg::geometry to build
+        * \param materialParser is the mesh processed stateset
+        * \param matrixParent is the optional parent matrix to apply to the geometry
+        * \return the new mesh node built.
+        */
+
+        FbxNode* buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix = {});
 
         void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh, std::set<std::string>& emptyBoneNames);
 
@@ -313,7 +312,8 @@ namespace pluginfbx
         BoneNodeMap _boneNodeSkinMap;
         MatrixAnimCurveMap _matrixAnimCurveMap;
         BlendShapeAnimMap _blendShapeAnimations;
-        FbxNode* _firstMatrix;
+        FbxNode* _firstMatrixNode;
+        osg::Matrix _firstMatrix;
 
         // Keep track of created materials
         std::unordered_map<const osg::Material*, MaterialParser*> _materialMap;

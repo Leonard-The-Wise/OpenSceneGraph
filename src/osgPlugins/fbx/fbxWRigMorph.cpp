@@ -198,6 +198,7 @@ namespace pluginfbx
 			if (vertexFailed)
 				continue;
 
+			/*
 			// Create Normals
 			const osg::Array* normals = osgMorphTarget->getNormalArray();
 
@@ -455,6 +456,7 @@ namespace pluginfbx
 
 				layer->SetUVs(layerDiffuseUV);
 			}
+			*/
 		}
 	}
 

@@ -796,7 +796,7 @@ namespace pluginfbx
 		return retMatrix;
 	}
 
-	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser)
+	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix)
 	{
 		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
 		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
@@ -844,6 +844,9 @@ namespace pluginfbx
 			transformMatrix = getMatrixFromSkeletonToNode(geometry);
 		}
 
+		// Apply parent matrix
+		transformMatrix = transformMatrix * parentMatrix;
+
 		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
 		setControlPointAndNormalsAndUV(index_vert, mesh, transformMatrix);
 		mesh->GenerateNormals(true);
@@ -858,14 +861,16 @@ namespace pluginfbx
 
 		// Process morphed geometry
 		if (morph)
+		{
+			//const osg::Geometry* osgMorphTarget = morph->getMorphTarget(2).getGeometry();
+			//buildMesh(*osgMorphTarget, materialParser, transformMatrix);
+
 			createMorphTargets(morph, mesh, transformMatrix);
+		}
 
 		// Look for morph geometries inside rig
-		if (rig)
-		{
-			if (rigMorph)
-				createMorphTargets(rigMorph, mesh, transformMatrix);
-		}
+		if (rigMorph)
+			createMorphTargets(rigMorph, mesh, transformMatrix);
 
 		return meshNode;
 	}
