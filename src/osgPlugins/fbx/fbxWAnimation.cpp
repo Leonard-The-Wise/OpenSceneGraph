@@ -240,6 +240,12 @@ namespace pluginfbx
 		if (!callback)
 			return;
 
+		// Create Static Pose
+		FbxAnimStack* animStack = FbxAnimStack::Create(_pScene, "Static Pose");
+		_pScene->SetCurrentAnimationStack(animStack);
+		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, "Static Pose");
+		animStack->AddMember(fbxAnimLayer);
+
 		// Read animation takes
 		auto bam = dynamic_pointer_cast<BasicAnimationManager>(callback);
 		if (!bam)
