@@ -175,7 +175,7 @@ namespace pluginfbx
 		osg::Matrix retMatrix;
 		if (dynamic_cast<const Skeleton*>(&node))
 		{
-			return dynamic_cast<const Skeleton*>(&node)->getMatrix();
+			return retMatrix; // dynamic_cast<const Skeleton*>(&node)->getMatrix();
 		}
 		else if (dynamic_cast<const MatrixTransform*>(&node))
 		{
@@ -309,6 +309,7 @@ namespace pluginfbx
 			_firstNodeProcessed = true;
 
 			FbxNode* RootNode = _curFbxNode;
+			_MeshesRoot = _curFbxNode;
 			
 			traverse(node);
 
