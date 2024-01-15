@@ -826,9 +826,6 @@ namespace pluginfbx
 		// Process morphed geometry
 		if (morph)
 		{
-			//const osg::Geometry* osgMorphTarget = morph->getMorphTarget(2).getGeometry();
-			//buildMesh(*osgMorphTarget, materialParser, transformMatrix);
-
 			createMorphTargets(morph, mesh, transformMatrix);
 		}
 
