@@ -209,6 +209,8 @@ namespace pluginfbx
 
         bool hasSkeletonParent(const osg::Node& object);
 
+        bool firstBoneInHierarchy(FbxNode* boneParent);
+
         osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback);
 
         osg::Matrix buildParentMatrices(const osg::Node& object, int& numParents);
