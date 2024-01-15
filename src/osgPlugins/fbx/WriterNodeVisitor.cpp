@@ -44,6 +44,23 @@ using namespace osgAnimation;
 namespace pluginfbx
 {
 
+	static bool isNodeASkeleton(FbxNode* pNode)
+	{
+		if (pNode == nullptr)
+		{
+			return false;
+		}
+
+		FbxNodeAttribute* nodeAttribute = pNode->GetNodeAttribute();
+
+		if (nodeAttribute == nullptr)
+		{
+			return false;
+		}
+
+		return nodeAttribute->GetAttributeType() == FbxNodeAttribute::eSkeleton;
+	}
+
 	const osg::ref_ptr<osg::Callback> WriterNodeVisitor::getRealUpdateCallback(const osg::ref_ptr<osg::Callback> callback)
 	{
 		if (!callback)
@@ -73,20 +90,19 @@ namespace pluginfbx
 		return hasSkeletonParent(*object.getParent(0));
 	}
 
-	static bool isNodeASkeleton(FbxNode* pNode)
+	bool WriterNodeVisitor::firstBoneInHierarchy(FbxNode* boneParent)
 	{
-		if (pNode == nullptr) {
-			return false;
-		}
+		if (!boneParent)
+			return true;
 
-		FbxNodeAttribute* nodeAttribute = pNode->GetNodeAttribute();
-
-		if (nodeAttribute == nullptr) 
-		{
+		if (isNodeASkeleton(boneParent))
 			return false;
+
+		if (!boneParent->GetParent())
+			return true;
+
+		return firstBoneInHierarchy(boneParent->GetParent());
 		}
-		return nodeAttribute->GetAttributeType() == FbxNodeAttribute::eSkeleton;
-	}
 
 	static FbxSkeleton::EType getSkeletonType(FbxNode* pNode)
 	{

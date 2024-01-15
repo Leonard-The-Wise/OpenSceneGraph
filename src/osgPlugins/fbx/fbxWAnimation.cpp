@@ -80,7 +80,7 @@ namespace pluginfbx
 			curveZ = animCurveNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
 			bTranslate = true;
 		}
-		else if (channelName == "scale")
+		else if (channelName == "scale" || channelName == "ScalingCompensation")
 		{
 			curveX = animCurveNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
 			curveY = animCurveNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
@@ -182,6 +182,7 @@ namespace pluginfbx
 
 		bool NotImplemented1(false), NotImplemented2(false);
 
+		bool foundAnimationWithoutTarget(false);
 		for (auto& channel : osgAnimation->getChannels()) 
 		{
 			std::string targetName = channel->getTargetName();
@@ -190,6 +191,8 @@ namespace pluginfbx
 			auto morphAnimNodeIter = _blendShapeAnimations.find(targetName);
 			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end() && morphAnimNodeIter == _blendShapeAnimations.end())
 			{
+				OSG_WARN << "WARNING: Found animation without target: " << targetName << std::endl;
+				foundAnimationWithoutTarget = true;
 				continue;
 			}
 
@@ -230,6 +233,11 @@ namespace pluginfbx
 
 				NotImplemented2 = true;
 			}
+		}
+
+		if (foundAnimationWithoutTarget)
+		{
+			OSG_NOTICE << "Consider exporting the model with -O ExportFullHierarchy to try to find missing animation targets." << std::endl;
 		}
 	}
 
