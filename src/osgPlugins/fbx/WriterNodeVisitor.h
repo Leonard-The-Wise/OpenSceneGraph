@@ -112,7 +112,8 @@ namespace pluginfbx
             _rotateXAxis(rotateXAxis),
             _exportFullHierarchy(exportFullHierarchy),
             _scaleModel(scaleModel),
-            _flipUVs(flipUVs)
+            _flipUVs(flipUVs),
+            _firstMatrixNode(nullptr)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -210,13 +211,12 @@ namespace pluginfbx
 
         osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback);
 
-        osg::Matrix buildParentMatrices(const osg::Node& object);
+        osg::Matrix buildParentMatrices(const osg::Node& object, int& numParents);
 
         osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
         void applyGlobalTransforms(FbxNode* RootNode);
 
-        void snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode);
 
 
         /**

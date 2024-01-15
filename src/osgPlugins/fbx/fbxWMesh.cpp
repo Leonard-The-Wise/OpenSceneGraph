@@ -755,27 +755,6 @@ namespace pluginfbx
 		}
 	}
 
-
-	void WriterNodeVisitor::snapMeshToParent(const osg::Geometry& geometry, FbxNode* meshNode)
-	{
-		osg::Matrix matrix = buildParentMatrices(geometry);
-
-		osg::Vec3d pos, scl;
-		osg::Quat rot, so;
-
-		matrix.decompose(pos, rot, scl, so);
-		meshNode->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
-		meshNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
-
-		FbxAMatrix mat;
-
-		FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
-		mat.SetQ(q);
-		FbxVector4 vec4 = mat.GetR();
-
-		meshNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
-	}
-
 	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix)
 	{
 		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
@@ -813,9 +792,14 @@ namespace pluginfbx
 		osg::Matrix transformMatrix;
 
 		// For all ordinary geometry, compute matrix from transform.
+		int numMatrixParent(0);
 		if (!_exportFullHierarchy && _matrixStack.size() > 0)
 		{
-			transformMatrix = buildParentMatrices(geometry);
+			transformMatrix = buildParentMatrices(geometry, numMatrixParent);
+		}
+		if (!_exportFullHierarchy && numMatrixParent == 0)
+		{
+			transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry

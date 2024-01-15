@@ -142,17 +142,18 @@ namespace pluginfbx
 		return nodeMatrix;
 	}
 
-	osg::Matrix WriterNodeVisitor::buildParentMatrices(const osg::Node& node)
+	osg::Matrix WriterNodeVisitor::buildParentMatrices(const osg::Node& node, int& numParents)
 	{
 		osg::Matrix mult;
 		if (node.getNumParents() > 0)
 		{
-			mult = buildParentMatrices(*node.getParent(0));
+			mult = buildParentMatrices(*node.getParent(0), numParents);
 		}
 
 		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&node))
 		{
 			osg::Matrix m = matrixObj->getMatrix();
+			numParents++;
 
 			// Check to see if it is animated.
 			ref_ptr<Callback> callback = const_cast<Callback*>(node.getUpdateCallback());
@@ -204,7 +205,7 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::applyGlobalTransforms(FbxNode* RootNode)
 	{
-		FbxAMatrix mainTransform = _firstMatrixNode->EvaluateGlobalTransform();
+		FbxAMatrix mainTransform = RootNode->EvaluateGlobalTransform();
 
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
@@ -227,9 +228,9 @@ namespace pluginfbx
 		FbxVector4 positionFinal = mainTransform.GetT();
 		FbxVector4 scaleFinal = mainTransform.GetS();
 
-		_firstMatrixNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
-		_firstMatrixNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
-		_firstMatrixNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+		RootNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+		RootNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+		RootNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
 	}
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
@@ -308,7 +309,6 @@ namespace pluginfbx
 			//ignore the root node to maintain same hierarchy
 			_firstNodeProcessed = true;
 
-			FbxNode* RootNode = _curFbxNode;
 			_MeshesRoot = _curFbxNode;
 			
 			traverse(node);
@@ -326,7 +326,10 @@ namespace pluginfbx
 				}
 			}
 
-			applyGlobalTransforms(RootNode);
+			if (!_firstMatrixNode)
+				_firstMatrixNode = _MeshesRoot;
+
+			applyGlobalTransforms(_firstMatrixNode);
 		}
 	}
 
@@ -335,6 +338,7 @@ namespace pluginfbx
 		std::string nodeName;
 		ref_ptr<Skeleton> skeleton = dynamic_cast<Skeleton*>(&node);
 		ref_ptr<Bone> bone = dynamic_cast<Bone*>(&node);
+		int numMatrixParents(0);
 
 		FbxNode* parent = _curFbxNode;
 		// bool NodeHasBoneParent = isNodeASkeleton(parent);
@@ -389,8 +393,17 @@ namespace pluginfbx
 			{
 				Matrix matrixSkeletonTransform;
 				if (skeleton->getNumParents() > 0)
-					matrixSkeletonTransform = buildParentMatrices(*skeleton->getParent(0));
+					matrixSkeletonTransform = buildParentMatrices(*skeleton->getParent(0), numMatrixParents);
 				matrix = matrixSkeletonTransform * matrix;
+
+				// Fix for skeletons without a first matrix parent
+				if (skeleton && numMatrixParents == 0)
+				{
+					osg::Matrix matrixMult;
+					matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+					matrix = matrix * matrixMult;
+					//node.setMatrix(matrix);
+				}
 			}
 
 			matrix.decompose(pos, rot, scl, so);
