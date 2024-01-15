@@ -14,7 +14,7 @@ namespace osgJSONParser
 
 
 		enum class KeyDecodeMode {
-			DirectionCompressed, Vec3Compressed, QuatCompressed
+			DirectionCompressed, TimeCompressed, Vec3Compressed, QuatCompressed
 		};
 
 		using json = nlohmann::json;

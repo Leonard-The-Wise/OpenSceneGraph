@@ -669,14 +669,15 @@ osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Ar
 osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::Array>& keys, const UserDataContainer* udc,
 	KeyDecodeMode mode)
 {
-	std::vector<double> o(4), b(3), h(3);
-	std::vector<std::string> valuesO(4), valuesB(3), valuesH(3);
+	std::vector<double> o(5), b(3), h(3);
+	std::vector<std::string> valuesO(5), valuesB(3), valuesH(3);
 	double epsilon(0.0), nphi(0.0);
 
 	std::ignore = udc->getUserValue("ox", valuesO[0]);
 	std::ignore = udc->getUserValue("oy", valuesO[1]);
 	std::ignore = udc->getUserValue("oz", valuesO[2]);
 	std::ignore = udc->getUserValue("ow", valuesO[3]);
+	std::ignore = udc->getUserValue("ot", valuesO[4]);
 
 	std::ignore = udc->getUserValue("bx", valuesB[0]);
 	std::ignore = udc->getUserValue("by", valuesB[1]);
@@ -698,6 +699,8 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		getSafeDouble(valuesO[2], o[2]);
 	if (!valuesO[3].empty())
 		getSafeDouble(valuesO[3], o[3]);
+	if (!valuesO[4].empty())
+		getSafeDouble(valuesO[4], o[4]);
 
 	if (!valuesB[0].empty())
 		getSafeDouble(valuesB[0], b[0]);
@@ -748,6 +751,12 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 
 	switch (keysConverted->getType())
 	{
+	case Array::FloatArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<FloatArray>(keysConverted), elementSize);
+		break;
+	case Array::DoubleArrayType:
+		keysConverted = deInterleaveKeys(dynamic_pointer_cast<DoubleArray>(keysConverted), elementSize);
+		break;
 	case Array::UIntArrayType:
 		keysConverted = deInterleaveKeys(dynamic_pointer_cast<UIntArray>(keysConverted), elementSize);
 		break;
@@ -771,7 +780,25 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		return nullptr;
 	}
 
-	if (mode == KeyDecodeMode::Vec3Compressed)
+	if (mode == KeyDecodeMode::TimeCompressed)
+	{
+		switch (keysConverted->getType())
+		{
+		case Array::FloatArrayType:
+			keysInflated1 = new DoubleArray(dynamic_pointer_cast<FloatArray>(keysConverted)->begin(), dynamic_pointer_cast<FloatArray>(keysConverted)->end());
+			break;
+		case Array::DoubleArrayType:
+			keysInflated1 = new DoubleArray(dynamic_pointer_cast<DoubleArray>(keysConverted)->begin(), dynamic_pointer_cast<DoubleArray>(keysConverted)->end());
+			break;
+		}
+
+		keysInflated2->reserveArray(keysInflated1->getNumElements() + 1);
+		keysInflated2->push_back(o[4]); // "ot"
+		keysInflated2->insert(keysInflated2->begin() + 1, keysInflated1->begin(), keysInflated1->end());
+
+		keysConverted = inflateKeys2(keysInflated2, elementSize);
+	}
+	else if (mode == KeyDecodeMode::Vec3Compressed)
 	{
 		switch (keysConverted->getType())
 		{
@@ -796,9 +823,9 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		}
 
 		keysInflated2->reserveArray(keysInflated1->getNumElements() + 3);
-		keysInflated2->push_back(o[0]);
-		keysInflated2->push_back(o[1]);
-		keysInflated2->push_back(o[2]);
+		keysInflated2->push_back(o[0]); // "ox"
+		keysInflated2->push_back(o[1]); // "oy"
+		keysInflated2->push_back(o[2]); // "oz"
 		keysInflated2->insert(keysInflated2->begin() + 3, keysInflated1->begin(), keysInflated1->end());
 
 		keysConverted = inflateKeys2(keysInflated2, elementSize);
@@ -831,10 +858,10 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		}
 
 		keysInflated2->reserveArray(keysInflated1->getNumElements() + 4);
-		keysInflated2->push_back(o[0]);
-		keysInflated2->push_back(o[1]);
-		keysInflated2->push_back(o[2]);
-		keysInflated2->push_back(o[3]);
+		keysInflated2->push_back(o[0]); // "ox"
+		keysInflated2->push_back(o[1]); // "oy"
+		keysInflated2->push_back(o[2]); // "oz"
+		keysInflated2->push_back(o[3]); // "ow"
 		keysInflated2->insert(keysInflated2->begin() + 4, keysInflated1->begin(), keysInflated1->end());
 
 		keysConverted = inflateKeysQuat(keysInflated2);
@@ -2075,9 +2102,9 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeys1(const osg::ref_ptr<T>&
 		unsigned int u = 0;
 		while (u < itemSize) {
 			(*output)[static_cast<size_t>(o) + u] = static_cast<float>(i[u] + (*input)[static_cast<size_t>(o) + u] * n[u]);
-			u += 1;
+			++u;
 		}
-		s += 1;
+		++s;
 	}
 
 	return output;

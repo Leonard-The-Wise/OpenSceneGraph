@@ -1682,17 +1682,10 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
         {
             // Get UserDataContainer early
             lookForChildren(channel, currentJSONNode, UserDataContainerType::UserData, nodeKey);
-            keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::Vec3Compressed);
 
-            // HACK: Since our data is corrupted...
-            auto t = dynamic_pointer_cast<FloatArray>(timesArray);
-            if (_useTimeHack && t)
-            {
-                for (unsigned int i = 0; i < t->getNumElements(); ++i)
-                {
-                    (*t)[i] = (*t)[i] * i;
-                }
-            }
+            // Decode time and keys
+            timesArray = ParserHelper::decompressArray(timesArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::TimeCompressed);
+            keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::Vec3Compressed);
         }
 
         if ((dynamic_pointer_cast<Vec3Array>(keysArray) || dynamic_pointer_cast<Vec3dArray>(keysArray))
@@ -1763,17 +1756,10 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
         {
             // Get UserDataContainer early
             lookForChildren(channel, currentJSONNode, UserDataContainerType::UserData, nodeKey);
-            keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::QuatCompressed);
 
-            // HACK: Since our data is corrupted...
-            auto t = dynamic_pointer_cast<FloatArray>(timesArray);
-            if (_useTimeHack && t)
-            {
-                for (unsigned int i = 0; i < t->getNumElements(); ++i)
-                {
-                    (*t)[i] = TIMEHACK * i; // (*t)[i] * i;
-                }
-            }
+            // Decode time and keys
+            timesArray = ParserHelper::decompressArray(timesArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::TimeCompressed);
+            keysArray = ParserHelper::decompressArray(keysArray, channel->getUserDataContainer(), ParserHelper::KeyDecodeMode::QuatCompressed);
         }
 
         if ((dynamic_pointer_cast<Vec4dArray>(keysArray) || dynamic_pointer_cast<Vec4Array>(keysArray))
