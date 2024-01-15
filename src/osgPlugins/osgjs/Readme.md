@@ -15,13 +15,13 @@ Also, this software is provided 'as-is', that means no warranties whatsoever. Th
 
 - One notice is that this plugin is capable of reading and understanging Sketchfab Ripper specific files, such as `model_info.json` and `materialInfo.txt` and also it may read animations and textures inside the default export directories and without any need to edit `file.osgjs` and replance the `.bin.gz` extensions - but it still needs the uncompressed files anyway. So, to use it properly, uncheck any conversion that Sketchfab Ripper does and just let it download/unzip files to their proper folders and then run the command manually on them after. The plugin will tell if any file for the model is missing or compressed.
 
-- Also, I did notice that Sketchfab Ripper (at least V 1.18) is downloading broken textures, so included on this package is a Tampermonkey script to download Sketchfab textures (tampermonkey extension for Chrome avaliable [here](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=pt-BR). In this script, model exportation is disabled, since it is intended to work with the original .osgjs, not a .obj file (that doesn't support rigging and animations). So use it to grab textures and place either on `textures` folder or directly into your model's folder. 
+- Also, If you are downloading with SketchRipper V 1.18, I included on this package is a Tampermonkey script to download Sketchfab textures, because that version don't download correct textures (tampermonkey extension for Chrome avaliable [here](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=pt-BR). In this script, model exportation is disabled, since it is intended to work with the original .osgjs, not a .obj file (that doesn't support rigging and animations). So use it to grab textures and place either on `textures` folder or directly into your model's folder. 
 
 This script may download "duplicate" textures. But they are not actually duplicate. This happens because Sketchfab separate some texture channels (like Alpha Opacity of Albedo) on a different texture with the same name. So, all "duplicate" textures are followed by a number at the end of file. Just open them to certify which part of the texture that channel is and adjust the texture on a painting software (like Gimp or Photoshop) accordingly.
 
 The plugin will detect any missing texture files if materialInfo.txt is avaliable and inform you. Notice however that material processing is experimental. Sketchfab uses a custom material system that is for now impossible to replicate in FBX format (duue to FBX SDK not supporting PBR based materials). So Material importing may work for just a few models, but at least some textures may be placed on a right channel and it is the easiest part to fix. Check your UVs though. Many models require `-O FlipUVs` to export correctly.
 
-Also, normals and tangent data are being reconstructed on the fly, since for now the plugin can't decode the originals.
+Also, normals and tangent data are being reconstructed on the fly, since for now the plugin can't decode the originals, so you may need to rebuild the smoothing groups.
 
 2. Usage
 
@@ -63,10 +63,6 @@ Finally, if everything is failing: like, your rigging won't export correctly, me
 What I recommend you to do is to begin exporting models with default options, and if it fails, `-O ExportOriginal`, and then incrementally change the options later, so you'll have a baseline for which parameters to use and which to not. Most of the time, 1 try is enough but for some models, you may have to experiment with several different options to make them work.
 
 ### Extra tip:
-
-Many times, animation data is broken (not the plugin's fault, the animation files have incorrect data), so animations may not present accurately or not play at all. So I made a hack to try and fix them, by adding custom keyframing into time arrays. Use `-O useTimeHack` on export and try it out to see if your animations are back up again. Tested with a few models only, and it's not 100% accurate in no way.
-
-### Extra tip 2:
 
 If for some models you get inconsistent results while importing to Blender, try opening it on FBXReview or other Autodesk product (like 3ds Max or Maya) to see if the problem is with the export or the import plugin.
 

@@ -70,8 +70,6 @@ ref_ptr<Group> OsgjsParser::parseObjectTree(const json& firstOsgNodeJSON)
 #define ADD_UNIQUE_ID (currentJSONNode.contains("UniqueID") ? ("[UniqueID: " + std::to_string(currentJSONNode["UniqueID"].get<int>()) + "]") : std::string(""))
 #define ADD_KEY_NAME ADD_NODE_KEY << ADD_NODE_NAME << ADD_UNIQUE_ID
 
-constexpr auto TIMEHACK = 0.0333333351;
-
 constexpr auto MODELINFO_FILE = "model_info.json";
 
 void OsgjsParser::buildMaterialAndtextures() 
@@ -1689,13 +1687,17 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
         }
 
         if ((dynamic_pointer_cast<Vec3Array>(keysArray) || dynamic_pointer_cast<Vec3dArray>(keysArray))
-            && dynamic_pointer_cast<FloatArray>(timesArray))
+            && dynamic_pointer_cast<FloatArray>(timesArray) || dynamic_pointer_cast<DoubleArray>(timesArray))
         {
             for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
             {
                 Vec3Keyframe f;
                 Vec3 vec;
-                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+
+                if (dynamic_pointer_cast<FloatArray>(timesArray))
+                    f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                else
+                    f.setTime((*dynamic_pointer_cast<DoubleArray>(timesArray))[i]);
                 switch (keysArray->getType())
                 {
                 case Array::Vec3dArrayType:
@@ -1763,13 +1765,16 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
         }
 
         if ((dynamic_pointer_cast<Vec4dArray>(keysArray) || dynamic_pointer_cast<Vec4Array>(keysArray))
-            && dynamic_pointer_cast<FloatArray>(timesArray))
+            && dynamic_pointer_cast<FloatArray>(timesArray) || dynamic_pointer_cast<DoubleArray>(timesArray))
         {
             for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
             {
                 QuatKeyframe f;
                 Quat vec;
-                f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                if (dynamic_pointer_cast<FloatArray>(timesArray))
+                    f.setTime((*dynamic_pointer_cast<FloatArray>(timesArray))[i]);
+                else
+                    f.setTime((*dynamic_pointer_cast<DoubleArray>(timesArray))[i]);
                 switch (keysArray->getType())
                 {
                 case Array::Vec4dArrayType:
@@ -2017,38 +2022,6 @@ std::string OsgjsParser::getModelName() const
     return modelName;
 }
 
-void OsgjsParser::decodeTexture(const std::string& fileName, osg::ref_ptr<osg::Image>& image)
-{
-    std::vector<uint8_t> vec, vecOut;
-
-    unsigned char* imageData = image->data();
-    int imageSize = image->getTotalSizeInBytes();
-    int imageWidth = image->s();
-    int imageHeight = image->t();
-    int imageDept = image->r();
-    GLenum textureFormat = image->getInternalTextureFormat();
-    GLenum pixelFormat = image->getPixelFormat();
-
-    vec.resize(imageSize);
-    std::copy(imageData, imageData + imageSize, vec.begin());
-
-    ParserHelper::decodeImage(imageWidth, vec, vecOut);
-
-    image->setImage(imageWidth, imageHeight, imageDept, textureFormat, pixelFormat, GL_UNSIGNED_BYTE, const_cast<unsigned char*>(vecOut.data()), Image::NO_DELETE);
-
-    if (!_decodeTexturesNoSave)
-    {
-        if (osgDB::writeImageFile(*image, fileName))
-            OSG_NOTICE << "INFO: Decoded texture " << fileName << " and overwritten file." << std::endl;
-        else
-            OSG_WARN << "WARNING: Failed to save decoded texture " << fileName << " to disk." << std::endl;
-    }
-    else
-    {
-        OSG_NOTICE << "INFO: Decoded texture " << fileName << " without saving to disk." << std::endl;
-    }
-}
-
 void OsgjsParser::createTextureMap(const std::map<std::string, TextureInfo2>& textureMap)
 {
     for (auto& textureName : textureMap)
@@ -2149,13 +2122,6 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
                 _meshMaterials2.renameTexture(osgDB::getSimpleFileName(fileNameOrig), osgDB::getSimpleFileName(fileNameChanged));
             }
         }
-    }
-
-
-    // Post processing: Deinterleave images if necessary
-    if (_decodeTextures || _decodeTexturesNoSave)
-    {
-        decodeTexture(fileNameChanged, image);
     }
 
     fileNameChanged = osgDB::getSimpleFileName(fileNameChanged);

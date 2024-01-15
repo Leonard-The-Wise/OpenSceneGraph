@@ -124,18 +124,6 @@ namespace osgJSONParser
             _filesBasePath = basePath;
         }
 
-        inline void setTimeHack(bool use)
-        {
-            _useTimeHack = use;
-        }
-
-        inline void setDecodeTextures(bool deinterleaveSave, bool deinterleaveNoSave)
-        {
-            _decodeTextures = deinterleaveSave;
-            _decodeTexturesNoSave = deinterleaveNoSave;
-        }
-
-
 		osg::ref_ptr<osg::Group> parseObjectTree(const json& firstOsgNodeJSON);
 
 	private:
@@ -144,9 +132,6 @@ namespace osgJSONParser
         bool _firstMatrix = true;
         bool _firstDecodedTexture = true;
         bool _needDecodeVertices = true;
-        bool _useTimeHack = false;
-        bool _decodeTextures = false;
-        bool _decodeTexturesNoSave = false;
 
         std::string _filesBasePath;
 
@@ -216,7 +201,6 @@ namespace osgJSONParser
         osg::ref_ptr<osg::Object> parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey);
 
         std::string getModelName() const;
-        void decodeTexture(const std::string& fileName, osg::ref_ptr<osg::Image>& image);
         void createTextureMap(const std::map<std::string, TextureInfo2>& textureMap);
         osg::ref_ptr<osg::Image> getOrCreateImage(const std::string& fileName);
 

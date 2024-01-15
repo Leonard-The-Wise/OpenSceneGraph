@@ -18,9 +18,6 @@ public:
         bool disableVertexDecompress;
         bool rebuildMaterials;
         bool ignoreGzExtension;
-        bool useTimeHack;
-        bool decodeTextures;
-        bool decodeTexturesNoSave;
         std::vector<std::string> useSpecificBuffer;
         std::set<std::string> additionalSourceDirs;
         std::string baseLodURL;
@@ -36,9 +33,6 @@ public:
             disableVertexDecompress = false;
             rebuildMaterials = false;
             ignoreGzExtension = true;
-            useTimeHack = false;
-            decodeTextures = false;
-            decodeTexturesNoSave = false;
         }
     };
 
@@ -56,7 +50,6 @@ public:
         supportsOption("disableCompactBuffer", "(write option) keep source types and do not try to optimize buffers size");
         supportsOption("disableStrictJson", "(write option) do not clean string (to utf8) or floating point (should be finite) values");
         supportsOption("disableVertexDecompress", "(read option) specify to not try to decompress vertex arrays. Use this only if export fails or you get weird geometry results.");
-        supportsOption("useTimeHack", "(read option) Hack animation times for compressed vectors. Using this may fix animations (not guaranteed).");
     }
 
     virtual const char* className() const { return "OSGJS json Reader/Writer"; }
