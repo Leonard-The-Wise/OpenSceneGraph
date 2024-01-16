@@ -755,6 +755,23 @@ namespace pluginfbx
 		}
 	}
 
+	static void applyNodeTransform(FbxNode* node, const osg::Matrix& matrixTransform)
+	{
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+
+		matrixTransform.decompose(pos, rot, scl, so);
+
+		FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
+		FbxAMatrix mat;
+		mat.SetQ(q);
+		FbxVector4 vec4 = mat.GetR();
+
+		node->LclTranslation.Set(FbxDouble3(pos.x(), pos.y(), pos.z()));
+		node->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
+		node->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
+	}
+
 	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix)
 	{
 		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
@@ -797,6 +814,7 @@ namespace pluginfbx
 		{
 			transformMatrix = buildParentMatrices(geometry, numMatrixParent);
 		}
+		// Fix for non-rigged geometry without a parent transform matrix
 		if (!_exportFullHierarchy && numMatrixParent == 0)
 		{
 			transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
