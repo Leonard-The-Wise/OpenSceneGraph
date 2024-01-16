@@ -2347,14 +2347,13 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     success[10] = ParserHelper::getShapeAttribute(shapeAttrList, "epsilon", epsilon);
     success[11] = ParserHelper::getShapeAttribute(shapeAttrList, "nphi", nphi);
 
-    // FIXME: Disabled because we need to figure out the compression for normals.
-    if (false && success[10] && success[11])
+    if (success[10] && success[11])
     {
         ref_ptr<Array> normals = geometry->getNormalArray();
         if (normals && normals->getDataSize() == 2)
         {
             ref_ptr<Array> normalsConverted = ParserHelper::decompressArray(normals, geometry->getUserDataContainer(),
-                ParserHelper::KeyDecodeMode::DirectionCompressed);
+                ParserHelper::KeyDecodeMode::NormalsCompressed);
 
             geometry->setNormalArray(normalsConverted);
         }
@@ -2375,7 +2374,8 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
         if (tangents && tangents->getDataSize() == 2)
         {
             ref_ptr<Array> tangentsConverted = ParserHelper::decompressArray(tangents, geometry->getUserDataContainer(),
-                ParserHelper::KeyDecodeMode::DirectionCompressed);
+                ParserHelper::KeyDecodeMode::TangentsCompressed);
+            tangentsConverted->setUserValue("tangent", true);
             geometry->setVertexAttribArray(index, tangentsConverted);
         }
     }
@@ -2430,7 +2430,7 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
             if (!channel.second.Enable || textureInfo.Name.empty())
                 continue;
 
-            material->setUserValue(std::string("textureLayer_") + channel.first, textureInfo.Name);
+            material->setUserValue(std::string("textureLayer_") + channel.first, osgDB::getSimpleFileName(textureInfo.Name));
             unfoundTextures.emplace(textureInfo.Name);
         }
     }

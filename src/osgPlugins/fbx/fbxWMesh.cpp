@@ -336,6 +336,10 @@ namespace pluginfbx
 
 		std::vector<bool> failNotify(4, false); // Emits only 1 warning for entire arrays
 
+		osg::Matrix transposeInverseMatrix = transformMatrix;
+		transposeInverseMatrix.transpose(transposeInverseMatrix);
+		transposeInverseMatrix = Matrix::inverse(transposeInverseMatrix);
+
 		for (MapIndices::iterator it = index_vert.begin(); it != index_vert.end(); ++it)
 		{
 			const osg::Geometry* pGeometry = _geometryList[it->first.drawableIndex];
@@ -497,57 +501,6 @@ namespace pluginfbx
 
 			mesh->SetControlPointAt(vertex, it->second);
 
-			const osg::Array* basenormals = pGeometry->getNormalArray();
-
-			if (basenormals && basenormals->getNumElements() > 0)
-			{
-				FbxVector4 normal;
-				bool failed = false;
-
-				switch (basenormals->getType())
-				{
-				case osg::Array::Vec4ArrayType:
-				{
-					const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basenormals))[normalIndex];
-					osg::Vec4 vecf = vec * transformMatrix;
-					normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
-					break;
-				}
-				case osg::Array::Vec4dArrayType:
-				{
-					const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basenormals))[normalIndex];
-					osg::Vec4d vecf = vec * transformMatrix;
-					normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
-					break;
-				}
-				case osg::Array::Vec3ArrayType:
-				{
-					const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(basenormals))[normalIndex];
-					osg::Vec3 vecf = vec * transformMatrix;
-					normal.Set(vecf.x(), vecf.y(), vecf.z());
-					break;
-				}
-				case osg::Array::Vec3dArrayType:
-				{
-					const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basenormals))[normalIndex];
-					osg::Vec3d vecf = vec * transformMatrix;
-					normal.Set(vecf.x(), vecf.y(), vecf.z());
-					break;
-				}
-				default:
-				{
-					if (!failNotify[0])
-						OSG_DEBUG << "DEBUG: Error parsing normal array. Normals ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
-					failed = true;
-					failNotify[0] = true;
-					break;
-				}
-				}
-
-				if (!failed)
-					lLayerElementNormal->GetDirectArray().SetAt(it->second, normal);
-			}
-
 			if (_texcoords)
 			{
 				const osg::Array* basetexcoords;
@@ -588,79 +541,6 @@ namespace pluginfbx
 					if (!failed)
 						lUVDiffuseLayer->GetDirectArray().SetAt(it->second, texcoord);
 				}
-			}
-
-			const osg::Array* tangents = nullptr;
-			for (auto& attrib : pGeometry->getVertexAttribArrayList())
-			{
-				bool isTangent = false;
-				if (attrib->getUserValue("tangent", isTangent))
-					if (isTangent)
-					{
-						tangents = attrib;
-						break;
-					}
-			}
-
-			if (tangents && tangents->getNumElements() > 0)
-			{
-				FbxVector4 tangent;
-				bool failed = false;
-
-				switch (tangents->getType())
-				{
-				case osg::Array::Vec4ArrayType:
-				{
-					const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(tangents))[vertexIndex];
-					osg::Vec4 vecf = vec * transformMatrix;
-					tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
-					break;
-				}
-				case osg::Array::Vec4dArrayType:
-				{
-					const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(tangents))[vertexIndex];
-					osg::Vec4 vecf = vec * transformMatrix;
-					tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
-					break;
-				}
-				case osg::Array::Vec3ArrayType:
-				{
-					const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(tangents))[vertexIndex];
-					osg::Vec3 vecf = vec * transformMatrix;
-					tangent.Set(vecf.x(), vecf.y(), vecf.z());
-					break;
-				}
-				case osg::Array::Vec3dArrayType:
-				{
-					const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(tangents))[vertexIndex];
-					osg::Vec3 vecf = vec * transformMatrix;
-					tangent.Set(vecf.x(), vecf.y(), vecf.z());
-					break;
-				}
-				case osg::Array::Vec2ArrayType:
-				{
-					const osg::Vec2& vec = (*static_cast<const osg::Vec2Array*>(tangents))[vertexIndex];
-					tangent.Set(vec.x(), vec.y(), 0.0);
-					break;
-				}
-				case osg::Array::Vec2dArrayType:
-				{
-					const osg::Vec2d& vec = (*static_cast<const osg::Vec2dArray*>(tangents))[vertexIndex];
-					tangent.Set(vec.x(), vec.y(), 0.0);
-					break;
-				}
-				default:
-				{
-					if (!failNotify[2])
-						OSG_DEBUG << "DEBUG: Error parsing tangent array. Tangents ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
-					failed = true;
-					failNotify[2] = true;
-					break;
-				}
-				}
-
-				if (!failed)
-					lTangentLayer->GetDirectArray().SetAt(it->second, tangent);
 			}
 
 			const osg::Array* basecolors = pGeometry->getColorArray();
@@ -709,6 +589,126 @@ namespace pluginfbx
 
 				if (!failed)
 					lVertexColorLayer->GetDirectArray().SetAt(it->second, color);
+			}
+
+			const osg::Array* basenormals = pGeometry->getNormalArray();
+
+			if (basenormals && basenormals->getNumElements() > 0)
+			{
+				FbxVector4 normal;
+				bool failed = false;
+
+				switch (basenormals->getType())
+				{
+				case osg::Array::Vec4ArrayType:
+				{
+					const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(basenormals))[normalIndex];
+					osg::Vec4 vecf = vec * transposeInverseMatrix;
+					vecf.normalize();
+					normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+					break;
+				}
+				case osg::Array::Vec4dArrayType:
+				{
+					const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(basenormals))[normalIndex];
+					osg::Vec4d vecf = vec * transposeInverseMatrix;
+					vecf.normalize();
+					normal.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+					break;
+				}
+				case osg::Array::Vec3ArrayType:
+				{
+					const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(basenormals))[normalIndex];
+					osg::Vec3 vecf = vec * transposeInverseMatrix;
+					vecf.normalize();
+					normal.Set(vecf.x(), vecf.y(), vecf.z());
+					break;
+				}
+				case osg::Array::Vec3dArrayType:
+				{
+					const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(basenormals))[normalIndex];
+					osg::Vec3d vecf = vec * transposeInverseMatrix;
+					vecf.normalize();
+					normal.Set(vecf.x(), vecf.y(), vecf.z());
+					break;
+				}
+				default:
+				{
+					if (!failNotify[0])
+						OSG_DEBUG << "DEBUG: Error parsing normal array. Normals ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
+					failed = true;
+					failNotify[0] = true;
+					break;
+				}
+				}
+
+				if (!failed)
+					lLayerElementNormal->GetDirectArray().SetAt(it->second, normal);
+			}
+
+			const osg::Array* tangents = nullptr;
+			for (auto& attrib : pGeometry->getVertexAttribArrayList())
+			{
+				bool isTangent = false;
+				if (attrib->getUserValue("tangent", isTangent))
+					if (isTangent)
+					{
+						tangents = attrib;
+						break;
+					}
+			}
+
+			if (tangents && tangents->getNumElements() > 0)
+			{
+				FbxVector4 tangent;
+				bool failed = false;
+
+				switch (tangents->getType())
+				{
+				case osg::Array::Vec4ArrayType:
+				{
+					const osg::Vec4& vec = (*static_cast<const osg::Vec4Array*>(tangents))[vertexIndex];
+					osg::Vec4 vecf = vec * transformMatrix;
+					vecf.normalize();
+					tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+					break;
+				}
+				case osg::Array::Vec4dArrayType:
+				{
+					const osg::Vec4d& vec = (*static_cast<const osg::Vec4dArray*>(tangents))[vertexIndex];
+					osg::Vec4 vecf = vec * transformMatrix;
+					vecf.normalize();
+					tangent.Set(vecf.x(), vecf.y(), vecf.z(), vecf.w());
+					break;
+				}
+				case osg::Array::Vec3ArrayType:
+				{
+					const osg::Vec3& vec = (*static_cast<const osg::Vec3Array*>(tangents))[vertexIndex];
+					osg::Vec3 vecf = vec * transformMatrix;
+					vecf.normalize();
+					tangent.Set(vecf.x(), vecf.y(), vecf.z());
+					break;
+				}
+				case osg::Array::Vec3dArrayType:
+				{
+					const osg::Vec3d& vec = (*static_cast<const osg::Vec3dArray*>(tangents))[vertexIndex];
+					osg::Vec3 vecf = vec * transformMatrix;
+					vecf.normalize();
+					tangent.Set(vecf.x(), vecf.y(), vecf.z());
+					break;
+				}
+				default:
+				{
+					if (!failNotify[2])
+						OSG_DEBUG << "DEBUG: Error parsing tangent array. Tangents ignored. " << "[Geometry: " << geometryName << "]" << std::endl;
+					failed = true;
+					failNotify[2] = true;
+					break;
+				}
+				}
+
+				if (!failed)
+					lTangentLayer->GetDirectArray().SetAt(it->second, tangent);
 			}
 
 		}
@@ -811,7 +811,7 @@ namespace pluginfbx
 		// Apply parent matrix
 		transformMatrix = transformMatrix * parentMatrix;
 
-		// Build vertices, normals, tangents, texcoords, etc. [and recalculate normals and tangents because right now we can't decode them]
+		// Build vertices, normals, tangents, texcoords, etc.
 		setControlPointAndNormalsAndUV(index_vert, mesh, transformMatrix);
 		mesh->GenerateNormals(true);
 		mesh->GenerateTangentsDataForAllUVSets(true);

@@ -357,7 +357,6 @@ namespace pluginfbx
 		int numMatrixParents(0);
 
 		FbxNode* parent = _curFbxNode;
-		// bool NodeHasBoneParent = isNodeASkeleton(parent);
 
 		if (skeleton)
 			nodeName = node.getName().empty() ? "Armature" : node.getName();
@@ -375,23 +374,18 @@ namespace pluginfbx
 
 		// Set transforms for node
 		osg::Matrix matrix = node.getMatrix();
+		osg::Vec3d pos, scl;
+		osg::Quat rot, so;
+		FbxAMatrix mat;
 		_matrixStack.push_back(std::make_pair(nodeName, matrix));
 
 		// Fix for sketchfab coordinates
 		if (isFirstMatrix)
 		{
 			matrix.makeIdentity();
-			//osg::Matrix matrix2;
-			//matrix2.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-			//matrix.preMult(matrix2);
 			node.setMatrix(matrix);
 		}
 
-		// Create groups for nodes if they are bones or if we are ignoring bones
-		// so we can see matrix groups when no bone is present.
-		osg::Vec3d pos, scl;
-		osg::Quat rot, so;
-		FbxAMatrix mat;
 
 		if (isFirstMatrix || _ignoreBones || _exportFullHierarchy || skeleton || bone)
 		{
@@ -418,7 +412,6 @@ namespace pluginfbx
 					osg::Matrix matrixMult;
 					matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 					matrix = matrix * matrixMult;
-					//node.setMatrix(matrix);
 				}
 			}
 
@@ -446,17 +439,11 @@ namespace pluginfbx
 			fbxSkel->SetSkeletonType(skeleton ? FbxSkeleton::eRoot : FbxSkeleton::eLimbNode);
 			_curFbxNode->SetNodeAttribute(fbxSkel);
 
-			//if (NodeHasBoneParent && getSkeletonType(parent) == FbxSkeleton::eEffector)
-			//{
-			//	reinterpret_cast<FbxSkeleton*>(parent->GetNodeAttribute())->SetSkeletonType(FbxSkeleton::eLimb);
-			//}
-
 			if (bone)
 				_boneNodeSkinMap.emplace(nodeName, std::make_pair(bone, _curFbxNode));
 		}
 
 		// Process UpdateMatrixTransform and UpdateBone Callbacks last
-//		if (!_ignoreAnimations && !skeleton)
 		if (!skeleton)
 		{
 			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
@@ -464,6 +451,7 @@ namespace pluginfbx
 				applyUpdateMatrixTransform(nodeCallback, _curFbxNode, node);
 		}
 
+		// Traverse Hierarchy
 		traverse(node);
 
 		_curFbxNode = parent;

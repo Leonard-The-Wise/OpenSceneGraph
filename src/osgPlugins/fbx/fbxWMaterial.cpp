@@ -206,7 +206,7 @@ namespace pluginfbx
 		{
 			std::string materialFile;
 			std::ignore = material->getUserValue(std::string("textureLayer_") + knownLayer, materialFile);
-			if (materialFile == textureFile)
+			if (materialFile == osgDB::getSimpleFileName(textureFile))
 			{
 				if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" || 
 					knownLayer == "CavityPBR" || knownLayer == "DiffuseIntensity")

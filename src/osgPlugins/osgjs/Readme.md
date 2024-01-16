@@ -21,7 +21,7 @@ This script may download "duplicate" textures. But they are not actually duplica
 
 The plugin will detect any missing texture files if materialInfo.txt is avaliable and inform you. Notice however that material processing is experimental. Sketchfab uses a custom material system that is for now impossible to replicate in FBX format (duue to FBX SDK not supporting PBR based materials). So Material importing may work for just a few models, but at least some textures may be placed on a right channel and it is the easiest part to fix. Check your UVs though. Many models require `-O FlipUVs` to export correctly.
 
-Also, normals and tangent data are being reconstructed on the fly, since for now the plugin can't decode the originals, so you may need to rebuild the smoothing groups.
+- When importing models, do not generate normals or tangent, since the data is being imported too.
 
 2. Usage
 
@@ -65,6 +65,11 @@ What I recommend you to do is to begin exporting models with default options, an
 ### Extra tip:
 
 If for some models you get inconsistent results while importing to Blender, try opening it on FBXReview or other Autodesk product (like 3ds Max or Maya) to see if the problem is with the export or the import plugin.
+
+### Extra tip 2:
+
+I put a convenience Batch file along with the exe called `OsgConvAll.bat`. With it you can convert models in batch. Just run it where your root model directory is and pass any parameters along with it if it applies.
+
 
 That's all I know for now.
 

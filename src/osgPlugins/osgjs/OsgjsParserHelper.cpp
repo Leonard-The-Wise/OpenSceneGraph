@@ -446,7 +446,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			}
 			case Array::UIntArrayType:
 			{
-				const uint16_t* uintData = reinterpret_cast<const uint16_t*>(elementsBytes->data() + readOffset);
+				const uint32_t* uintData = reinterpret_cast<const uint32_t*>(elementsBytes->data() + readOffset);
 				for (size_t i = 0; i < totalElements; ++i) {
 					dynamic_cast<UIntArray*>(returnArray.get())->push_back(uintData[i]);
 				}
@@ -722,31 +722,57 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 	osg::ref_ptr<osg::DoubleArray> keysFloat;
 	unsigned int elementSize = keys->getDataSize();
 
-	if (mode == KeyDecodeMode::DirectionCompressed)
+	if (mode == KeyDecodeMode::NormalsCompressed)
 	{
 		switch (keysConverted->getType())
 		{
 		case Array::UIntArrayType:
-			keysConverted = decodeVectorOctahedral<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted));
+			keysConverted = intToFloatArray<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), 3, epsilon, nphi, false);
 			break;
 		case Array::UShortArrayType:
-			keysConverted = decodeVectorOctahedral<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted));
+			keysConverted = intToFloatArray<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), 3, epsilon, nphi, false);
 			break;
 		case Array::UByteArrayType:
-			keysConverted = decodeVectorOctahedral<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted));
+			keysConverted = intToFloatArray<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), 3, epsilon, nphi, false);
 			break;
 		case Array::IntArrayType:
-			keysConverted = decodeVectorOctahedral<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted));
+			keysConverted = intToFloatArray<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), 3, epsilon, nphi, false);
 			break;
 		case Array::ShortArrayType:
-			keysConverted = decodeVectorOctahedral<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted));
+			keysConverted = intToFloatArray<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), 3, epsilon, nphi, false);
 			break;
 		case Array::ByteArrayType:
-			keysConverted = decodeVectorOctahedral<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted));
+			keysConverted = intToFloatArray<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), 3, epsilon, nphi, false);
 			break;
 		}
 
-		return keysConverted;
+		return ParserHelper::recastArray(keysConverted, DesiredVectorSize::Vec3);
+	}
+	else if (mode == KeyDecodeMode::TangentsCompressed)
+	{
+		switch (keysConverted->getType())
+		{
+		case Array::UIntArrayType:
+			keysConverted = intToFloatArray<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), 4, epsilon, nphi, false);
+			break;
+		case Array::UShortArrayType:
+			keysConverted = intToFloatArray<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), 4, epsilon, nphi, false);
+			break;
+		case Array::UByteArrayType:
+			keysConverted = intToFloatArray<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), 4, epsilon, nphi, false);
+			break;
+		case Array::IntArrayType:
+			keysConverted = intToFloatArray<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), 4, epsilon, nphi, false);
+			break;
+		case Array::ShortArrayType:
+			keysConverted = intToFloatArray<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), 4, epsilon, nphi, false);
+			break;
+		case Array::ByteArrayType:
+			keysConverted = intToFloatArray<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), 4, epsilon, nphi, false);
+			break;
+		}
+
+		return ParserHelper::recastArray(keysConverted, DesiredVectorSize::Vec4);
 	}
 
 	switch (keysConverted->getType())
@@ -838,22 +864,22 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		switch (keysConverted->getType())
 		{
 		case Array::UIntArrayType:
-			keysInflated1 = int3ToFloat4<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = int3ToFloat4Array<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), epsilon, nphi, elementSize);
 			break;
 		case Array::UShortArrayType:
-			keysInflated1 = int3ToFloat4<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = int3ToFloat4Array<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), epsilon, nphi, elementSize);
 			break;
 		case Array::UByteArrayType:
-			keysInflated1 = int3ToFloat4<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = int3ToFloat4Array<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), epsilon, nphi, elementSize);
 			break;
 		case Array::IntArrayType:
-			keysInflated1 = int3ToFloat4<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = int3ToFloat4Array<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), epsilon, nphi, elementSize);
 			break;
 		case Array::ShortArrayType:
-			keysInflated1 = int3ToFloat4<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = int3ToFloat4Array<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), epsilon, nphi, elementSize);
 			break;
 		case Array::ByteArrayType:
-			keysInflated1 = int3ToFloat4<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = int3ToFloat4Array<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), epsilon, nphi, elementSize);
 			break;
 		}
 
@@ -2166,7 +2192,7 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysQuat(const osg::ref_ptr<
 }
 
 template <typename T>
-osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize)
+osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4Array(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize)
 {
 	int c = 4;
 	double d = epsilon != 0 ? epsilon : 0.25;
@@ -2265,54 +2291,87 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysVec3(const osg::ref_ptr<
 }
 
 
-// For references, see: 
-// https://cesium.com/blog/2015/05/18/vertex-compression/
-// https://github.com/CesiumGS/cesium/blob/master/Source/Core/AttributeCompression.js
-// https://jcgt.org/published/0003/02/01/
 
 
-static osg::Vec3 decodeOctahedral(const osg::Vec2ui& encodedInt, float maxRange)
+
+// Some constants
+const int VEC_SIZE = 1801779;
+const float DEG_TO_RAD = 0.01745329251f;
+const float HALF_PI = 1.57079632679f;
+const float TWO_PI = 6.28318530718f;
+
+template<typename T>
+ref_ptr<FloatArray> ParserHelper::intToFloatArray(ref_ptr<T> input, int returnItemSize, float epsilon = 0.25f, int nphi = 720, bool isQuadArray = false)
 {
-	// Normalizar os valores inteiros para o intervalo de -1 a 1
-	float x = (static_cast<float>(encodedInt.x()) / (maxRange / 2)) - 1.0f;
-	float y = (static_cast<float>(encodedInt.y()) / (maxRange / 2)) - 1.0f;
+	epsilon = epsilon != 0.0f ? epsilon : 0.25f;
+	nphi = nphi != 0 ? nphi : 720;
+	float u = std::cos(DEG_TO_RAD * epsilon);
+	std::vector<float> h(VEC_SIZE, std::numeric_limits<float>::infinity());
 
-	// Passo 1: Reconstruir z
-	float z = 1.0f - fabs(x) - fabs(y);
+	float d = PI / (nphi - 1);
+	float g = HALF_PI / (nphi - 1);
+	int originalSize = isQuadArray ? 3 : 2;
+	size_t numElements = input->getNumElements() / originalSize;
 
-	// Passo 2: Ajustar se o ponto está na parte inferior do octaedro
-	if (z < 0.0f) {
-		float oldX = x;
-		x = copysign(1.0f - fabs(y), x);
-		y = copysign(1.0f - fabs(oldX), y);
-	}
+	ref_ptr<FloatArray> returnArray = new FloatArray(numElements * returnItemSize);
 
-	// Passo 3: Normalizar o vetor
-	osg::Vec3 normal(x, y, z);
-	normal.normalize();
-
-	return normal;
-}
-
-// TODO: Figure out which encoding for normals and tangents. This encoding here seems to NOT be the case.
-template <typename T>
-osg::ref_ptr<osg::Vec3Array> ParserHelper::decodeVectorOctahedral(const osg::ref_ptr<T>& input)
-{
-	ref_ptr<osg::UIntArray> e = new UIntArray(input->begin(), input->end());
-	ref_ptr<Vec3Array> returnVec = new Vec3Array;
-
-	unsigned int maxRange = *std::max_element(e->begin(), e->end());
-
-	returnVec->reserveArray(e->getNumElements() / 2);
-	for (unsigned int i = 0; i < e->getNumElements() / 2; i++)
+	for (size_t c = 0; c < numElements; ++c) 
 	{
-		unsigned int x = (*e)[i * 2];
-		unsigned int y = (*e)[i * 2 + 1];
-		Vec3 v = decodeOctahedral(Vec2ui(x, y), static_cast<float>(maxRange));
-		returnVec->push_back(v);
+		size_t v = c * returnItemSize;
+		size_t _ = c * originalSize;
+		unsigned int S = (*input)[_];
+		unsigned int x = (*input)[_ + 1];
+
+		if (returnItemSize == 4 && !isQuadArray) 
+		{
+			(*returnArray)[v + 3] = (S & 1024) ? -1.0f : 1.0f;
+			S &= ~1025;
+		}
+
+		float C, T, M;
+		int b = 3 * (S + nphi * x);
+		bool y = b >= VEC_SIZE;
+
+		if (y || h[b] == std::numeric_limits<float>::infinity()) 
+		{
+			float A = S * d;
+			float R = std::cos(A);
+			float w = std::sin(A);
+			A += g;
+			float E = (u - R * std::cos(A)) / std::max(1e-5f, w * std::sin(A));
+			E = std::max(-1.0f, std::min(E, 1.0f));
+			float P = TWO_PI * x / std::ceil(PI / std::max(1e-5f, std::acos(E)));
+			C = w * std::cos(P);
+			T = w * std::sin(P);
+			M = R;
+			if (!y) {
+				h[b] = C;
+				h[static_cast<size_t>(b) + 1] = T;
+				h[static_cast<size_t>(b) + 2] = M;
+			}
+		}
+		else {
+			C = h[b];
+			T = h[static_cast<size_t>(b) + 1];
+			M = h[static_cast<size_t>(b) + 2];
+		}
+
+		if (isQuadArray) 
+		{
+			float N = 47938362584151635e-21f * (*input)[_ + 2];
+			float O = std::sin(N);
+			(*returnArray)[v] = O * C;
+			(*returnArray)[v + 1] = O * T;
+			(*returnArray)[v + 2] = O * M;
+			(*returnArray)[v + 3] = std::cos(N);
+		}
+		else 
+		{
+			(*returnArray)[v] = C;
+			(*returnArray)[v + 1] = T;
+			(*returnArray)[v + 2] = M;
+		}
 	}
 
-	return returnVec;
+	return returnArray;
 }
-
-

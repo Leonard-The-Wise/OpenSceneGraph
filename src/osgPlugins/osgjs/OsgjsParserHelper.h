@@ -14,7 +14,7 @@ namespace osgJSONParser
 
 
 		enum class KeyDecodeMode {
-			DirectionCompressed, TimeCompressed, Vec3Compressed, QuatCompressed
+			NormalsCompressed, TangentsCompressed, TimeCompressed, Vec3Compressed, QuatCompressed
 		};
 
 		using json = nlohmann::json;
@@ -88,16 +88,16 @@ namespace osgJSONParser
 
 		static osg::ref_ptr<osg::DoubleArray> inflateKeys2(const osg::ref_ptr<osg::DoubleArray>& input, unsigned int itemSize);
 
+		template<typename T>
+		static osg::ref_ptr<osg::FloatArray> intToFloatArray(osg::ref_ptr<T> input, int returnItemSize, float epsilon, int nphi, bool isQuadArray);
+
 		template <typename T>
 		static osg::ref_ptr<osg::DoubleArray> inflateKeysQuat(const osg::ref_ptr<T>& input);
 
 		template <typename T>
-		static osg::ref_ptr<osg::DoubleArray> int3ToFloat4(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
+		static osg::ref_ptr<osg::DoubleArray> int3ToFloat4Array(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
 
 		template<typename T>
 		static osg::ref_ptr<osg::DoubleArray> inflateKeysVec3(const osg::ref_ptr<T>& input);
-
-		template<typename T>
-		static osg::ref_ptr<osg::Vec3Array> decodeVectorOctahedral(const osg::ref_ptr<T>& input);
 	};
 }
