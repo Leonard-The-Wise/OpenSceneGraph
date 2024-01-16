@@ -782,7 +782,20 @@ namespace pluginfbx
 		std::string meshName = geometry.getName();
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
 
-		FbxNode* meshParent = _exportFullHierarchy ? _curFbxNode : _MeshesRoot;
+		// Select which mesh parent to put. For rigged geometry we put nodes bellow skeleton node
+		FbxNode* meshParent = _exportFullHierarchy ? _curFbxNode : _firstMatrixNode;
+		if (!_exportFullHierarchy && rig)
+		{
+			if (_riggedMeshesRoot.size() > 0)
+				meshParent = _riggedMeshesRoot.top();
+			else
+				OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
+		}
+		else if (!rig)
+		{
+			_normalMeshesNodes.push(meshNode);
+		}
+		
 		meshParent->AddChild(meshNode);
 
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());

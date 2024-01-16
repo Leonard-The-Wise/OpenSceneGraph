@@ -177,6 +177,12 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 localOptions.ignoreGzExtension = true;
             }
 
+            // Helper for FBX plugin (don't show option on help here because FBX already displays it)
+            if (pre_equals == "IgnoreAnimations")
+            {
+                localOptions.ignoreAnimations = true;
+            }
+
             if (pre_equals == "additionalSourceDir")
             {
                 std::string path = post_equals;
@@ -278,6 +284,7 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
 
         if (options.disableVertexDecompress)
             nodeParser.setNeedDecodeVertices(false);
+        nodeParser.setIgnoreAnimations(options.ignoreAnimations);
 
         rootNode = nodeParser.parseObjectTree(input["osg.Node"]);
 

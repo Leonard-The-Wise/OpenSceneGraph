@@ -124,6 +124,11 @@ namespace osgJSONParser
             _filesBasePath = basePath;
         }
 
+        inline void setIgnoreAnimations(bool ignore)
+        {
+            _ignoreAnimations = ignore;
+        }
+
 		osg::ref_ptr<osg::Group> parseObjectTree(const json& firstOsgNodeJSON);
 
 	private:
@@ -132,6 +137,7 @@ namespace osgJSONParser
         bool _firstMatrix = true;
         bool _firstDecodedTexture = true;
         bool _needDecodeVertices = true;
+        bool _ignoreAnimations = false;
 
         std::string _filesBasePath;
 

@@ -219,10 +219,8 @@ namespace pluginfbx
 		return retMatrix;
 	}
 
-	void WriterNodeVisitor::applyGlobalTransforms(FbxNode* RootNode)
+	void WriterNodeVisitor::applyGlobalTransforms()
 	{
-		FbxAMatrix mainTransform = RootNode->EvaluateGlobalTransform();
-
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
 
@@ -238,15 +236,42 @@ namespace pluginfbx
 		FbxAMatrix matMultiply;
 		matMultiply.SetTQS(translate, rotationQuat, scale);
 
-		mainTransform = mainTransform * matMultiply;
+		while (_riggedMeshesRoot.size() > 0)
+		{
+			FbxNode* skeleton = _riggedMeshesRoot.top();
 
-		FbxVector4 rotationFinal = mainTransform.GetR();
-		FbxVector4 positionFinal = mainTransform.GetT();
-		FbxVector4 scaleFinal = mainTransform.GetS();
+			FbxAMatrix mainTransform = skeleton->EvaluateGlobalTransform();
+			mainTransform = mainTransform * matMultiply;
 
-		RootNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
-		RootNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
-		RootNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+			FbxVector4 rotationFinal = mainTransform.GetR();
+			FbxVector4 positionFinal = mainTransform.GetT();
+			FbxVector4 scaleFinal = mainTransform.GetS();
+
+			skeleton->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+			skeleton->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+			skeleton->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+
+			_riggedMeshesRoot.pop();
+		}
+
+		while (_normalMeshesNodes.size() > 0)
+		{
+			FbxNode* meshRoot = _normalMeshesNodes.top();
+
+			FbxAMatrix mainTransform = meshRoot->EvaluateGlobalTransform();
+			mainTransform = mainTransform * matMultiply;
+
+			FbxVector4 rotationFinal = mainTransform.GetR();
+			FbxVector4 positionFinal = mainTransform.GetT();
+			FbxVector4 scaleFinal = mainTransform.GetS();
+
+			meshRoot->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+			meshRoot->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+			meshRoot->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+
+			_normalMeshesNodes.pop();
+		}
+
 	}
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
@@ -324,8 +349,7 @@ namespace pluginfbx
 		{
 			//ignore the root node to maintain same hierarchy
 			_firstNodeProcessed = true;
-
-			_MeshesRoot = _curFbxNode;
+			_firstMatrixNode = _curFbxNode;
 			
 			traverse(node);
 
@@ -342,10 +366,7 @@ namespace pluginfbx
 				}
 			}
 
-			if (!_firstMatrixNode)
-				_firstMatrixNode = _MeshesRoot;
-
-			applyGlobalTransforms(_firstMatrixNode);
+			applyGlobalTransforms();
 		}
 	}
 
@@ -380,7 +401,7 @@ namespace pluginfbx
 		_matrixStack.push_back(std::make_pair(nodeName, matrix));
 
 		// Fix for sketchfab coordinates
-		if (isFirstMatrix)
+		if (isFirstMatrix && !skeleton)
 		{
 			matrix.makeIdentity();
 			node.setMatrix(matrix);
@@ -413,6 +434,8 @@ namespace pluginfbx
 					matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 					matrix = matrix * matrixMult;
 				}
+
+				_riggedMeshesRoot.push(_curFbxNode);
 			}
 
 			matrix.decompose(pos, rot, scl, so);
@@ -428,7 +451,6 @@ namespace pluginfbx
 		if (isFirstMatrix)
 		{
 			_firstMatrixNode = _curFbxNode;
-			_MeshesRoot = _curFbxNode;
 			_firstMatrix = matrix;
 		}
 

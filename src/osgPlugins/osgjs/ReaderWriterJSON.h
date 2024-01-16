@@ -18,6 +18,7 @@ public:
         bool disableVertexDecompress;
         bool rebuildMaterials;
         bool ignoreGzExtension;
+        bool ignoreAnimations;
         std::vector<std::string> useSpecificBuffer;
         std::set<std::string> additionalSourceDirs;
         std::string baseLodURL;
@@ -33,6 +34,7 @@ public:
             disableVertexDecompress = false;
             rebuildMaterials = false;
             ignoreGzExtension = true;
+            ignoreAnimations = false;
         }
     };
 

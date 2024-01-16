@@ -108,7 +108,6 @@ namespace pluginfbx
             _firstNodeProcessed(false),
             _ignoreBones(ignoreBones),
             _ignoreAnimations(ignoreAnimations),
-            _MeshesRoot(nullptr),
             _rotateXAxis(rotateXAxis),
             _exportFullHierarchy(exportFullHierarchy),
             _scaleModel(scaleModel),
@@ -217,7 +216,8 @@ namespace pluginfbx
 
         osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
-        void applyGlobalTransforms(FbxNode* RootNode);
+        // Must be the last step before exporting
+        void applyGlobalTransforms();
 
 
 
@@ -288,7 +288,8 @@ namespace pluginfbx
 
         ///The current Fbx Node.
         FbxNode* _curFbxNode;
-        FbxNode* _MeshesRoot;
+        std::stack<FbxNode*> _riggedMeshesRoot;
+        std::stack<FbxNode*> _normalMeshesNodes;
 
         ///The current stateSet.
         osg::ref_ptr<osg::StateSet> _currentStateSet;

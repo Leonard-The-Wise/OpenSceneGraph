@@ -1277,8 +1277,13 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationBasicAnimationManager(const json
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
+
     ref_ptr<BasicAnimationManager> bam = new BasicAnimationManager;
     bam->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
+    if (_ignoreAnimations)
+        return bam;
+
 
     if (currentJSONNode.contains("Animations") && currentJSONNode["Animations"].is_array())
     {
