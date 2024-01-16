@@ -4,7 +4,7 @@
 
 This plugin was made for educational purposes only. If you are a student or enthusiast ainimg to improve, feel free to use this plugin. Otherwise, making models requires a good amount of time, talent and effort, and such are to be rewarded. So, please, buy the models you'll effectively use and support our 3D artists.
 
-Also, this software is provided 'as-is', that means no warranties whatsoever. This is a WIP. And also, you shall not pay for it. It is free software, no one should be selling it! However, if you'd like to support me, you may [buy me a coffe](https://www.buymeacoffee.com/theillusionist).
+Also, this software is provided 'as-is', that means no warranties whatsoever. This is a WIP. And also, you shall not pay for it. It is free software, no one should be selling it!
 
 ## INSTRUCTIONS
 

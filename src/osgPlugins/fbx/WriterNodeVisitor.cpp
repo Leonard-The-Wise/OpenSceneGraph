@@ -434,7 +434,10 @@ namespace pluginfbx
 					matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 					matrix = matrix * matrixMult;
 				}
+			}
 
+			if (skeleton)
+			{
 				_riggedMeshesRoot.push(_curFbxNode);
 			}
 
