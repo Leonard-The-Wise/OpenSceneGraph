@@ -95,7 +95,7 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 		elementsNode = &currentJSONNode["Float64Array"];
 	}
 	else if (currentJSONNode.contains("Float32Array") && currentJSONNode["Float32Array"].is_object())
-	{ 
+	{
 		returnArray = new FloatArray;
 		arrayType = Array::FloatArrayType;
 		elementTypeSize = sizeof(float);
@@ -107,13 +107,6 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 		arrayType = Array::UByteArrayType;
 		elementTypeSize = sizeof(uint8_t);
 		elementsNode = &currentJSONNode["Uint8Array"];
-	}
-	else if (currentJSONNode.contains("Uint8ClampedArray") && currentJSONNode["Uint8ClampedArray"].is_object())
-	{
-		returnArray = new UByteArray;
-		arrayType = Array::UByteArrayType;
-		elementTypeSize = sizeof(uint8_t);
-		elementsNode = &currentJSONNode["Uint8ClampedArray"];
 	}
 	else if (currentJSONNode.contains("Uint16Array") && currentJSONNode["Uint16Array"].is_object())
 	{
@@ -164,7 +157,11 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 		elementTypeSize = sizeof(int64_t);
 		elementsNode = &currentJSONNode["Int64Array"];
 	}
-
+	else
+	{
+		OSG_WARN << "WARNING: Unsupported Array type. Ignored." << std::endl;
+		return nullptr;
+	}
 
 	// 2) Determine Write Mode: inline or file
 
@@ -175,6 +172,10 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 
 		switch (arrayType)
 		{
+		case Array::DoubleArrayType:
+			for (auto& element : (*elementsNode)["Elements"])
+				dynamic_cast<DoubleArray*>(returnArray.get())->push_back(element.get<double>());
+			break;
 		case Array::FloatArrayType:
 			for (auto& element : (*elementsNode)["Elements"])
 				dynamic_cast<FloatArray*>(returnArray.get())->push_back(element.get<float>());
@@ -396,6 +397,14 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			returnArray->reserveArray(totalElements);
 			switch (arrayType)
 			{
+			case Array::DoubleArrayType:
+			{
+				const double* doubleData = reinterpret_cast<const double*>(elementsBytes->data() + readOffset);
+				for (size_t i = 0; i < totalElements; ++i) {
+					dynamic_cast<DoubleArray*>(returnArray.get())->push_back(doubleData[i]);
+				}
+				break;
+			}
 			case Array::FloatArrayType:
 			{
 				const float* floatData = reinterpret_cast<const float*>(elementsBytes->data() + readOffset);
