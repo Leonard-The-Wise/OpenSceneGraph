@@ -208,26 +208,27 @@ namespace pluginfbx
 			std::ignore = material->getUserValue(std::string("textureLayer_") + knownLayer, materialFile);
 			if (materialFile == osgDB::getSimpleFileName(textureFile))
 			{
-				if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" || 
-					knownLayer == "CavityPBR" || knownLayer == "DiffuseIntensity")
+				if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" ||
+					knownLayer == "DiffuseIntensity")
 					return MaterialSurfaceLayer::Diffuse;
 				else if (knownLayer == "NormalMap" || knownLayer == "BumpMap" || knownLayer == "ClearCoatNormalMap")
 					return MaterialSurfaceLayer::NormalMap;
-				else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor" || knownLayer == "SpecularHardness" ||
-					knownLayer == "MetalnessPBR" || knownLayer == "ClearCoat" || knownLayer == "Sheen")
+				else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor" || knownLayer == "SpecularHardness")
 					return MaterialSurfaceLayer::Specular;
-				else if (knownLayer == "Displacement")
+				else if (knownLayer == "Displacement" || knownLayer == "CavityPBR" || "AOPBR")
 					return MaterialSurfaceLayer::DisplacementColor;
 				else if (knownLayer == "EmitColor")
 					return MaterialSurfaceLayer::Emissive;
-				else if (knownLayer == "GlossinessPBR" || knownLayer == "RoughnessPBR" || knownLayer == "SheenRoughness")
+				else if (knownLayer == "GlossinessPBR" || knownLayer == "RoughnessPBR" || knownLayer == "SheenRoughness" || knownLayer == "ClearCoat")
 					return MaterialSurfaceLayer::Shininess;
 				else if (knownLayer == "Opacity" || knownLayer == "AlphaMask")
 					return MaterialSurfaceLayer::Transparency;
-			}
+				else if (knownLayer == "MetalnessPBR" || knownLayer == "Sheen")
+					return MaterialSurfaceLayer::Reflection;
+			} 
 		}
 
-		return MaterialSurfaceLayer::Diffuse;
+		return MaterialSurfaceLayer::None;
 	}
 
 	WriterNodeVisitor::MaterialParser* WriterNodeVisitor::processStateSet(const osg::StateSet* ss)

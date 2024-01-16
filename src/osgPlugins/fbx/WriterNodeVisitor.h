@@ -254,6 +254,10 @@ namespace pluginfbx
 
         FbxAnimStack* getOrCreateAnimStack();
 
+        void AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel, FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string channelName);
+
+        void AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel, FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer);
+
         void applyAnimations(const osg::ref_ptr<osg::Callback>& callback);
 
         void createAnimationLayer(const osg::ref_ptr<osgAnimation::Animation> osgAnimation);

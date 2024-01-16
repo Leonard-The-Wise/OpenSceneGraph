@@ -59,7 +59,7 @@ namespace pluginfbx
 		return animStack;
 	}
 
-	void AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel, 
+	void WriterNodeVisitor::AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel,
 		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string channelName)
 	{
 		if (!transformChannel || !animCurveNode)
@@ -112,7 +112,7 @@ namespace pluginfbx
 		}
 	}
 
-	void AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel,
+	void WriterNodeVisitor::AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel,
 		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer)
 	{
 		if (!transformChannel || !animCurveNode)
