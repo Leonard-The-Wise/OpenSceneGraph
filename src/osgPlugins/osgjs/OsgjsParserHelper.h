@@ -89,15 +89,9 @@ namespace osgJSONParser
 		static osg::ref_ptr<osg::DoubleArray> inflateKeys2(const osg::ref_ptr<osg::DoubleArray>& input, unsigned int itemSize);
 
 		template<typename T>
-		static osg::ref_ptr<osg::FloatArray> intToFloatArray(osg::ref_ptr<T> input, int returnItemSize, float epsilon, int nphi, bool isQuadArray);
+		static osg::ref_ptr<osg::DoubleArray> intToFloatArray(const osg::ref_ptr<T>& input, int returnItemSize, double epsilon, int nphi, bool isQuatArray);
 
 		template <typename T>
 		static osg::ref_ptr<osg::DoubleArray> inflateKeysQuat(const osg::ref_ptr<T>& input);
-
-		template <typename T>
-		static osg::ref_ptr<osg::DoubleArray> int3ToFloat4Array(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize);
-
-		template<typename T>
-		static osg::ref_ptr<osg::DoubleArray> inflateKeysVec3(const osg::ref_ptr<T>& input);
 	};
 }

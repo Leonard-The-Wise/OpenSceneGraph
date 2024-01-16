@@ -822,7 +822,7 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		keysInflated2->push_back(o[4]); // "ot"
 		keysInflated2->insert(keysInflated2->begin() + 1, keysInflated1->begin(), keysInflated1->end());
 
-		keysConverted = inflateKeys2(keysInflated2, elementSize);
+		keysConverted = inflateKeys2(keysInflated2, 1);
 	}
 	else if (mode == KeyDecodeMode::Vec3Compressed)
 	{
@@ -857,29 +857,29 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		keysConverted = inflateKeys2(keysInflated2, elementSize);
 	
 		// Recast Array
-		keysConverted = recastArray(keysConverted, static_cast<DesiredVectorSize>(elementSize));
+		keysConverted = recastArray(keysConverted, DesiredVectorSize::Vec3);
 	}
 	else if (mode == KeyDecodeMode::QuatCompressed)
 	{
 		switch (keysConverted->getType())
 		{
 		case Array::UIntArrayType:
-			keysInflated1 = int3ToFloat4Array<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = intToFloatArray<UIntArray>(dynamic_pointer_cast<UIntArray>(keysConverted), 4, epsilon, nphi, true);
 			break;
 		case Array::UShortArrayType:
-			keysInflated1 = int3ToFloat4Array<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = intToFloatArray<UShortArray>(dynamic_pointer_cast<UShortArray>(keysConverted), 4, epsilon, nphi, true);
 			break;
 		case Array::UByteArrayType:
-			keysInflated1 = int3ToFloat4Array<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = intToFloatArray<UByteArray>(dynamic_pointer_cast<UByteArray>(keysConverted), 4, epsilon, nphi, true);
 			break;
 		case Array::IntArrayType:
-			keysInflated1 = int3ToFloat4Array<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = intToFloatArray<IntArray>(dynamic_pointer_cast<IntArray>(keysConverted), 4, epsilon, nphi, true);
 			break;
 		case Array::ShortArrayType:
-			keysInflated1 = int3ToFloat4Array<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = intToFloatArray<ShortArray>(dynamic_pointer_cast<ShortArray>(keysConverted), 4, epsilon, nphi, true);
 			break;
 		case Array::ByteArrayType:
-			keysInflated1 = int3ToFloat4Array<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), epsilon, nphi, elementSize);
+			keysInflated1 = intToFloatArray<ByteArray>(dynamic_pointer_cast<ByteArray>(keysConverted), 4, epsilon, nphi, true);
 			break;
 		}
 
@@ -893,7 +893,7 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 		keysConverted = inflateKeysQuat(keysInflated2);
 
 		// Recast Array
-		keysConverted = recastArray(keysConverted, static_cast<DesiredVectorSize>(elementSize + 1));
+		keysConverted = recastArray(keysConverted, DesiredVectorSize::Vec4);
 	}
 
 	return keysConverted;
@@ -1326,8 +1326,8 @@ ref_ptr<Array> ParserHelper::recastArray(const ref_ptr<Array>& toRecast, Desired
 				return nullptr;
 			for (int i = 0; i < totalElements; i++)
 			{
-				Vec2ui newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
-				dynamic_cast<Vec2uiArray*>(returnArray.get())->push_back(newVec);
+				Vec2i newVec((*converted)[2 * i], (*converted)[2 * i + 1]);
+				dynamic_cast<Vec2iArray*>(returnArray.get())->push_back(newVec);
 			}
 			break;
 		}
@@ -2191,129 +2191,27 @@ osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysQuat(const osg::ref_ptr<
 	return output;
 }
 
-template <typename T>
-osg::ref_ptr<osg::DoubleArray> ParserHelper::int3ToFloat4Array(const osg::ref_ptr<T>& input, double epsilon, double nphi, int itemSize)
-{
-	int c = 4;
-	double d = epsilon != 0 ? epsilon : 0.25;
-	int p = static_cast<int>(nphi != 0 ? nphi : 720);
-	osg::ref_ptr<osg::DoubleArray> e = new osg::DoubleArray();
-	e->resizeArray(input->getNumElements() * 4 / itemSize);
-
-	double i = 1.57079632679;
-	double n = 6.28318530718;
-	double r = 3.14159265359;
-	double a = 0.01745329251;
-	double l = 47938362584151635e-21;
-	std::map<int, double> _;
-
-	double b = r / static_cast<double>(p - 1);
-	double x = i / static_cast<double>(p - 1);
-
-	int y = 3;
-
-	int m = 0;
-	int v_length = input->getNumElements() / y;
-	while (m < v_length) 
-	{
-		int A = m * c;
-		int S = m * y;
-		int C = (*input)[S];
-		int w = (*input)[S + 1];
-		double M(0.0), T(0.0), E(0.0);
-		int I = 3 * (C + p * w);
-
-		M = _[I];
-		if (M == 0) 
-		{  
-			double N = C * b;
-			double k = std::cos(N);
-			double F = std::sin(N);
-			N += x;
-			double D = (std::cos(d * a) - k * std::cos(N)) / std::max(1e-5, F * std::sin(N));
-			D = std::max(-1.0, std::min(D, 1.0));
-
-			double P = w * n / std::ceil(r / std::max(1e-5, std::acos(D)));
-			M = _[I] = F * std::cos(P);
-			T = _[static_cast<size_t>(I) + 1] = F * std::sin(P);
-			E = _[static_cast<size_t>(I) + 2] = k;
-		}
-		else 
-		{
-			T = _[static_cast<size_t>(I) + 1];
-			E = _[static_cast<size_t>(I) + 2];
-		}
-
-		double R = (*input)[S + 2] * l;
-		double O = std::sin(R);
-		(*e)[A] = O * M;
-		(*e)[static_cast<size_t>(A) + 1] = O * T;
-		(*e)[static_cast<size_t>(A) + 2] = O * E;
-		(*e)[static_cast<size_t>(A) + 3] = std::cos(R);
-
-		++m;
-	}
-
-	return e;
-}
-
-
-template <typename T>
-osg::ref_ptr<osg::DoubleArray> ParserHelper::inflateKeysVec3(const osg::ref_ptr<T>& input)
-{
-	osg::ref_ptr<osg::DoubleArray> output = new DoubleArray(input->begin(), input->end());
-
-	unsigned int e = 1;
-	unsigned int i = output->getNumElements() / 3;
-
-	while (e < i) {
-		unsigned int n = 3 * (e - 1);
-		unsigned int r = 3 * e;
-
-		double a = (*output)[n];
-		double s = (*output)[static_cast<size_t>(n) + 1];
-		double o = (*output)[static_cast<size_t>(n) + 2];
-		double u = 0.0; //(*output)[static_cast<size_t>(n) + 3];
-		double l = (*output)[r];
-		double h = (*output)[static_cast<size_t>(r) + 1];
-		double c = (*output)[static_cast<size_t>(r) + 2];
-		double d = 0.0; //(*output)[static_cast<size_t>(r) + 3];
-
-		(*output)[r] = a * d + s * c - o * h + u * l;
-		(*output)[static_cast<size_t>(r) + 1] = -a * c + s * d + o * l + u * h;
-		(*output)[static_cast<size_t>(r) + 2] = a * h - s * l + o * d + u * c;
-		//(*output)[static_cast<size_t>(r) + 3] = -a * l - s * h - o * c + u * d;
-
-		++e;
-	}
-
-	return output;
-}
-
-
-
-
-
 // Some constants
 const int VEC_SIZE = 1801779;
-const float DEG_TO_RAD = 0.01745329251f;
-const float HALF_PI = 1.57079632679f;
-const float TWO_PI = 6.28318530718f;
+const double DEG_TO_RAD = 0.01745329251;
+const double HALF_PI = 1.57079632679;
+const double ONE_PI = 3.14159265359;
+const double TWO_PI = 6.28318530718;
 
 template<typename T>
-ref_ptr<FloatArray> ParserHelper::intToFloatArray(ref_ptr<T> input, int returnItemSize, float epsilon = 0.25f, int nphi = 720, bool isQuadArray = false)
+ref_ptr<DoubleArray> ParserHelper::intToFloatArray(const ref_ptr<T>& input, int returnItemSize, double epsilon = 0.25, int nphi = 720, bool isQuatArray = false)
 {
-	epsilon = epsilon != 0.0f ? epsilon : 0.25f;
+	epsilon = epsilon != 0.0 ? epsilon : 0.25;
 	nphi = nphi != 0 ? nphi : 720;
-	float u = std::cos(DEG_TO_RAD * epsilon);
-	std::vector<float> h(VEC_SIZE, std::numeric_limits<float>::infinity());
+	double u = std::cos(DEG_TO_RAD * epsilon);
+	std::vector<double> h(VEC_SIZE, std::numeric_limits<double>::infinity());
 
-	float d = PI / (nphi - 1);
-	float g = HALF_PI / (nphi - 1);
-	int originalSize = isQuadArray ? 3 : 2;
+	double d = ONE_PI / (nphi - 1);
+	double g = HALF_PI / (nphi - 1);
+	int originalSize = isQuatArray ? 3 : 2;
 	size_t numElements = input->getNumElements() / originalSize;
 
-	ref_ptr<FloatArray> returnArray = new FloatArray(numElements * returnItemSize);
+	ref_ptr<DoubleArray> returnArray = new DoubleArray(numElements * returnItemSize);
 
 	for (size_t c = 0; c < numElements; ++c) 
 	{
@@ -2322,25 +2220,25 @@ ref_ptr<FloatArray> ParserHelper::intToFloatArray(ref_ptr<T> input, int returnIt
 		unsigned int S = (*input)[_];
 		unsigned int x = (*input)[_ + 1];
 
-		if (returnItemSize == 4 && !isQuadArray) 
+		if (returnItemSize == 4 && !isQuatArray) 
 		{
-			(*returnArray)[v + 3] = (S & 1024) ? -1.0f : 1.0f;
+			(*returnArray)[v + 3] = (S & 1024) ? -1.0 : 1.0;
 			S &= ~1025;
 		}
 
-		float C, T, M;
+		double C, T, M;
 		int b = 3 * (S + nphi * x);
 		bool y = b >= VEC_SIZE;
 
-		if (y || h[b] == std::numeric_limits<float>::infinity()) 
+		if (y || h[b] == std::numeric_limits<double>::infinity()) 
 		{
-			float A = S * d;
-			float R = std::cos(A);
-			float w = std::sin(A);
+			double A = S * d;
+			double R = std::cos(A);
+			double w = std::sin(A);
 			A += g;
-			float E = (u - R * std::cos(A)) / std::max(1e-5f, w * std::sin(A));
-			E = std::max(-1.0f, std::min(E, 1.0f));
-			float P = TWO_PI * x / std::ceil(PI / std::max(1e-5f, std::acos(E)));
+			double E = (u - R * std::cos(A)) / std::max(1e-5, w * std::sin(A));
+			E = std::max(-1.0, std::min(E, 1.0));
+			double P = TWO_PI * x / std::ceil(ONE_PI / std::max(1e-5, std::acos(E)));
 			C = w * std::cos(P);
 			T = w * std::sin(P);
 			M = R;
@@ -2356,10 +2254,10 @@ ref_ptr<FloatArray> ParserHelper::intToFloatArray(ref_ptr<T> input, int returnIt
 			M = h[static_cast<size_t>(b) + 2];
 		}
 
-		if (isQuadArray) 
+		if (isQuatArray) 
 		{
-			float N = 47938362584151635e-21f * (*input)[_ + 2];
-			float O = std::sin(N);
+			double N = 47938362584151635e-21 * (*input)[_ + 2];
+			double O = std::sin(N);
 			(*returnArray)[v] = O * C;
 			(*returnArray)[v + 1] = O * T;
 			(*returnArray)[v + 2] = O * M;
