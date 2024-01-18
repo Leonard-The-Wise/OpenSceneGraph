@@ -480,7 +480,7 @@ namespace pluginfbx
 		}
 
 		// Process UpdateMatrixTransform and UpdateBone Callbacks last
-		if (!skeleton)
+		if ((bone && !_ignoreBones) || _exportFullHierarchy)
 		{
 			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
 			if (nodeCallback)

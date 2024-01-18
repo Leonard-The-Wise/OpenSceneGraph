@@ -57,6 +57,9 @@ namespace pluginfbx
 		// Save matrixtransform targets
 		std::shared_ptr<UpdateMatrixNodes> newMatrixAnim = std::make_shared<UpdateMatrixNodes>();
 		std::string updateMatrixName = umt->getName();
+
+		std::string nodeName = fbxNode->GetName(); // for debug;
+
 		newMatrixAnim->matrixTransform = &matrixTransform;
 		newMatrixAnim->fbxNode = fbxNode;
 

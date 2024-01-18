@@ -111,6 +111,8 @@ namespace pluginfbx
 			{
 				auto& dummyAnimNode = animCurveNode.second->fbxNode;
 
+				std::string nodeName = dummyAnimNode->GetName(); // for debug
+
 				FbxDouble3 staticTrans = dummyAnimNode->LclTranslation.Get();
 				FbxAnimCurve* dummyCurveTransX = dummyAnimNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
 				FbxAnimCurve* dummyCurveTransY = dummyAnimNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
