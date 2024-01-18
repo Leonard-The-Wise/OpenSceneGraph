@@ -42,8 +42,7 @@ using namespace osgAnimation;
 namespace pluginfbx
 {
 
-	// Some variables to avoid spamming warnings
-	static bool foundAnimationWithoutTarget(false);
+	// Variable to avoid spamming warnings
 	static std::set<std::string> missingTargets;
 
 	inline FbxAnimStack* WriterNodeVisitor::getOrCreateAnimStack()
@@ -339,10 +338,9 @@ namespace pluginfbx
 			FbxTime currentTime;
 			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end() && morphAnimNodeIter == _blendShapeAnimations.end())
 			{
-				if (missingTargets.find(targetName) == missingTargets.end())
+				if (missingTargets.find(targetName) == missingTargets.end() && _discardedAnimationTargetNames.find(targetName) == _discardedAnimationTargetNames.end())
 				{
 					OSG_WARN << "WARNING: Found animation without target: " << targetName << std::endl;
-					foundAnimationWithoutTarget = true;
 					missingTargets.emplace(targetName);
 					continue;
 				}
@@ -447,9 +445,6 @@ namespace pluginfbx
 		if (!callback)
 			return;
 
-		// Apply global transforms before animating scenes
-		//applyGlobalTransforms();
-
 		// Create Static Pose, add a dummy keyframe for every bone (so some applications won't give warnings about it)
 		FbxAnimStack* fbxAnimStack = FbxAnimStack::Create(_pScene, "Static Pose");
 		_pScene->SetCurrentAnimationStack(fbxAnimStack);
@@ -476,13 +471,46 @@ namespace pluginfbx
 		{
 			createAnimationStack(animation);
 		}
-
-		if (foundAnimationWithoutTarget)
-		{
-			OSG_NOTICE << "Consider exporting the model with -O ExportFullHierarchy to try to find missing animation targets." << std::endl;
-		}
 	}
 
+
+	void WriterNodeVisitor::buildAnimationTargets(osg::Group* node)
+	{
+		// Only build this list once
+		if (!node || _animationTargetNames.size() > 0)
+			return;
+
+		std::string nodeName = node->getName(); // for debug
+
+		// Traverse hierarchy looking for basic animations manager
+		ref_ptr<Callback> nodeCallback = const_cast<Callback*>(node->getUpdateCallback());
+		ref_ptr<Callback> callback = getRealUpdateCallback(nodeCallback);
+
+		auto bam = dynamic_pointer_cast<BasicAnimationManager>(callback);
+		if (bam)
+		{
+			for (auto& animation : bam->getAnimationList())
+			{
+				for (auto& channel : animation->getChannels())
+				{
+					// Disconsider channels with 1 keyframe (non-animated). Mark them for reference
+					if (channel->getSampler()->getKeyframeContainer()->size() > 1)
+						_animationTargetNames.emplace(channel->getTargetName());
+					else
+						_discardedAnimationTargetNames.emplace(channel->getTargetName());
+				}
+			}
+		}
+		else
+		{
+			for (unsigned int i = 0; i < node->getNumChildren(); ++i)
+			{
+				buildAnimationTargets(dynamic_cast<Group*>(node->getChild(i)));
+				if (_animationTargetNames.size() > 0)
+					break;
+			}
+		}
+	}
 
 }
 
