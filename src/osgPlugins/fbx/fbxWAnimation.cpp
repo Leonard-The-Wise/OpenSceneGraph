@@ -105,7 +105,7 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::applyDummyKeyFrame(const FbxTime& fbxTime, FbxAnimLayer* fbxAnimLayer)
 	{
-		if (_skeletonNodes.size() > 0)
+		if (_matrixAnimCurveMap.size() > 0)
 		{
 			for (auto& animCurveNode : _matrixAnimCurveMap)
 			{
