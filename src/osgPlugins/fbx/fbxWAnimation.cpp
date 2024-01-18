@@ -59,12 +59,91 @@ namespace pluginfbx
 		return animStack;
 	}
 
-	void WriterNodeVisitor::AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel,
+	static std::string getLastPart(const std::string& input) 
+	{
+		size_t pos = input.find_last_of('|');
+		if (pos != std::string::npos) {
+			return input.substr(pos + 1);
+		}
+		return input;
+	}
+
+	inline static Quat AddQuaternions(const Quat& q1, const Quat& q2) {
+		return Quat(q1.x() + q2.x(), q1.y() + q2.y(), q1.z() + q2.z(), q1.w() + q2.w());
+	}
+
+	inline static Quat SubtractQuaternions(const Quat& q1, const Quat& q2) {
+		return Quat(q1.x() - q2.x(), q1.y() - q2.y(), q1.z() - q2.z(), q1.w() - q2.w());
+	}
+
+	inline static Quat MultiplyQuaternionByScalar(const Quat& q, double scalar) {
+		return Quat(q.x() * scalar, q.y() * scalar, q.z() * scalar, q.w() * scalar);
+	}
+
+	inline static double QuaternionDot(const Quat& q1, const Quat& q2) {
+		return q1.x() * q2.x() + q1.y() * q2.y() + q1.z() * q2.z() + q1.w() * q2.w();
+	}
+
+	static Quat Slerp(const Quat& q1, const Quat& q2, double t) 
+	{
+		double cosTheta = QuaternionDot(q1, q2);
+		if (cosTheta > 0.9995) 
+		{
+			return AddQuaternions(q1, MultiplyQuaternionByScalar(SubtractQuaternions(q2, q1), t));
+		}
+		else 
+		{
+			double theta = acos(std::max(-1.0, std::min(1.0, cosTheta)));
+			double thetap = theta * t;
+
+			Quat qperp = SubtractQuaternions(q2, MultiplyQuaternionByScalar(q1, cosTheta));
+			qperp.asVec4().normalize();
+
+			return AddQuaternions(MultiplyQuaternionByScalar(q1, cos(thetap)), MultiplyQuaternionByScalar(qperp, sin(thetap)));
+		}
+	}
+
+	void WriterNodeVisitor::applyDummyKeyFrame(const FbxTime& fbxTime, FbxAnimLayer* fbxAnimLayer)
+	{
+		if (_skeletonNodes.size() > 0)
+		{
+			for (auto& animCurveNode : _matrixAnimCurveMap)
+			{
+				auto& dummyAnimNode = animCurveNode.second->fbxNode;
+
+				FbxDouble3 staticTrans = dummyAnimNode->LclTranslation.Get();
+				FbxAnimCurve* dummyCurveTransX = dummyAnimNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+				FbxAnimCurve* dummyCurveTransY = dummyAnimNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+				FbxAnimCurve* dummyCurveTransZ = dummyAnimNode->LclTranslation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+				dummyCurveTransX->KeySet(dummyCurveTransX->KeyAdd(fbxTime), fbxTime, staticTrans[0], FbxAnimCurveDef::eInterpolationConstant);
+				dummyCurveTransY->KeySet(dummyCurveTransY->KeyAdd(fbxTime), fbxTime, staticTrans[1], FbxAnimCurveDef::eInterpolationConstant);
+				dummyCurveTransZ->KeySet(dummyCurveTransZ->KeyAdd(fbxTime), fbxTime, staticTrans[2], FbxAnimCurveDef::eInterpolationConstant);
+
+				FbxDouble3 staticScale = dummyAnimNode->LclScaling.Get();
+				FbxAnimCurve* dummyCurveScaleX = dummyAnimNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+				FbxAnimCurve* dummyCurveScaleY = dummyAnimNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+				FbxAnimCurve* dummyCurveScaleZ = dummyAnimNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+				dummyCurveScaleX->KeySet(dummyCurveScaleX->KeyAdd(fbxTime), fbxTime, staticScale[0], FbxAnimCurveDef::eInterpolationConstant);
+				dummyCurveScaleY->KeySet(dummyCurveScaleY->KeyAdd(fbxTime), fbxTime, staticScale[1], FbxAnimCurveDef::eInterpolationConstant);
+				dummyCurveScaleZ->KeySet(dummyCurveScaleZ->KeyAdd(fbxTime), fbxTime, staticScale[2], FbxAnimCurveDef::eInterpolationConstant);
+
+				FbxDouble3 staticRot = dummyAnimNode->LclRotation.Get();
+				FbxAnimCurve* dummyCurveRotX = dummyAnimNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+				FbxAnimCurve* dummyCurveRotY = dummyAnimNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+				FbxAnimCurve* dummyCurveRotZ = dummyAnimNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+				dummyCurveRotX->KeySet(dummyCurveRotX->KeyAdd(fbxTime), fbxTime, staticRot[0], FbxAnimCurveDef::eInterpolationConstant);
+				dummyCurveRotY->KeySet(dummyCurveRotY->KeyAdd(fbxTime), fbxTime, staticRot[1], FbxAnimCurveDef::eInterpolationConstant);
+				dummyCurveRotZ->KeySet(dummyCurveRotZ->KeyAdd(fbxTime), fbxTime, staticRot[2], FbxAnimCurveDef::eInterpolationConstant);
+			}
+		}
+	}
+
+	FbxTime WriterNodeVisitor::AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel,
 		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string channelName)
 	{
 		if (!transformChannel || !animCurveNode)
 		{
-			return;
+			return FbxTime(0);
 		}
 
 		// Obtenha as curvas de animação para X, Y e Z do nó de translação.
@@ -89,106 +168,172 @@ namespace pluginfbx
 		else
 		{
 			OSG_WARN << "WARNING: Animation channel contains invalid name: " << channelName << std::endl;
-			return;
+			return FbxTime(0);
 		}
 
 		// Obtenha o KeyframeContainer do canal de translação.
 		osgAnimation::Vec3KeyframeContainer* keyframes = transformChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
 
 		// Itere sobre todos os keyframes do canal de translação e adicione-os às curvas FBX.
-		for (unsigned int i = 0; i < keyframes->size(); ++i) 
+		FbxTime fbxTime;
+
+		// Aplicar uma dummy keyframe no começo
+		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+
+		for (unsigned int i = 0; i < keyframes->size(); ++i)
 		{
 			const osgAnimation::Vec3Keyframe& keyframe = (*keyframes)[i];
 
 			// Converta o tempo do OSG para o tempo do FBX.
-			FbxTime fbxTime;
 			fbxTime.SetSecondDouble(keyframe.getTime());
 			Vec3 keyValue = keyframe.getValue();
 
 			// Adicione os valores de translação para cada eixo às curvas correspondentes.
-			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, keyValue.x(), FbxAnimCurveDef::eInterpolationConstant);
-			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, keyValue.y(), FbxAnimCurveDef::eInterpolationConstant);
-			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, keyValue.z(), FbxAnimCurveDef::eInterpolationConstant);
+			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, keyValue.x(), FbxAnimCurveDef::eInterpolationLinear);
+			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, keyValue.y(), FbxAnimCurveDef::eInterpolationLinear);
+			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, keyValue.z(), FbxAnimCurveDef::eInterpolationLinear);
 		}
+
+		// Aplicar uma dummy keyframe no fim da animação
+		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+
+		return fbxTime;
 	}
 
-	void WriterNodeVisitor::AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel,
+	FbxTime WriterNodeVisitor::AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel,
 		FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer)
 	{
 		if (!transformChannel || !animCurveNode)
 		{
-			return;
+			return FbxTime(0);
 		}
 
 		FbxAnimCurve* curveX = animCurveNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
 		FbxAnimCurve* curveY = animCurveNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
 		FbxAnimCurve* curveZ = animCurveNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
 
-		osgAnimation::QuatKeyframeContainer* keyframes = transformChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+		// Cria uma cópia
+		osgAnimation::QuatKeyframeContainer keyframes = *transformChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
 
-		for (unsigned int i = 0; i < keyframes->size(); ++i)
+		if (keyframes.size() == 0)
+			return FbxTime(0);
+
+		FbxTime fbxTime;
+
+		// Aplicar uma dummy keyframe no começo
+		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+
+		// Pegar a rotação original (inicial) do objeto
+		FbxDouble3 lastRotation = animCurveNode->LclRotation.Get();
+		FbxAMatrix quatMatrix;
+		quatMatrix.SetR(lastRotation);
+		FbxQuaternion qLastRotation = quatMatrix.GetQ();
+		Quat zeroQuatKey = Quat(qLastRotation[0], qLastRotation[1], qLastRotation[2], qLastRotation[3]);
+
+		// Prepara os quaternions para interpolação
+		Quat firstQuatKey = keyframes[0].getValue();
+		if (QuaternionDot(firstQuatKey, zeroQuatKey) < 0)
+			keyframes[0].setValue(-firstQuatKey);
+
+		for (unsigned int i = 1; i < keyframes.size(); ++i) 
 		{
-			const osgAnimation::QuatKeyframe& keyframe = (*keyframes)[i];
+			Quat current = keyframes[i].getValue();
+			Quat previous = keyframes[i - 1].getValue();
 
-			FbxTime fbxTime;
+			if (QuaternionDot(current, previous) < 0) 
+			{
+				keyframes[i].setValue(-current); // Inverte o sinal do quaternion
+			}
+		}
+		
+		constexpr double t = 0.5;
+		for (unsigned int i = 0; i < keyframes.size(); ++i)
+		{
+			osgAnimation::QuatKeyframe& keyframe = keyframes[i];
+
 			fbxTime.SetSecondDouble(keyframe.getTime());
 
+			Quat interpolatedQuat;
 			Quat quat = keyframe.getValue();
 
-			FbxQuaternion q(quat.x(), quat.y(), quat.z(), quat.w());
+			if (i == 0)
+			{
+				interpolatedQuat = Slerp(zeroQuatKey, keyframes[i].getValue(), t);
+			}
+			else
+			{
+				Quat quatStart = keyframes[i - 1].getValue();
+				Quat quatEnd = keyframes[i].getValue();
+											
+				interpolatedQuat = Slerp(quatStart, quatEnd, t);
+			}
+
+			FbxQuaternion q(interpolatedQuat.x(), interpolatedQuat.y(), interpolatedQuat.z(), interpolatedQuat.w());
 			FbxAMatrix mat;
 			mat.SetQ(q);
 			FbxVector4 vec4 = mat.GetR();
 			FbxDouble3 euler = FbxDouble3(vec4[0], vec4[1], vec4[2]);
 
-			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, euler[0], FbxAnimCurveDef::eInterpolationConstant);
-			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, euler[1], FbxAnimCurveDef::eInterpolationConstant);
-			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, euler[2], FbxAnimCurveDef::eInterpolationConstant);
+			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, euler[0], FbxAnimCurveDef::eInterpolationLinear);
+			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, euler[1], FbxAnimCurveDef::eInterpolationLinear);
+			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, euler[2], FbxAnimCurveDef::eInterpolationLinear);
 		}
+
+		// Aplicar uma dummy keyframe no final
+		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+
+		return fbxTime;
 	}
 
-	void AddFloatKeyframes(osgAnimation::FloatLinearChannel* transformChannel,
+	FbxTime AddFloatKeyframes(osgAnimation::FloatLinearChannel* transformChannel,
 		FbxBlendShapeChannel* blendShapeChannel, FbxAnimLayer* fbxAnimLayer)
 	{
 		if (!transformChannel || !blendShapeChannel)
 		{
-			return;
+			return FbxTime(0);
 		}
 		FbxAnimCurve* curve = blendShapeChannel->DeformPercent.GetCurve(fbxAnimLayer, true);
 
 		osgAnimation::FloatKeyframeContainer* keyframes = transformChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
 
+		FbxTime fbxTime;
 		for (unsigned int i = 0; i < keyframes->size(); ++i)
 		{
 			const osgAnimation::FloatKeyframe& keyframe = (*keyframes)[i];
 
-			FbxTime fbxTime;
 			fbxTime.SetSecondDouble(keyframe.getTime());
 
 			float value = keyframe.getValue();
 
 			curve->KeySet(curve->KeyAdd(fbxTime), fbxTime, value, FbxAnimCurveDef::eInterpolationConstant);
 		}
+		return fbxTime;
 	}
 
-	void WriterNodeVisitor::createAnimationLayer(const osg::ref_ptr<osgAnimation::Animation> osgAnimation)
+	void WriterNodeVisitor::createAnimationStack(const osg::ref_ptr<osgAnimation::Animation> osgAnimation)
 	{
 		std::string animationName = osgAnimation->getName().c_str();
+		animationName = getLastPart(animationName);
 
-		FbxAnimStack* animStack = FbxAnimStack::Create(_pScene, animationName.c_str());
-		_pScene->SetCurrentAnimationStack(animStack);
+		FbxAnimStack* fbxAnimStack = FbxAnimStack::Create(_pScene, animationName.c_str());
+		_pScene->SetCurrentAnimationStack(fbxAnimStack);
 		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, animationName.c_str());
-		animStack->AddMember(fbxAnimLayer);
+		fbxAnimStack->AddMember(fbxAnimLayer);
 
 		bool NotImplemented1(false), NotImplemented2(false);
 
 		bool foundAnimationWithoutTarget(false);
+
+		FbxTime startTime, endTime;
+		startTime.SetSecondDouble(0.0);
 		for (auto& channel : osgAnimation->getChannels()) 
 		{
 			std::string targetName = channel->getTargetName();
 
 			auto boneAnimCurveNodeIter = _matrixAnimCurveMap.find(targetName);
 			auto morphAnimNodeIter = _blendShapeAnimations.find(targetName);
+
+			FbxTime currentTime;
 			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end() && morphAnimNodeIter == _blendShapeAnimations.end())
 			{
 				OSG_WARN << "WARNING: Found animation without target: " << targetName << std::endl;
@@ -202,11 +347,11 @@ namespace pluginfbx
 
 				if (auto transformChannel = dynamic_pointer_cast<Vec3LinearChannel>(channel))
 				{
-					AddVec3Keyframes(transformChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer, transformChannel->getName());
+					currentTime = AddVec3Keyframes(transformChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer, transformChannel->getName());
 				}
 				else if (auto rotateChannel = dynamic_pointer_cast<QuatSphericalLinearChannel>(channel))
 				{
-					AddQuatSlerpKeyframes(rotateChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer);
+					currentTime = AddQuatSlerpKeyframes(rotateChannel, boneAnimCurveNodes->fbxNode, fbxAnimLayer);
 				}
 			} 
 			else if (morphAnimNodeIter != _blendShapeAnimations.end())
@@ -214,7 +359,7 @@ namespace pluginfbx
 
 				if (auto morphChannel = dynamic_pointer_cast<FloatLinearChannel>(channel))
 				{
-					AddFloatKeyframes(morphChannel, morphAnimNodeIter->second, fbxAnimLayer);
+					currentTime = AddFloatKeyframes(morphChannel, morphAnimNodeIter->second, fbxAnimLayer);
 				}
 			}
 
@@ -233,14 +378,66 @@ namespace pluginfbx
 
 				NotImplemented2 = true;
 			}
+
+			if (currentTime.GetSecondDouble() > endTime.GetSecondDouble())
+				endTime = currentTime;
 		}
 
 		if (foundAnimationWithoutTarget)
 		{
 			OSG_NOTICE << "Consider exporting the model with -O ExportFullHierarchy to try to find missing animation targets." << std::endl;
 		}
-	}
+		
+		std::string framerateStr;
+		DefaultUserDataContainer* udc = dynamic_cast<DefaultUserDataContainer*>(osgAnimation->getUserDataContainer());
+		if (udc && udc->getUserValue("framerate", framerateStr))
+		{
+			int framerate(0);
+			framerate = std::stoi(framerateStr);
+			switch (framerate)
+			{
+			case 24:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames24);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames24);
+				break;
+			case 30:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames30);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames30);
+				break;
+			case 48:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames48);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames48);
+				break;
+			case 50:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames50);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames50);
+				break;
+			case 60:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames60);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames60);
+				break;
+			case 72:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames72);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames72);
+				break;
+			case 96:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames96);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames96);
+				break;
+			case 100:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames100);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames100);
+				break;
+			case 120:
+				startTime.SetGlobalTimeMode(FbxTime::eFrames120);
+				endTime.SetGlobalTimeMode(FbxTime::eFrames120);
+				break;
+			}
+		}
 
+		fbxAnimStack->LocalStart = startTime;
+		fbxAnimStack->LocalStop = endTime;
+	}
 
 	// Call this only after all node's children are already processed
 	void WriterNodeVisitor::applyAnimations(const osg::ref_ptr<osg::Callback>& callback)
@@ -248,11 +445,22 @@ namespace pluginfbx
 		if (!callback)
 			return;
 
-		// Create Static Pose
-		FbxAnimStack* animStack = FbxAnimStack::Create(_pScene, "Static Pose");
-		_pScene->SetCurrentAnimationStack(animStack);
+		// Apply global transforms before animating scenes
+		//applyGlobalTransforms();
+
+		// Create Static Pose, add a dummy keyframe for every bone (so some applications won't give warnings about it)
+		FbxAnimStack* fbxAnimStack = FbxAnimStack::Create(_pScene, "Static Pose");
+		_pScene->SetCurrentAnimationStack(fbxAnimStack);
 		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, "Static Pose");
-		animStack->AddMember(fbxAnimLayer);
+		fbxAnimStack->AddMember(fbxAnimLayer);
+
+		FbxTime fbxTime;
+		fbxTime.SetSecondDouble(0);
+
+		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+
+		fbxAnimStack->LocalStart = fbxTime;
+		fbxAnimStack->LocalStop = fbxTime;
 
 		// Read animation takes
 		auto bam = dynamic_pointer_cast<BasicAnimationManager>(callback);
@@ -264,7 +472,7 @@ namespace pluginfbx
 		// Run through all animations
 		for (auto& animation : bam->getAnimationList())
 		{
-			createAnimationLayer(animation);
+			createAnimationStack(animation);
 		}
 	}
 

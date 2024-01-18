@@ -221,6 +221,12 @@ namespace pluginfbx
 
 	void WriterNodeVisitor::applyGlobalTransforms()
 	{
+		// This function only runs once
+		if (_globalTransformsApplied)
+			return;
+
+		_globalTransformsApplied = true;
+
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
 
@@ -240,6 +246,8 @@ namespace pluginfbx
 		{
 			FbxNode* skeleton = _riggedMeshesRoot.top();
 
+			std::string skeletonName = skeleton->GetName(); // for debug
+
 			FbxAMatrix mainTransform = skeleton->EvaluateGlobalTransform();
 			mainTransform = mainTransform * matMultiply;
 
@@ -258,6 +266,8 @@ namespace pluginfbx
 		{
 			FbxNode* meshRoot = _normalMeshesNodes.top();
 
+			std::string meshName = meshRoot->GetName();
+
 			FbxAMatrix mainTransform = meshRoot->EvaluateGlobalTransform();
 			mainTransform = mainTransform * matMultiply;
 
@@ -271,7 +281,6 @@ namespace pluginfbx
 
 			_normalMeshesNodes.pop();
 		}
-
 	}
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
@@ -380,7 +389,7 @@ namespace pluginfbx
 		FbxNode* parent = _curFbxNode;
 
 		if (skeleton)
-			nodeName = node.getName().empty() ? "Armature" : node.getName();
+			nodeName = node.getName().empty() ? "Skeleton" : node.getName();
 		else if (bone)
 			nodeName = node.getName().empty() ? "DefaultBone" : node.getName();
 		else
@@ -403,10 +412,11 @@ namespace pluginfbx
 		// Fix for sketchfab coordinates
 		if (isFirstMatrix && !skeleton)
 		{
-			matrix.makeIdentity();
+			osg::Matrix matrixMult;
+			matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+			matrix = matrix * matrixMult;
 			node.setMatrix(matrix);
 		}
-
 
 		if (isFirstMatrix || _ignoreBones || _exportFullHierarchy || skeleton || bone)
 		{
@@ -415,7 +425,7 @@ namespace pluginfbx
 
 			if (skeleton || bone)
 			{
-				_skeletonNodes.push_back(_curFbxNode);
+				_skeletonNodes.emplace(_curFbxNode);
 			}
 
 			// Need to reconstruct skeleton transforms for non-full hierarchy
@@ -432,7 +442,8 @@ namespace pluginfbx
 				{
 					osg::Matrix matrixMult;
 					matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-					matrix = matrix * matrixMult;
+					matrix.decompose(pos, rot, scl, so);
+					matrix = matrixMult;
 				}
 			}
 

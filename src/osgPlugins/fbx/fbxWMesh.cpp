@@ -834,9 +834,10 @@ namespace pluginfbx
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry
-		if (rig && !rigMorph)
+		if (!_exportFullHierarchy && rig && !rigMorph)
 		{
 			transformMatrix = getMatrixFromSkeletonToNode(geometry);
+			_skeletonNodes.emplace(meshNode); // Some applications complains if the rigged mesh node is not mapped to a FbxCluster.
 		}
 
 		// Apply parent matrix
@@ -850,8 +851,10 @@ namespace pluginfbx
 		if (materialParser)
 		{
 			FbxSurfacePhong* meshMaterial = materialParser->getFbxMaterial();
-			if (meshMaterial)
-				meshNode->AddMaterial(meshMaterial);
+			if (meshMaterial && meshNode->AddMaterial(meshMaterial) == -1)
+			{
+				OSG_WARN << "WARNING: Error applying material do mesh: " << meshName << std::endl;
+			}
 		}
 
 		// Process morphed geometry

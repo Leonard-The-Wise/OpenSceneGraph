@@ -112,7 +112,8 @@ namespace pluginfbx
             _exportFullHierarchy(exportFullHierarchy),
             _scaleModel(scaleModel),
             _flipUVs(flipUVs),
-            _firstMatrixNode(nullptr)
+            _firstMatrixNode(nullptr),
+            _globalTransformsApplied(false)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -216,10 +217,7 @@ namespace pluginfbx
 
         osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
 
-        // Must be the last step before exporting
         void applyGlobalTransforms();
-
-
 
         /**
         * Build geometry triangles and control points (vertices)
@@ -231,7 +229,7 @@ namespace pluginfbx
 
         FbxNode* buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix = {});
 
-        void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh, std::set<std::string>& emptyBoneNames);
+        void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
 
         void buildBindPose();
 
@@ -254,18 +252,29 @@ namespace pluginfbx
 
         FbxAnimStack* getOrCreateAnimStack();
 
-        void AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel, FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string channelName);
+        /// Creates a dummy keyframe at given time (simulates static pose)
+        void applyDummyKeyFrame(const FbxTime& fbxTime, FbxAnimLayer* fbxAnimLayer);
 
-        void AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel, FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer);
+        FbxTime AddVec3Keyframes(osgAnimation::Vec3LinearChannel* transformChannel, FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer, std::string channelName);
 
+        FbxTime AddQuatSlerpKeyframes(osgAnimation::QuatSphericalLinearChannel* transformChannel, FbxNode* animCurveNode, FbxAnimLayer* fbxAnimLayer);
+
+        /// <summary>
+        /// Applies all animations in a BasicAnimationManager
+        /// </summary>
+        /// <param name="callback"></param>
         void applyAnimations(const osg::ref_ptr<osg::Callback>& callback);
 
-        void createAnimationLayer(const osg::ref_ptr<osgAnimation::Animation> osgAnimation);
+        void createAnimationStack(const osg::ref_ptr<osgAnimation::Animation> osgAnimation);
 
          void applyUpdateMatrixTransform(const osg::ref_ptr<osg::Callback>& callback, FbxNode* fbxNode,
             osg::MatrixTransform& matrixTransform);
 
-        ///Return a material from StateSet
+        /// <summary>
+        /// Get node's material and textures
+        /// </summary>
+        /// <param name="stateset">node stateset</param>
+        /// <returns>Material Parser containing the material and textures</returns>
         WriterNodeVisitor::MaterialParser* processStateSet(const osg::StateSet* stateset);
 
         typedef std::stack<osg::ref_ptr<osg::StateSet> > StateSetStack;
@@ -326,6 +335,7 @@ namespace pluginfbx
         BlendShapeAnimMap _blendShapeAnimations;
         FbxNode* _firstMatrixNode;
         osg::Matrix _firstMatrix;
+        bool _globalTransformsApplied;   // Global transforms can be applied before animating nodes or after processing hierarchy for static scenes.
 
         // Keep track of created materials
         std::unordered_map<const osg::Material*, MaterialParser*> _materialMap;
@@ -333,8 +343,8 @@ namespace pluginfbx
         // Keep track of transform matrices
         std::deque<std::pair<std::string, osg::Matrix>> _matrixStack;
 
-        // Keep track of created Skeletons and bones
-        std::vector<FbxNode*> _skeletonNodes;
+        // Keep track of all created Skeletons and bones
+        std::set<FbxNode*> _skeletonNodes;
 
     };
 

@@ -461,9 +461,12 @@ namespace pluginfbx
 		}
 	}
 
-	void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh, std::set<std::string>& emptyBoneNames)
+	void WriterNodeVisitor::applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh)
 	{
 		FbxSkin* skinDeformer = FbxSkin::Create(_pSdkManager, "");
+
+		// Make a copy of all skeleton and bone nodes
+		std::set<FbxNode*> unusedBoneNodes = _skeletonNodes;
 
 		// Map all used bones to influence maps
 		for (const auto& influence : vim)
@@ -473,12 +476,13 @@ namespace pluginfbx
 			BonePair bonePair;
 			if (_boneNodeSkinMap.find(boneName) != _boneNodeSkinMap.end())
 			{
-				bonePair = _boneNodeSkinMap.at(boneName);
-				emptyBoneNames.erase(boneName); // Mark bone as "found", ereasing from empty list
+				bonePair = _boneNodeSkinMap.at(boneName);				
 			}
 
 			ref_ptr<osgAnimation::Bone> bone = bonePair.first;
 			FbxNode* fbxBoneNode = bonePair.second;
+
+			unusedBoneNodes.erase(fbxBoneNode); // Mark bone as found by erasing...
 
 			if (!bone)
 			{
@@ -513,6 +517,16 @@ namespace pluginfbx
 			cluster->SetTransformLinkMatrix(fbxInvBindMatrix);
 		}
 
+		// We still create empty clusters for non-influencing bones, so the bind pose of the mesh can be calculated correctly.
+		//for (auto& unusedBone : unusedBoneNodes)
+		//{
+		//	FbxCluster* cluster = FbxCluster::Create(_pSdkManager, "");
+		//	std::string boneName = unusedBone->GetName();
+		//	cluster->SetLink(unusedBone);
+		//	cluster->SetLinkMode(FbxCluster::eAdditive);
+		//	skinDeformer->AddCluster(cluster);
+		//}
+
 		fbxMesh->AddDeformer(skinDeformer);
 	}
 
@@ -531,25 +545,26 @@ namespace pluginfbx
 		}
 		_pScene->AddPose(pose);
 
-		FbxUserNotification* status = FbxUserNotification::Create(_pSdkManager, "", "");
-		bool success = pose->IsValidBindPoseVerbose(_pScene->GetRootNode(), status);
+		//FbxNode* pRoot = _pScene->GetRootNode();
+		//FbxUserNotification* status = FbxUserNotification::Create(_pSdkManager, "", "");
+		//bool success = pose->IsValidBindPoseVerbose(pRoot, status);
 
-		if (!success)
-		{
-			int numNotifications = status->GetNbEntries();
+		//if (!success)
+		//{
+		//	int numNotifications = status->GetNbEntries();
 
-			for (int i = 0; i < numNotifications; ++i) 
-			{
-				const FbxAccumulatorEntry* entry = status->GetEntry(i);
-				OSG_WARN << "Bind pose error: " << entry->GetDescription() << std::endl;
-				
-				for (int j = 0; j < entry->GetDetailsCount(); j++)
-				{
-					OSG_WARN << "      - " << entry->GetDetail(j)->Buffer() << std::endl;
-				}
-				
-			}
-		}
+		//	for (int i = 0; i < numNotifications; ++i) 
+		//	{
+		//		const FbxAccumulatorEntry* entry = status->GetEntry(i);
+		//		OSG_WARN << "Bind pose error: " << entry->GetDescription() << std::endl;
+		//		
+		//		for (int j = 0; j < entry->GetDetailsCount(); j++)
+		//		{
+		//			OSG_WARN << "      - " << entry->GetDetail(j)->Buffer() << std::endl;
+		//		}
+		//		
+		//	}
+		//}
 	}
 
 	void WriterNodeVisitor::buildMeshSkin()
@@ -558,12 +573,6 @@ namespace pluginfbx
 			OSG_NOTICE << "Processing rig and skinning... " << std::endl;
 		else
 			return;
-
-		std::set<std::string> emptyBoneNames;
-
-		// Make a set of known bone names to see if all are used
-		for (auto& nodeSkin : _boneNodeSkinMap)
-			emptyBoneNames.emplace(nodeSkin.first);
 
 		// Process meshes skinning
 		for (auto& entry : _riggedMeshMap)
@@ -589,7 +598,7 @@ namespace pluginfbx
 
 			if (mesh)
 			{
-				applySkinning(*vim, mesh, emptyBoneNames);
+				applySkinning(*vim, mesh);
 			}
 			else
 				OSG_WARN << "WARNING: Vertex Influence without corresponding mesh" << std::endl;
@@ -599,14 +608,6 @@ namespace pluginfbx
 		// Construct bind pose
 		buildBindPose();
 
-		if (emptyBoneNames.size() > 0)
-		{
-			OSG_DEBUG << "DEBUG: The following bones are not influencing any vertex:" << std::endl;
-			for (auto& bone : emptyBoneNames)
-			{
-				OSG_DEBUG << "   - " << bone << std::endl;
-			}
-		}
 	}
 
 }

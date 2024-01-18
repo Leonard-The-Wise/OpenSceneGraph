@@ -47,19 +47,19 @@ osgconv --format fbx
 ```
 osgconv file.osgjs file-export.fbx -O RotateXAxis=-90.0
 ```
-(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis.
+(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis before exporting).
 
 In rare cases you may get an "out of bound indexes or vertexes", that usually means your model isn't vertex/index compressed (this was actually the default for old OSGJS original format). Since we can't programatically determine whether this model is compressed or not (depends on which version of sketchfab processor it was uploaded and time of upload), you must try different options manually.
 
 Defaultly, the plugin will try to decompress vertices and texcoords because most recent models use it, but if it is a legacy model and it fails to export or your vertices looks totally broken, try to export with the option `-O disableVertexDecompress` and it may fix the issue.
 
-You can also ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging or animations distorting your model, use it. It won't export rigging, but it WILL reconstruct all bone nodes as normal "group" nodes (visible in Blender like a series of black dots in the air - just click the dots and you'll select the corresponding group), so you can still visualize how the model's skeleton would be like before distorting model.
+You can also ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging or animations distorting your model, use it. It won't export rigging, but it WILL reconstruct all bone nodes as normal "group" nodes (visible in Blender like a series of black dots in the air - just click the dots and you'll select the corresponding group), so you can still visualize how the model's skeleton would be like before distorting model. Just notice that animations in FBX may suffer from gimbal lock, due to the fact that the rotations are expressed in Euler angles instead of quaternions. To try to ease this issue, the plugin will try to smooth all OpenSceneGraph rotations (based on quaternions) before applying to animations. But it is not 100% guaranteeed. While the great majority of animations tested where without issues, some are, and no easy fix is avaliable and the only way for now is to try and fix rotations in a 3D editor like Blender or 3DS Max.
 
 And also, by default we try to "compact" the OpenSceneGraph hierarchy nodes, by placing all meshes on a single Root and then applying the skeleton on it's own hierarchy. This is usually the best for most models, but with some it doesn't work. So if anything goes wrong, or animations are missing because we didn't export a Node, you can try to export with the `-O ExportFullHierarchy` option.
 
 Finally, if everything is failing: like, your rigging won't export correctly, meshes looks weirdly rotated or distorted, you may want to use `-O ExportOriginal`, so NO PROCESSING will be done on the original hierarchy. This also disables exporting the skeleton. And also will skip animations, so you can see exactly what the scene looks like originally and make the appropriate adjust on the export parameters.
 
-What I recommend you to do is to begin exporting models using the default command [NO options], and if it fails, `-O ExportOriginal`, and then incrementally change the options later, so you'll have a baseline for which parameters to use and which to not. Most of the time, 1 try is enough but for some models, you may have to experiment with several different options to make them work.
+What I recommend you to do is to begin exporting models using the default command [NO tweaks], and if it fails, `-O ExportOriginal`, and then incrementally change the options later, so you'll have a baseline for which parameters to use and which to not. Most of the time, 1 try is enough but for some models, you may have to experiment with several different options to make them work.
 
 ### Extra tip:
 

@@ -30,7 +30,7 @@ public:
         supportsOption("ExportOriginal", "(Write option) Export only base model with original rotations (usefull to identify rigging problems).");
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
         supportsOption("ExportFullHierarchy", "(Write option) Export models respecting the original full node hierarchy. Some models may need it.");
-        supportsOption("ScaleModel", "(Write option) Scale model on X, Y and Z by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0)");
+        supportsOption("ScaleModel", "(Write option) Scale model uniformly by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0)");
         supportsOption("FlipUVs", "(Write option) Flip Y axis of texture UV's.");
     }
 
