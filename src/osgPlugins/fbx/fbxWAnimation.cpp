@@ -42,6 +42,9 @@ using namespace osgAnimation;
 namespace pluginfbx
 {
 
+	// Some variables to avoid spamming warnings
+	static bool foundAnimationWithoutTarget(false);
+	static std::set<std::string> missingTargets;
 
 	inline FbxAnimStack* WriterNodeVisitor::getOrCreateAnimStack()
 	{
@@ -324,8 +327,6 @@ namespace pluginfbx
 
 		bool NotImplemented1(false), NotImplemented2(false);
 
-		bool foundAnimationWithoutTarget(false);
-
 		FbxTime startTime, endTime;
 		startTime.SetSecondDouble(0.0);
 		for (auto& channel : osgAnimation->getChannels()) 
@@ -338,9 +339,13 @@ namespace pluginfbx
 			FbxTime currentTime;
 			if (boneAnimCurveNodeIter == _matrixAnimCurveMap.end() && morphAnimNodeIter == _blendShapeAnimations.end())
 			{
-				OSG_WARN << "WARNING: Found animation without target: " << targetName << std::endl;
-				foundAnimationWithoutTarget = true;
-				continue;
+				if (missingTargets.find(targetName) == missingTargets.end())
+				{
+					OSG_WARN << "WARNING: Found animation without target: " << targetName << std::endl;
+					foundAnimationWithoutTarget = true;
+					missingTargets.emplace(targetName);
+					continue;
+				}
 			}
 
 			if (boneAnimCurveNodeIter != _matrixAnimCurveMap.end())
@@ -383,11 +388,6 @@ namespace pluginfbx
 
 			if (currentTime.GetSecondDouble() > endTime.GetSecondDouble())
 				endTime = currentTime;
-		}
-
-		if (foundAnimationWithoutTarget)
-		{
-			OSG_NOTICE << "Consider exporting the model with -O ExportFullHierarchy to try to find missing animation targets." << std::endl;
 		}
 		
 		std::string framerateStr;
@@ -475,6 +475,11 @@ namespace pluginfbx
 		for (auto& animation : bam->getAnimationList())
 		{
 			createAnimationStack(animation);
+		}
+
+		if (foundAnimationWithoutTarget)
+		{
+			OSG_NOTICE << "Consider exporting the model with -O ExportFullHierarchy to try to find missing animation targets." << std::endl;
 		}
 	}
 
