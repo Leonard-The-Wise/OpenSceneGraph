@@ -280,6 +280,7 @@ namespace pluginfbx
 			return std::string(currentNode->GetName()) + std::string("/");
 	}
 
+	/*
 	void WriterNodeVisitor::applyGlobalTransforms()
 	{
 		osg::Vec3d pos, scl;
@@ -364,6 +365,7 @@ namespace pluginfbx
 			_normalMeshesNodes.pop();
 		}
 	}
+	*/
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
 	{
@@ -453,7 +455,7 @@ namespace pluginfbx
 				}
 			}
 
-			applyGlobalTransforms();
+			// applyGlobalTransforms();
 		}
 	}
 
@@ -528,10 +530,10 @@ namespace pluginfbx
 
 				_firstMatrixNode = _curFbxNode;
 			}
-			else if (skeleton)
-			{
-				_riggedMeshesRoot.push(std::make_pair(skeleton, _curFbxNode));
-			}
+			//else if (skeleton)
+			//{
+			//	_riggedMeshesRoot.push(std::make_pair(skeleton, _curFbxNode));
+			//}
 			else if (animatedMatrix)
 			{
 				_animatedMatrices.push(std::make_pair(&node, _curFbxNode));

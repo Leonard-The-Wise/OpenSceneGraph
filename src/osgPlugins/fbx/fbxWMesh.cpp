@@ -791,21 +791,21 @@ namespace pluginfbx
 		std::string currentNodePath = buildNodePath(_curFbxNode);				//
 		FbxAMatrix currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	//
 
-		// For rigged geometry we put nodes bellow skeleton node
-		if (rig)
-		{
-			if (_riggedMeshesRoot.size() > 0)
-			{
-				std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
-				meshParent = _riggedMeshesRoot.top().second;
-			}
-			else
-				OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
-		}
-		else
-		{
-			_normalMeshesNodes.push(meshNode);
-		}
+		//// For rigged geometry we put nodes bellow skeleton node
+		//if (rig)
+		//{
+		//	if (_riggedMeshesRoot.size() > 0)
+		//	{
+		//		std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
+		//		meshParent = _riggedMeshesRoot.top().second;
+		//	}
+		//	else
+		//		OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
+		//}
+		//else
+		//{
+		//	_normalMeshesNodes.push(meshNode);
+		//}
 
 		meshParent->AddChild(meshNode);
 
@@ -847,7 +847,7 @@ namespace pluginfbx
 		if (rig && !rigMorph)
 		{
 			transformMatrix = getMatrixFromSkeletonToNode(geometry);
-			_skeletonNodes.emplace(meshNode); // Some applications complains if the rigged mesh node is not mapped to a FbxCluster.
+			//_skeletonNodes.emplace(meshNode);
 		}		
 
 		// Build vertices, normals, tangents, texcoords, etc.
