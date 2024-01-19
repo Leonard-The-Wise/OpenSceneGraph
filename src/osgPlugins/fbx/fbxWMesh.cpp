@@ -840,7 +840,7 @@ namespace pluginfbx
 
 		if (!_exportFull)
 		{
-			transformMatrix = buildParentMatrices(geometry, numMatrixParent, false);
+			transformMatrix = buildParentMatrices(geometry, numMatrixParent, hasAnimatedMatrix ? false : true);
 
 			// Fix for non-rigged geometry without a parent transform matrix
 			if (numMatrixParent == 0)

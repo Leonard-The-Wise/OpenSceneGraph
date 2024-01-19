@@ -328,9 +328,9 @@ namespace pluginfbx
         bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
         bool _ignoreAnimations;                 // Tell the export engine to not process animations
         double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = 180.0º)
+        bool _exportFull;                       // Create full hierarchy
         double _scaleModel;                     // Scales model by a given factor
         bool _flipUVs;                          // Flip UVs on Y Axis
-        bool _exportFull;                       // Create full hierarchy
 
         ///Maintain geode state between visits to the geometry
         GeometryList _geometryList;

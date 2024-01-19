@@ -221,13 +221,14 @@ namespace pluginfbx
 
 		if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&node))
 		{
-			// 
 			osg::Matrix m = matrixObj->getMatrix();
 			numParents++;
 
+			// Check to see if it has update callback
 			ref_ptr<Callback> callback = const_cast<Callback*>(node.getUpdateCallback());
 			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(callback);
 
+			//
 			if (nodeCallback)
 			{
 				m = getAnimatedMatrixTransform(nodeCallback);
@@ -301,7 +302,7 @@ namespace pluginfbx
 			MatrixTransform* node = _animatedMatrices.top().first;
 			FbxNode* matrixAnimated = _animatedMatrices.top().second;
 
-			FbxAMatrix mainTransform = matrixAnimated->EvaluateGlobalTransform();
+			FbxAMatrix mainTransform = matrixAnimated->EvaluateLocalTransform();
 			mainTransform = mainTransform * matMultiply;
 
 			std::string matrixName = matrixAnimated->GetName(); // for debug
@@ -328,7 +329,7 @@ namespace pluginfbx
 
 			if (!hasAnimatedMatrixParent(node)) // Don't apply transformations twice!
 			{
-				FbxAMatrix mainTransform = skeleton->EvaluateGlobalTransform();
+				FbxAMatrix mainTransform = skeleton->EvaluateLocalTransform();
 				mainTransform = mainTransform * matMultiply;
 
 				FbxVector4 rotationFinal = mainTransform.GetR();
@@ -349,7 +350,7 @@ namespace pluginfbx
 
 			std::string meshName = meshRoot->GetName();
 
-			FbxAMatrix mainTransform = meshRoot->EvaluateGlobalTransform();
+			FbxAMatrix mainTransform = meshRoot->EvaluateLocalTransform();
 			mainTransform = mainTransform * matMultiply;
 
 			FbxVector4 rotationFinal = mainTransform.GetR();
@@ -419,8 +420,9 @@ namespace pluginfbx
 
 			if (_exportFull)
 			{
-				_curFbxNode = FbxNode::Create(_pSdkManager, node.getName().c_str());
-				parent->AddChild(_curFbxNode);
+				FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
+				_curFbxNode->AddChild(nodeFBX);
+				_curFbxNode = nodeFBX;
 			}
 
 			traverse(node);
@@ -458,7 +460,7 @@ namespace pluginfbx
 				}
 			}
 
-			applyGlobalTransforms();
+			//applyGlobalTransforms();
 		}
 	}
 
@@ -530,7 +532,6 @@ namespace pluginfbx
 				matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 				matrix = matrix * matrixMult;
 				node.setMatrix(matrix);
-				nodeName = "First Matrix";
 
 				_firstMatrixNode = _curFbxNode;
 			}
