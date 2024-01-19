@@ -784,7 +784,7 @@ namespace pluginfbx
 
 		// Select which mesh parent to put.
 		bool hasAnimatedMatrix = hasAnimatedMatrixParent(&geometry);			
-		FbxNode* meshParent = _exportFull || hasAnimatedMatrix ? _curFbxNode : _firstMatrixNode;
+		FbxNode* meshParent = hasAnimatedMatrix ? _curFbxNode : _firstMatrixNode;
 
 		std::string meshParentName = meshParent->GetName();						// 
 		std::string meshParentPath = buildNodePath(meshParent);					// for debug
@@ -792,22 +792,19 @@ namespace pluginfbx
 		FbxAMatrix currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	//
 
 		// For rigged geometry we put nodes bellow skeleton node
-		if (!_exportFull)
+		if (rig)
 		{
-			if (rig)
+			if (_riggedMeshesRoot.size() > 0)
 			{
-				if (_riggedMeshesRoot.size() > 0)
-				{
-					std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
-					meshParent = _riggedMeshesRoot.top().second;
-				}
-				else
-					OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
+				std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
+				meshParent = _riggedMeshesRoot.top().second;
 			}
 			else
-			{
-				_normalMeshesNodes.push(meshNode);
-			}
+				OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
+		}
+		else
+		{
+			_normalMeshesNodes.push(meshNode);
 		}
 
 		meshParent->AddChild(meshNode);
@@ -838,15 +835,12 @@ namespace pluginfbx
 		osg::Matrix transformMatrix;
 		int numMatrixParent(0);
 
-		if (!_exportFull)
-		{
-			transformMatrix = buildParentMatrices(geometry, numMatrixParent, hasAnimatedMatrix ? false : true);
+		transformMatrix = buildParentMatrices(geometry, numMatrixParent, hasAnimatedMatrix ? false : true);
 
-			// Fix for non-rigged geometry without a parent transform matrix
-			if (numMatrixParent == 0)
-			{
-				transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-			}
+		// Fix for non-rigged geometry without a parent transform matrix
+		if (numMatrixParent == 0)
+		{
+			transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 		}
 
 		// Fix for rigged geometry, get matrix from skeleton to geometry

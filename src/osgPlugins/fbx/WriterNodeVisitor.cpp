@@ -418,13 +418,6 @@ namespace pluginfbx
 		{
 			FbxNode* parent = _curFbxNode;
 
-			if (_exportFull)
-			{
-				FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? defaultName.c_str() : node.getName().c_str());
-				_curFbxNode->AddChild(nodeFBX);
-				_curFbxNode = nodeFBX;
-			}
-
 			traverse(node);
 
 			if (!_ignoreBones && !_ignoreAnimations)
@@ -460,7 +453,7 @@ namespace pluginfbx
 				}
 			}
 
-			//applyGlobalTransforms();
+			applyGlobalTransforms();
 		}
 	}
 
@@ -497,7 +490,7 @@ namespace pluginfbx
 		_matrixStack.push_back(std::make_pair(nodeName, matrix));
 
 		// Only build the appropriate nodes that apply
-		if (_exportFull || isFirstMatrix || skeleton || bone || animatedMatrix)
+		if (isFirstMatrix || skeleton || bone || animatedMatrix || _ignoreBones)
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
 			parent->AddChild(_curFbxNode);
@@ -509,7 +502,7 @@ namespace pluginfbx
 			}
 
 			// Need to reconstruct skeleton and animated matrices transforms.
-			if (!_exportFull && (skeleton || animatedMatrix))
+			if (skeleton || animatedMatrix)
 			{
 				Matrix matrixTransform;
 				if (node.getNumParents() > 0)

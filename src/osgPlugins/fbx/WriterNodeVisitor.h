@@ -110,8 +110,7 @@ namespace pluginfbx
             _rotateXAxis(rotateXAxis),
             _scaleModel(scaleModel),
             _flipUVs(flipUVs),
-            _firstMatrixNode(nullptr),
-            _exportFull(false)
+            _firstMatrixNode(nullptr)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -328,7 +327,6 @@ namespace pluginfbx
         bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
         bool _ignoreAnimations;                 // Tell the export engine to not process animations
         double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = 180.0º)
-        bool _exportFull;                       // Create full hierarchy
         double _scaleModel;                     // Scales model by a given factor
         bool _flipUVs;                          // Flip UVs on Y Axis
 
