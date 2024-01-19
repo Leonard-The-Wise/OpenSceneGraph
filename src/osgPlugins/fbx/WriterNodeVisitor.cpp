@@ -523,9 +523,7 @@ namespace pluginfbx
 
 			if (isFirstMatrix && !skeleton)
 			{
-				osg::Matrix matrixMult;
-				matrixMult.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
-				matrix = matrix * matrixMult;
+				matrix.makeIdentity();
 				node.setMatrix(matrix);
 
 				_firstMatrixNode = _curFbxNode;
