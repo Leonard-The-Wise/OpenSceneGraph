@@ -110,7 +110,8 @@ namespace pluginfbx
             _rotateXAxis(rotateXAxis),
             _scaleModel(scaleModel),
             _flipUVs(flipUVs),
-            _firstMatrixNode(nullptr)
+            _firstMatrixNode(nullptr),
+            _exportFull(false)
         {}
 
         virtual void apply(osg::Geometry& node);
@@ -329,6 +330,7 @@ namespace pluginfbx
         double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = 180.0º)
         double _scaleModel;                     // Scales model by a given factor
         bool _flipUVs;                          // Flip UVs on Y Axis
+        bool _exportFull;                       // Create full hierarchy
 
         ///Maintain geode state between visits to the geometry
         GeometryList _geometryList;

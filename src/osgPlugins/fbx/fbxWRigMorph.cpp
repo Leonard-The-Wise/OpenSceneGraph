@@ -73,7 +73,7 @@ namespace pluginfbx
 		osg::Quat rot, so;
 
 		// Transform for export hierarchy and bones, but not for animated matrices
-		if (!_ignoreBones && bone)
+		if (_exportFull || (!_ignoreBones && bone))
 		{
 			// Should have only 1 of each or a matrix...
 			for (auto& stackedTransform : stackedTransforms)

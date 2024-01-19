@@ -783,7 +783,8 @@ namespace pluginfbx
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
 
 		// Select which mesh parent to put.
-		FbxNode* meshParent = hasAnimatedMatrixParent(&geometry) ? _curFbxNode : _firstMatrixNode;
+		bool hasAnimatedMatrix = hasAnimatedMatrixParent(&geometry);			
+		FbxNode* meshParent = _exportFull || hasAnimatedMatrix ? _curFbxNode : _firstMatrixNode;
 
 		std::string meshParentName = meshParent->GetName();						// 
 		std::string meshParentPath = buildNodePath(meshParent);					// for debug
@@ -791,21 +792,24 @@ namespace pluginfbx
 		FbxAMatrix currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	//
 
 		// For rigged geometry we put nodes bellow skeleton node
-		if (rig)
+		if (!_exportFull)
 		{
-			if (_riggedMeshesRoot.size() > 0)
+			if (rig)
 			{
-				std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
-				meshParent = _riggedMeshesRoot.top().second;
+				if (_riggedMeshesRoot.size() > 0)
+				{
+					std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
+					meshParent = _riggedMeshesRoot.top().second;
+				}
+				else
+					OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
 			}
 			else
-				OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
+			{
+				_normalMeshesNodes.push(meshNode);
+			}
 		}
-		else
-		{
-			_normalMeshesNodes.push(meshNode);
-		}
-		
+
 		meshParent->AddChild(meshNode);
 
 		FbxMesh* mesh = FbxMesh::Create(_pSdkManager, meshName.c_str());
@@ -833,19 +837,24 @@ namespace pluginfbx
 		// For all ordinary geometry, compute matrix from transform.
 		osg::Matrix transformMatrix;
 		int numMatrixParent(0);
-		transformMatrix = buildParentMatrices(geometry, numMatrixParent, false);
 
-		// Fix for non-rigged geometry without a parent transform matrix
-		if (numMatrixParent == 0)
+		if (!_exportFull)
 		{
-			transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+			transformMatrix = buildParentMatrices(geometry, numMatrixParent, false);
+
+			// Fix for non-rigged geometry without a parent transform matrix
+			if (numMatrixParent == 0)
+			{
+				transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
+			}
 		}
+
 		// Fix for rigged geometry, get matrix from skeleton to geometry
 		if (rig && !rigMorph)
 		{
 			transformMatrix = getMatrixFromSkeletonToNode(geometry);
 			_skeletonNodes.emplace(meshNode); // Some applications complains if the rigged mesh node is not mapped to a FbxCluster.
-		}
+		}		
 
 		// Build vertices, normals, tangents, texcoords, etc.
 		setControlPointAndNormalsAndUV(index_vert, mesh, transformMatrix);
