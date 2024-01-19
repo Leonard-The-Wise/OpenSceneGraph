@@ -27,9 +27,7 @@ public:
         supportsOption("IgnoreRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
         supportsOption("IgnoreAnimations", "(Write option) Ignore animations.");
         supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0)");
-        supportsOption("ExportOriginal", "(Write option) Export only base model with original rotations (usefull to identify rigging problems).");
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
-        supportsOption("ExportFullHierarchy", "(Write option) Export models respecting the original full node hierarchy. Some models may need it.");
         supportsOption("ScaleModel", "(Write option) Scale model uniformly by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0)");
         supportsOption("FlipUVs", "(Write option) Flip Y axis of texture UV's.");
     }

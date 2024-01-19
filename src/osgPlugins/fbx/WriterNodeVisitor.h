@@ -92,7 +92,6 @@ namespace pluginfbx
             bool ignoreBones,
             bool ignoreAnimations,
             double rotateXAxis,
-            bool exportFullHierarchy,
             double scaleModel,
             bool flipUVs) :
             osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN),
@@ -109,15 +108,19 @@ namespace pluginfbx
             _ignoreBones(ignoreBones),
             _ignoreAnimations(ignoreAnimations),
             _rotateXAxis(rotateXAxis),
-            _exportFullHierarchy(exportFullHierarchy),
             _scaleModel(scaleModel),
             _flipUVs(flipUVs),
-            _firstMatrixNode(nullptr),
-            _globalTransformsApplied(false)
+            _firstMatrixNode(nullptr)
         {}
 
         virtual void apply(osg::Geometry& node);
         virtual void apply(osg::Group& node);
+
+        /// <summary>
+        /// Warning: this function is heavy in flux control. Changes on order of things may easily break the entire hierarchy logics.
+        /// Change with care and extensive testing.
+        /// </summary>
+        /// <param name="node"></param>
         virtual void apply(osg::MatrixTransform& node);
 
         void traverse(osg::Node& node)
@@ -205,17 +208,23 @@ namespace pluginfbx
 
         void createMorphTargets(const osgAnimation::MorphGeometry* morphGeom, FbxMesh* mesh, const osg::Matrix& rotateMatrix);
 
-        const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback> callback);
+        bool isMatrixAnimated(const osg::MatrixTransform* node);
+
+        const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback>& callback);
 
         bool hasSkeletonParent(const osg::Node& object);
+
+        bool hasAnimatedMatrixParent(const osg::Node* node);
 
         bool firstBoneInHierarchy(FbxNode* boneParent);
 
         osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback);
 
-        osg::Matrix buildParentMatrices(const osg::Node& object, int& numParents);
+        osg::Matrix buildParentMatrices(const osg::Node& object, int& numParents, bool useAllParents = false);
 
         osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node);
+
+        std::string buildNodePath(FbxNode* currentNode);
 
         void applyGlobalTransforms();
 
@@ -227,7 +236,7 @@ namespace pluginfbx
         * \return the new mesh node built.
         */
 
-        FbxNode* buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix = {});
+        FbxNode* buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser);
 
         void applySkinning(const osgAnimation::VertexInfluenceMap& vim, FbxMesh* fbxMesh);
 
@@ -265,6 +274,13 @@ namespace pluginfbx
         /// <param name="callback"></param>
         void applyAnimations(const osg::ref_ptr<osg::Callback>& callback);
 
+        /// <summary>
+        /// Creates animation targets. Must call this function at the beggining of every node/transform matrix creation or else we risk missing the
+        /// location of BasicAnimationsManager
+        /// </summary>
+        /// <param name="callback">Callback of the calling node</param>
+        void buildAnimationTargets(osg::Group* node);
+
         void createAnimationStack(const osg::ref_ptr<osgAnimation::Animation> osgAnimation);
 
          void applyUpdateMatrixTransform(const osg::ref_ptr<osg::Callback>& callback, FbxNode* fbxNode,
@@ -297,7 +313,8 @@ namespace pluginfbx
 
         ///The current Fbx Node.
         FbxNode* _curFbxNode;
-        std::stack<FbxNode*> _riggedMeshesRoot;
+        std::stack<std::pair<osgAnimation::Skeleton*, FbxNode*>> _riggedMeshesRoot;
+        std::stack<std::pair<osg::MatrixTransform*, FbxNode*>> _animatedMatrices;
         std::stack<FbxNode*> _normalMeshesNodes;
 
         ///The current stateSet.
@@ -310,7 +327,6 @@ namespace pluginfbx
         bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
         bool _ignoreAnimations;                 // Tell the export engine to not process animations
         double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis (default = 180.0º)
-        bool _exportFullHierarchy;              // Tell the export engine to not bypass node hierarchy
         double _scaleModel;                     // Scales model by a given factor
         bool _flipUVs;                          // Flip UVs on Y Axis
 
@@ -334,8 +350,6 @@ namespace pluginfbx
         MatrixAnimCurveMap _matrixAnimCurveMap;
         BlendShapeAnimMap _blendShapeAnimations;
         FbxNode* _firstMatrixNode;
-        osg::Matrix _firstMatrix;
-        bool _globalTransformsApplied;   // Global transforms can be applied before animating nodes or after processing hierarchy for static scenes.
 
         // Keep track of created materials
         std::unordered_map<const osg::Material*, MaterialParser*> _materialMap;
@@ -345,7 +359,8 @@ namespace pluginfbx
 
         // Keep track of all created Skeletons, bones, animation targets...
         std::set<FbxNode*> _skeletonNodes;
-        std::set<std::string> _animationTargetNames;
+        std::set<std::string> _animationTargetNames;          // Animation targets
+        std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
 
     };
 

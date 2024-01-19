@@ -72,7 +72,8 @@ namespace pluginfbx
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
 
-		if (_exportFullHierarchy || (!_ignoreBones && bone))
+		// Transform for export hierarchy and bones, but not for animated matrices
+		if (!_ignoreBones && bone)
 		{
 			// Should have only 1 of each or a matrix...
 			for (auto& stackedTransform : stackedTransforms)

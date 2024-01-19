@@ -772,7 +772,7 @@ namespace pluginfbx
 		node->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 	}
 
-	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser, const osg::Matrix& parentMatrix)
+	FbxNode* WriterNodeVisitor::buildMesh(const osg::Geometry& geometry, const MaterialParser* materialParser)
 	{
 		const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(&geometry);
 		const osgAnimation::RigGeometry* rig = dynamic_cast<const osgAnimation::RigGeometry*>(&geometry);
@@ -782,16 +782,26 @@ namespace pluginfbx
 		std::string meshName = geometry.getName();
 		FbxNode* meshNode = FbxNode::Create(_pSdkManager, meshName.c_str());
 
-		// Select which mesh parent to put. For rigged geometry we put nodes bellow skeleton node
-		FbxNode* meshParent = _exportFullHierarchy ? _curFbxNode : _firstMatrixNode;
-		if (!_exportFullHierarchy && rig)
+		// Select which mesh parent to put.
+		FbxNode* meshParent = hasAnimatedMatrixParent(&geometry) ? _curFbxNode : _firstMatrixNode;
+
+		std::string meshParentName = meshParent->GetName();						// 
+		std::string meshParentPath = buildNodePath(meshParent);					// for debug
+		std::string currentNodePath = buildNodePath(_curFbxNode);				//
+		FbxAMatrix currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	//
+
+		// For rigged geometry we put nodes bellow skeleton node
+		if (rig)
 		{
 			if (_riggedMeshesRoot.size() > 0)
-				meshParent = _riggedMeshesRoot.top();
+			{
+				std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
+				meshParent = _riggedMeshesRoot.top().second;
+			}
 			else
 				OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
 		}
-		else if (!rig)
+		else
 		{
 			_normalMeshesNodes.push(meshNode);
 		}
@@ -811,37 +821,31 @@ namespace pluginfbx
 
 		unsigned int i = 0;
 		MapIndices index_vert;
-		for (ListTriangle::iterator it = _listTriangles.begin(); it != _listTriangles.end(); ++it, ++i) //Go through the triangle list to define meshs
+
+		//Go through the triangle list to define meshs		
+		for (ListTriangle::iterator it = _listTriangles.begin(); it != _listTriangles.end(); ++it, ++i) 
 		{
 			mesh->BeginPolygon();
 			addPolygon(mesh, index_vert, it->first, it->second);
 			mesh->EndPolygon();
 		}
 
-		// Option to rotate rigged and morphed meshes on X axis
-		osg::Matrix transformMatrix;
-
 		// For all ordinary geometry, compute matrix from transform.
+		osg::Matrix transformMatrix;
 		int numMatrixParent(0);
-		if (!_exportFullHierarchy && _matrixStack.size() > 0)
-		{
-			transformMatrix = buildParentMatrices(geometry, numMatrixParent);
-		}
+		transformMatrix = buildParentMatrices(geometry, numMatrixParent, false);
+
 		// Fix for non-rigged geometry without a parent transform matrix
-		if (!_exportFullHierarchy && numMatrixParent == 0)
+		if (numMatrixParent == 0)
 		{
 			transformMatrix.makeRotate(osg::DegreesToRadians(-90.0), X_AXIS);
 		}
-
 		// Fix for rigged geometry, get matrix from skeleton to geometry
-		if (!_exportFullHierarchy && rig && !rigMorph)
+		if (rig && !rigMorph)
 		{
 			transformMatrix = getMatrixFromSkeletonToNode(geometry);
 			_skeletonNodes.emplace(meshNode); // Some applications complains if the rigged mesh node is not mapped to a FbxCluster.
 		}
-
-		// Apply parent matrix
-		transformMatrix = transformMatrix * parentMatrix;
 
 		// Build vertices, normals, tangents, texcoords, etc.
 		setControlPointAndNormalsAndUV(index_vert, mesh, transformMatrix);
