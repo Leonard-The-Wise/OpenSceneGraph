@@ -521,16 +521,6 @@ namespace pluginfbx
 			cluster->SetTransformLinkMatrix(fbxInvBindMatrix);
 		}
 
-		// We still create empty clusters for non-influencing bones, so the bind pose of the mesh can be calculated correctly.
-		//for (auto& unusedBone : unusedBoneNodes)
-		//{
-		//	FbxCluster* cluster = FbxCluster::Create(_pSdkManager, "");
-		//	std::string boneName = unusedBone->GetName();
-		//	cluster->SetLink(unusedBone);
-		//	cluster->SetLinkMode(FbxCluster::eAdditive);
-		//	skinDeformer->AddCluster(cluster);
-		//}
-
 		fbxMesh->AddDeformer(skinDeformer);
 	}
 
