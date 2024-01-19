@@ -280,7 +280,7 @@ namespace pluginfbx
 			return std::string(currentNode->GetName()) + std::string("/");
 	}
 
-	/*
+	
 	void WriterNodeVisitor::applyGlobalTransforms()
 	{
 		osg::Vec3d pos, scl;
@@ -297,6 +297,21 @@ namespace pluginfbx
 
 		FbxAMatrix matMultiply;
 		matMultiply.SetTQS(translate, rotationQuat, scale);
+
+		std::string meshName = _firstMatrixNode->GetName();
+
+		FbxAMatrix mainTransform = _firstMatrixNode->EvaluateLocalTransform();
+		mainTransform = mainTransform * matMultiply;
+
+		FbxVector4 rotationFinal = mainTransform.GetR();
+		FbxVector4 positionFinal = mainTransform.GetT();
+		FbxVector4 scaleFinal = mainTransform.GetS();
+
+		_firstMatrixNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+		_firstMatrixNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+		_firstMatrixNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+
+		/*
 
 		while (_animatedMatrices.size() > 0)
 		{
@@ -321,10 +336,10 @@ namespace pluginfbx
 			_animatedMatrices.pop();
 		}
 
-		while (_riggedMeshesRoot.size() > 0)
+		while (_skeletonRoots.size() > 0)
 		{
-			Skeleton* node = _riggedMeshesRoot.top().first;
-			FbxNode* skeleton = _riggedMeshesRoot.top().second;
+			Skeleton* node = _skeletonRoots.top().first;
+			FbxNode* skeleton = _skeletonRoots.top().second;
 
 			std::string skeletonName = skeleton->GetName(); // for debug
 
@@ -342,7 +357,7 @@ namespace pluginfbx
 				skeleton->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
 			}
 
-			_riggedMeshesRoot.pop();
+			_skeletonRoots.pop();
 		}
 
 		while (_normalMeshesNodes.size() > 0)
@@ -364,8 +379,10 @@ namespace pluginfbx
 
 			_normalMeshesNodes.pop();
 		}
+
+		*/
 	}
-	*/
+	
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
 	{
@@ -454,8 +471,6 @@ namespace pluginfbx
 						applyAnimations(getRealUpdateCallback(nodeCallback));
 				}
 			}
-
-			// applyGlobalTransforms();
 		}
 	}
 
@@ -500,7 +515,7 @@ namespace pluginfbx
 
 			if (skeleton || bone)
 			{
-				_skeletonNodes.emplace(_curFbxNode);
+				_boneNodes.emplace(_curFbxNode);
 			}
 
 			// Need to reconstruct skeleton and animated matrices transforms.
@@ -528,10 +543,10 @@ namespace pluginfbx
 
 				_firstMatrixNode = _curFbxNode;
 			}
-			//else if (skeleton)
-			//{
-			//	_riggedMeshesRoot.push(std::make_pair(skeleton, _curFbxNode));
-			//}
+			else if (skeleton)
+			{
+				_skeletonRoots.push(std::make_pair(skeleton, _curFbxNode));
+			}
 			else if (animatedMatrix)
 			{
 				_animatedMatrices.push(std::make_pair(&node, _curFbxNode));
@@ -546,6 +561,9 @@ namespace pluginfbx
 			_curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 			currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	// for debug
+
+			if (isFirstMatrix) // Apply globals transformation early because the way FBX calculates children matrix (the creation order matters)
+				applyGlobalTransforms();
 		}
 
 		// Process Skeleton and Bones and create nodes before continuing
@@ -560,7 +578,7 @@ namespace pluginfbx
 		}
 
 		// Process UpdateMatrixTransform and UpdateBone Callbacks last
-		if (!skeleton)
+		if (!skeleton && !isFirstMatrix)
 		{
 			ref_ptr<Callback> nodeCallback = getRealUpdateCallback(node.getUpdateCallback());
 			if (nodeCallback)

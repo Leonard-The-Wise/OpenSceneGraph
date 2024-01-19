@@ -470,7 +470,7 @@ namespace pluginfbx
 		FbxSkin* skinDeformer = FbxSkin::Create(_pSdkManager, "");
 
 		// Make a copy of all skeleton and bone nodes
-		std::set<FbxNode*> unusedBoneNodes = _skeletonNodes;
+		std::set<FbxNode*> unusedBoneNodes = _boneNodes;
 
 		// Map all used bones to influence maps
 		for (const auto& influence : vim)
@@ -529,7 +529,7 @@ namespace pluginfbx
 		FbxPose* pose = FbxPose::Create(_pScene, "Initial Pose");
 		pose->SetIsBindPose(true);
 
-		for (auto& fbxBoneNode : _skeletonNodes)
+		for (auto& fbxBoneNode : _boneNodes)
 		{
 			FbxMatrix matrix = fbxBoneNode->EvaluateGlobalTransform();
 			int nodeIndex = pose->Add(fbxBoneNode, matrix);

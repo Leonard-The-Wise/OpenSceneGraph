@@ -226,7 +226,7 @@ namespace pluginfbx
 
         std::string buildNodePath(FbxNode* currentNode);
 
-        // void applyGlobalTransforms();
+        void applyGlobalTransforms();
 
         /**
         * Build geometry triangles and control points (vertices)
@@ -313,9 +313,9 @@ namespace pluginfbx
 
         ///The current Fbx Node.
         FbxNode* _curFbxNode;
-        // std::stack<std::pair<osgAnimation::Skeleton*, FbxNode*>> _riggedMeshesRoot;
+        std::stack<std::pair<osgAnimation::Skeleton*, FbxNode*>> _skeletonRoots;
         std::stack<std::pair<osg::MatrixTransform*, FbxNode*>> _animatedMatrices;
-        // std::stack<FbxNode*> _normalMeshesNodes;
+        std::stack<FbxNode*> _normalMeshesNodes;
 
         ///The current stateSet.
         osg::ref_ptr<osg::StateSet> _currentStateSet;
@@ -358,7 +358,7 @@ namespace pluginfbx
         std::deque<std::pair<std::string, osg::Matrix>> _matrixStack;
 
         //// Keep track of all created Skeletons, bones, animation targets...
-        std::set<FbxNode*> _skeletonNodes;
+        std::set<FbxNode*> _boneNodes;
         std::set<std::string> _animationTargetNames;          // Animation targets
         std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
 

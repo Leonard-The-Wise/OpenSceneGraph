@@ -804,7 +804,7 @@ namespace pluginfbx
 		//}
 		//else
 		//{
-		//	_normalMeshesNodes.push(meshNode);
+			_normalMeshesNodes.push(meshNode);
 		//}
 
 		meshParent->AddChild(meshNode);
