@@ -114,11 +114,6 @@ namespace osgJSONParser
 		inline void setFileCache(const FileCache& fileCache) 
 		{ _fileCache = fileCache; };
 
-        inline void setNeedDecodeVertices(bool need)
-        {
-            _needDecodeVertices = need;
-        }
-
         inline void setFileBasePath(const std::string& basePath)
         {
             _filesBasePath = basePath;
@@ -136,7 +131,6 @@ namespace osgJSONParser
 		FileCache _fileCache;
         bool _firstMatrix = true;
         bool _firstDecodedTexture = true;
-        bool _needDecodeVertices = true;
         bool _ignoreAnimations = false;
 
         std::string _filesBasePath;

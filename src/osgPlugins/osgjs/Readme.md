@@ -43,6 +43,15 @@ osgconv --format fbx
 
 - Plugins options must be used with the `-O` flag. Example: `osgconv file.osgjs file-export.fbx -O option1 [-O option2..., etc]`
 
+- There are certain options that requires a parameter and a value, like: 
+```
+osgconv file.osgjs file-export.fbx -O RotateXAxis=-90.0
+```
+(this will tell the FBX exporter plugin to rotate meshes in -90.0 degrees on X axis before exporting). Or:
+```
+osgconv file.osgjs file-export.fbx -O ScaleModel=100
+```
+
 In rare cases you may get an "out of bound indexes or vertexes", that usually means your model isn't vertex/index compressed (this was actually the default for old OSGJS original format). Since we can't programatically determine whether this model is compressed or not (depends on which version of sketchfab processor it was uploaded and time of upload), you must try different options manually.
 
 Defaultly, the plugin will try to decompress vertices and texcoords because most recent models use it, but if it is a legacy model and it fails to export or your vertices looks totally broken, try to export with the option `-O disableVertexDecompress` and it may fix the issue.

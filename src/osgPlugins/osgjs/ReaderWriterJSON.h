@@ -15,7 +15,6 @@ public:
         bool inlineImages;
         bool varint;
         bool strictJson;
-        bool disableVertexDecompress;
         bool rebuildMaterials;
         bool ignoreGzExtension;
         bool ignoreAnimations;
@@ -31,7 +30,6 @@ public:
             inlineImages = false;
             varint = false;
             strictJson = true;
-            disableVertexDecompress = false;
             rebuildMaterials = false;
             ignoreGzExtension = true;
             ignoreAnimations = false;
@@ -51,7 +49,6 @@ public:
             "(write option) uses specific buffers for unshared buffers attached to geometries having a specified user key/value. Buffer name *may* be specified after ':' and will be set to uservalue by default. If no value is set then only the existence of a uservalue with key string is performed.");
         supportsOption("disableCompactBuffer", "(write option) keep source types and do not try to optimize buffers size");
         supportsOption("disableStrictJson", "(write option) do not clean string (to utf8) or floating point (should be finite) values");
-        supportsOption("disableVertexDecompress", "(read option) specify to not try to decompress vertex arrays. Use this only if export fails or you get weird geometry results.");
     }
 
     virtual const char* className() const { return "OSGJS json Reader/Writer"; }

@@ -241,6 +241,11 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 				elementsBytes = elementsBytesConverted;
 				readOffset = 0;
 			}
+			else
+			{
+				elementsBytes = new std::vector<uint8_t>(elementsBytes->begin() + readOffset, elementsBytes->begin() + (totalElements * elementTypeSize + readOffset));
+				readOffset = 0;
+			}
 
 			// Decode indexes when necessary
 			if (needDecodeIndices && !elementsBytes->empty())
@@ -390,6 +395,11 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 
 				if (!decodeFail)
 					return recastArray(returnArray, static_cast<DesiredVectorSize>(elementsPerItem));
+				else
+				{
+					OSG_WARN << "WARNING: Failed do decompress DrawPrimitive Array!" << std::endl;
+					return nullptr;
+				}
 			}
 
 			// Read and Copy bytes
@@ -680,7 +690,9 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 {
 	std::vector<double> o(5), b(3), h(3);
 	std::vector<std::string> valuesO(5), valuesB(3), valuesH(3);
+	std::string epsilonstr, nphistr, channel_modeStr;
 	double epsilon(0.0), nphi(0.0);
+	int channel_mode(0);
 
 	std::ignore = udc->getUserValue("ox", valuesO[0]);
 	std::ignore = udc->getUserValue("oy", valuesO[1]);
@@ -696,9 +708,10 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 	std::ignore = udc->getUserValue("hy", valuesH[1]);
 	std::ignore = udc->getUserValue("hz", valuesH[2]);
 
-	std::ignore = udc->getUserValue("epsilon", epsilon);
-	std::ignore = udc->getUserValue("nphi", nphi);
+	std::ignore = udc->getUserValue("epsilon", epsilonstr);
+	std::ignore = udc->getUserValue("nphi", nphistr);
 
+	std::ignore = udc->getUserValue("channel_mode", channel_modeStr);
 
 	if (!valuesO[0].empty())
 		getSafeDouble(valuesO[0], o[0]);
@@ -725,11 +738,21 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 	if (!valuesH[2].empty())
 		getSafeDouble(valuesH[2], h[2]);
 
+	if (!epsilonstr.empty())
+		getSafeDouble(epsilonstr, epsilon);
+	if (!nphistr.empty())
+		getSafeDouble(nphistr, nphi);
+	if (!channel_modeStr.empty())
+		getSafeInteger(channel_modeStr, channel_mode);
+
 	osg::ref_ptr<osg::Array> keysConverted = ParserHelper::recastArray(keys, DesiredVectorSize::Array);
 	osg::ref_ptr<osg::DoubleArray> keysInflated1;
 	osg::ref_ptr<osg::DoubleArray> keysInflated2 = new DoubleArray;
 	osg::ref_ptr<osg::DoubleArray> keysFloat;
 	unsigned int elementSize = keys->getDataSize();
+
+	if (mode == KeyDecodeMode::TimeCompressed && channel_mode == 8)
+		return keysConverted;
 
 	if (mode == KeyDecodeMode::NormalsCompressed)
 	{
@@ -1958,7 +1981,7 @@ std::vector<T> ParserHelper::decodeDelta(const std::vector<T>& input, int e)
 	std::vector<T> t = input;
 	std::vector<T> tEmpty;
 	if (t.empty() || e >= t.size()) 
-		return tEmpty;
+		return input;
 
 	uint32_t r = t[e];
 	for (int a = e + 1; a < t.size(); ++a) {
@@ -1972,6 +1995,10 @@ template <typename T>
 std::vector<T> ParserHelper::decodeImplicit(const std::vector<T>& t, int n)
 {
 	std::vector<T> vempty;
+
+	if (t.size() == 0)
+		return vempty;
+
 	uint32_t eSize = t[IMPLICIT_HEADER_PRIMITIVE_LENGTH];
 	std::vector<T> e(eSize, 0);
 	uint32_t a = t[IMPLICIT_HEADER_EXPECTED_INDEX];

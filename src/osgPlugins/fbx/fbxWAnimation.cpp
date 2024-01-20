@@ -182,7 +182,7 @@ namespace pluginfbx
 		FbxTime fbxTime;
 
 		// Aplicar uma dummy keyframe no começo
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		for (unsigned int i = 0; i < keyframes->size(); ++i)
 		{
@@ -199,7 +199,7 @@ namespace pluginfbx
 		}
 
 		// Aplicar uma dummy keyframe no fim da animação
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		return fbxTime;
 	}
@@ -225,7 +225,7 @@ namespace pluginfbx
 		FbxTime fbxTime;
 
 		// Aplicar uma dummy keyframe no começo
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		// applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		// Pegar a rotação original (inicial) do objeto
 		FbxDouble3 lastRotation = animCurveNode->LclRotation.Get();
@@ -236,41 +236,41 @@ namespace pluginfbx
 
 		// Prepara os quaternions para interpolação
 		Quat firstQuatKey = keyframes[0].getValue();
-		if (QuaternionDot(firstQuatKey, zeroQuatKey) < 0)
-			keyframes[0].setValue(-firstQuatKey);
+		//if (QuaternionDot(firstQuatKey, zeroQuatKey) < 0)
+		//	keyframes[0].setValue(-firstQuatKey);
 
-		for (unsigned int i = 1; i < keyframes.size(); ++i) 
-		{
-			Quat current = keyframes[i].getValue();
-			Quat previous = keyframes[i - 1].getValue();
+		//for (unsigned int i = 1; i < keyframes.size(); ++i) 
+		//{
+		//	Quat current = keyframes[i].getValue();
+		//	Quat previous = keyframes[i - 1].getValue();
 
-			if (QuaternionDot(current, previous) < 0) 
-			{
-				keyframes[i].setValue(-current); // Inverte o sinal do quaternion
-			}
-		}
+		//	if (QuaternionDot(current, previous) < 0) 
+		//	{
+		//		keyframes[i].setValue(-current); // Inverte o sinal do quaternion
+		//	}
+		//}
 		
-		constexpr double t = 0.5;
+		//constexpr double t = 0.5;
 		for (unsigned int i = 0; i < keyframes.size(); ++i)
 		{
 			osgAnimation::QuatKeyframe& keyframe = keyframes[i];
 
 			fbxTime.SetSecondDouble(keyframe.getTime());
 
-			Quat interpolatedQuat;
 			Quat quat = keyframe.getValue();
+			Quat interpolatedQuat = quat;
 
-			if (i == 0)
-			{
-				interpolatedQuat = Slerp(zeroQuatKey, keyframes[i].getValue(), t);
-			}
-			else
-			{
-				Quat quatStart = keyframes[i - 1].getValue();
-				Quat quatEnd = keyframes[i].getValue();
-											
-				interpolatedQuat = Slerp(quatStart, quatEnd, t);
-			}
+			//if (i == 0)
+			//{
+			//	interpolatedQuat = Slerp(zeroQuatKey, keyframes[i].getValue(), t);
+			//}
+			//else
+			//{
+			//	Quat quatStart = keyframes[i - 1].getValue();
+			//	Quat quatEnd = keyframes[i].getValue();
+			//								
+			//	interpolatedQuat = Slerp(quatStart, quatEnd, t);
+			//}
 
 			FbxQuaternion q(interpolatedQuat.x(), interpolatedQuat.y(), interpolatedQuat.z(), interpolatedQuat.w());
 			FbxAMatrix mat;
@@ -284,7 +284,7 @@ namespace pluginfbx
 		}
 
 		// Aplicar uma dummy keyframe no final
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		return fbxTime;
 	}
@@ -494,7 +494,8 @@ namespace pluginfbx
 				for (auto& channel : animation->getChannels())
 				{
 					// Disconsider channels with 1 keyframe (non-animated). Mark them for reference
-					if (channel->getSampler()->getKeyframeContainer()->size() > 1)
+					if (channel->getSampler() && channel->getSampler()->getKeyframeContainer() && 
+						channel->getSampler()->getKeyframeContainer()->size() > 1)
 						_animationTargetNames.emplace(channel->getTargetName());
 					else
 						_discardedAnimationTargetNames.emplace(channel->getTargetName());

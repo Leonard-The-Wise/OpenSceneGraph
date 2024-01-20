@@ -340,6 +340,7 @@ namespace pluginfbx
 		transposeInverseMatrix.transpose(transposeInverseMatrix);
 		transposeInverseMatrix = Matrix::inverse(transposeInverseMatrix);
 
+		bool displayWarning(false);
 		for (MapIndices::iterator it = index_vert.begin(); it != index_vert.end(); ++it)
 		{
 			const osg::Geometry* pGeometry = _geometryList[it->first.drawableIndex];
@@ -360,9 +361,12 @@ namespace pluginfbx
 
 			if (vertexIndex >= basevecs->getNumElements())
 			{
-				OSG_WARN << "WARNING: Found vertex index out of bounds. Try to import model with flag -O disableVertexDecompress or turn it off if you already enabled it." << std::endl
-					<< "If it not work, geometry [" << geometryName << "]" << " may become incomplete or broken." << std::endl;
-				break;
+				if (!displayWarning)
+				{
+					OSG_WARN << "WARNING: Found vertex index out of bounds for mesh: " << geometryName << std::endl;
+					displayWarning = true;
+				}
+				continue;
 			}
 
 			switch (basevecs->getType())
@@ -790,22 +794,6 @@ namespace pluginfbx
 		std::string meshParentPath = buildNodePath(meshParent);					// for debug
 		std::string currentNodePath = buildNodePath(_curFbxNode);				//
 		FbxAMatrix currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	//
-
-		//// For rigged geometry we put nodes bellow skeleton node
-		//if (rig)
-		//{
-		//	if (_riggedMeshesRoot.size() > 0)
-		//	{
-		//		std::string rigMeshParentName = _riggedMeshesRoot.top().second->GetName(); // for debug
-		//		meshParent = _riggedMeshesRoot.top().second;
-		//	}
-		//	else
-		//		OSG_WARN << "WARNING: Found rigged mesh without parent skeleton node: " << meshName << std::endl;
-		//}
-		//else
-		//{
-			_normalMeshesNodes.push(meshNode);
-		//}
 
 		meshParent->AddChild(meshNode);
 

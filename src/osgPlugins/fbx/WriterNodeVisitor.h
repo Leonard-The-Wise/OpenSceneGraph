@@ -314,8 +314,6 @@ namespace pluginfbx
         ///The current Fbx Node.
         FbxNode* _curFbxNode;
         std::stack<std::pair<osgAnimation::Skeleton*, FbxNode*>> _skeletonRoots;
-        std::stack<std::pair<osg::MatrixTransform*, FbxNode*>> _animatedMatrices;
-        std::stack<FbxNode*> _normalMeshesNodes;
 
         ///The current stateSet.
         osg::ref_ptr<osg::StateSet> _currentStateSet;

@@ -513,6 +513,14 @@ namespace pluginfbx
 			parent->AddChild(_curFbxNode);
 			std::string currentNodePath = buildNodePath(_curFbxNode);		// for debug
 
+			if (isFirstMatrix)
+			{
+				matrix.makeIdentity();
+				node.setMatrix(matrix);
+
+				_firstMatrixNode = _curFbxNode;
+			}
+
 			if (skeleton || bone)
 			{
 				_boneNodes.emplace(_curFbxNode);
@@ -536,22 +544,6 @@ namespace pluginfbx
 				}
 			}
 
-			if (isFirstMatrix && !skeleton)
-			{
-				matrix.makeIdentity();
-				node.setMatrix(matrix);
-
-				_firstMatrixNode = _curFbxNode;
-			}
-			else if (skeleton)
-			{
-				_skeletonRoots.push(std::make_pair(skeleton, _curFbxNode));
-			}
-			else if (animatedMatrix)
-			{
-				_animatedMatrices.push(std::make_pair(&node, _curFbxNode));
-			}
-
 			matrix.decompose(pos, rot, scl, so);
 			FbxQuaternion q(rot.x(), rot.y(), rot.z(), rot.w());
 			mat.SetQ(q);
@@ -562,7 +554,9 @@ namespace pluginfbx
 			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 			currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	// for debug
 
-			if (isFirstMatrix) // Apply globals transformation early because the way FBX calculates children matrix (the creation order matters)
+			// Apply globals transformation early because the way FBX calculates children matrix (the creation order matters)
+			// Must be after all above transforms are applied on node.
+			if (isFirstMatrix)
 				applyGlobalTransforms();
 		}
 

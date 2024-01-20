@@ -661,10 +661,13 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     uint32_t magic = 0;
     GLenum drawMode = GL_POINTS;
 
-    // 1) Parse Vertex Attributes List
+    // 1) Get object statesets and userData
+    lookForChildren(newGeometry, currentJSONNode, UserDataContainerType::ShapeAttributes, nodeKey);
+
+    // 2) Parse Vertex Attributes List
     if (currentJSONNode.contains("VertexAttributeList") && currentJSONNode["VertexAttributeList"].is_object())
     {
-        // 1.1) Get VertexAttributeList members
+        // 2.1) Get VertexAttributeList members
 
         if (vertexAttributeList->contains("Vertex") && (*vertexAttributeList)["Vertex"].is_object())
             vertexNode = &(*vertexAttributeList)["Vertex"];
@@ -688,7 +691,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                 texCoordNodes[i] = &(*vertexAttributeList)[ss.str()];
         }
 
-        // 1.2) Get VertexAttributeList arrays
+        // 2.2) Get VertexAttributeList arrays
 #ifdef DEBUG
         std::string vertexNodestr = vertexNode ? vertexNode->dump() : "";
         std::string normalNodestr = normalNode ? normalNode->dump(): "";
@@ -718,7 +721,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                 texcoords[texCoordNode.first] = ParserHelper::parseJSONArray((*texCoordNode.second)["Array"], (*texCoordNode.second)["ItemSize"].get<int>(), _fileCache, magic);
         }
 
-        // 1.3) Sanity checks
+        // 2.3) Sanity checks
         if (nodeKey == "osg.Geometry")
         {
             if (vertices)
@@ -751,7 +754,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         }
 
 
-        // 1.4) Set Geometry Attributes
+        // 2.4) Set Geometry Attributes
 
         if (vertices)
             newGeometry->setVertexArray(vertices);
@@ -771,7 +774,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         }
     }
 
-    // 2) Parse Primitive Set List
+    // 3) Parse Primitive Set List
     if (currentJSONNode.contains("PrimitiveSetList") && currentJSONNode["PrimitiveSetList"].is_array())
     {
         const json& primitiveSetList = currentJSONNode["PrimitiveSetList"];
@@ -820,8 +823,23 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                     const json& newPrimitiveIndices = (*newDrawElementNode)["Indices"];
                     if (newPrimitiveIndices.contains("Array") && newPrimitiveIndices["Array"].is_object() && newPrimitiveIndices.contains("ItemSize") && newPrimitiveIndices["ItemSize"].is_number())
                     {
+                        // Get parameters to check if need decode indices
+                        bool needDecodeIndices(false);
+                        ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(newGeometry->getUserData());
+                        if (shapeAttrList)
+                        {
+                            double temp;
+                            const std::vector<std::string> vertexAttributes = { "attributes", "vertex_bits", "vertex_mode", "epsilon", "nphi", "triangle_mode"};
+                            for (auto& verteAttribute : vertexAttributes)
+                            {
+                                needDecodeIndices = ParserHelper::getShapeAttribute(shapeAttrList, verteAttribute, temp);
+                                if (needDecodeIndices)
+                                    break;
+                            }
+                        }
+
                         indices = ParserHelper::parseJSONArray(newPrimitiveIndices["Array"], 
-                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, magic, _needDecodeVertices, drawMode);
+                            newPrimitiveIndices["ItemSize"].get<int>(), _fileCache, magic, needDecodeIndices, drawMode);
 
                         if (indices)
                         {
@@ -872,13 +890,13 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         }
     }
 
-    // 3) Get ComputBoundingBoxCallback
+    // 4) Get ComputBoundingBoxCallback
     if (currentJSONNode.contains("osg.ComputeBoundingBoxCallback") && currentJSONNode["osg.ComputeBoundingBoxCallback"].is_object())
     {
         std::ignore = parseComputeBoundingBoxCallback(currentJSONNode["osg.ComputeBoundingBoxCallback"], "osg.ComputeBoundingBoxCallback");
     }
 
-    // 4) Morph Geometry processing
+    // 5) Morph Geometry processing
     if (nodeKey == "osgAnimation.MorphGeometry")
     {
         assert(morphGeometry);
@@ -918,7 +936,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         }
     }
 
-    // 5) Rig Geometry processing
+    // 6) Rig Geometry processing
     if (nodeKey == "osgAnimation.RigGeometry")
     {
         assert(rigGeometry);
@@ -981,9 +999,6 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         rigGeometry->setDataVariance(osg::Object::DYNAMIC);
         rigGeometry->setUseDisplayList(false);
     }
-
-    // 6) Get object statesets and userData
-    lookForChildren(newGeometry, currentJSONNode, UserDataContainerType::ShapeAttributes, nodeKey);
 
     // 7) Get external materials (from materialInfo.txt)
     parseExternalMaterials(newGeometry);
@@ -2303,7 +2318,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
         if (!verticesConverted)
         {
-            OSG_FATAL << "FATAL: Failed to decode vertex array! Try to import model with flag -O disableVertexDecompress (or turn it off if you already enabled it)" << std::endl;
+            OSG_FATAL << "FATAL: Failed to decode vertex array!" << std::endl;
             throw ("Exiting");
         }
 
