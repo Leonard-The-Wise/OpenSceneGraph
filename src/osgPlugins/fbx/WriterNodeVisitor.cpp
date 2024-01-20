@@ -280,15 +280,14 @@ namespace pluginfbx
 			return std::string(currentNode->GetName()) + std::string("/");
 	}
 
-	
-	void WriterNodeVisitor::applyGlobalTransforms()
+	void WriterNodeVisitor::applyTransforms(FbxNode* transformNode, double nodeScale, double nodeRotationXAxis)
 	{
 		osg::Vec3d pos, scl;
 		osg::Quat rot, so;
 
 		osg::Matrix matrixOsg;
-		matrixOsg.makeRotate(osg::DegreesToRadians(_rotateXAxis), X_AXIS);
-		matrixOsg.postMultScale(Vec3(_scaleModel, _scaleModel, _scaleModel));
+		matrixOsg.makeRotate(osg::DegreesToRadians(nodeRotationXAxis), X_AXIS);
+		matrixOsg.postMultScale(Vec3(nodeScale, nodeScale, nodeScale));
 		matrixOsg.decompose(pos, rot, scl, so);
 
 		FbxQuaternion rotationQuat(rot.x(), rot.y(), rot.z(), rot.w());
@@ -298,18 +297,18 @@ namespace pluginfbx
 		FbxAMatrix matMultiply;
 		matMultiply.SetTQS(translate, rotationQuat, scale);
 
-		std::string meshName = _firstMatrixNode->GetName();
+		std::string meshName = transformNode->GetName();
 
-		FbxAMatrix mainTransform = _firstMatrixNode->EvaluateLocalTransform();
+		FbxAMatrix mainTransform = transformNode->EvaluateLocalTransform();
 		mainTransform = mainTransform * matMultiply;
 
 		FbxVector4 rotationFinal = mainTransform.GetR();
 		FbxVector4 positionFinal = mainTransform.GetT();
 		FbxVector4 scaleFinal = mainTransform.GetS();
 
-		_firstMatrixNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
-		_firstMatrixNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
-		_firstMatrixNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
+		transformNode->LclTranslation.Set(FbxDouble3(positionFinal[0], positionFinal[1], positionFinal[2]));
+		transformNode->LclRotation.Set(FbxDouble3(rotationFinal[0], rotationFinal[1], rotationFinal[2]));
+		transformNode->LclScaling.Set(FbxDouble3(scaleFinal[0], scaleFinal[1], scaleFinal[2]));
 
 		/*
 
@@ -459,17 +458,16 @@ namespace pluginfbx
 			
 			traverse(node);
 
-			// Build mesh skin, apply global animations
-			if (!_ignoreBones)
-			{
+			// Build bind pose, mesh skin, apply global animations
+			if (!_ignoreBones)		
+				buildBindPose();				
+			if (!_ignoreBones && !_ignoreWeights)
 				buildMeshSkin();
-
-				if (!_ignoreAnimations)
-				{
-					ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
-					if (nodeCallback)
-						applyAnimations(getRealUpdateCallback(nodeCallback));
-				}
+			if (!_ignoreBones && !_ignoreAnimations)
+			{
+				ref_ptr<Callback> nodeCallback = node.getUpdateCallback();
+				if (nodeCallback)
+					applyAnimations(getRealUpdateCallback(nodeCallback));
 			}
 		}
 	}
@@ -521,17 +519,17 @@ namespace pluginfbx
 				_firstMatrixNode = _curFbxNode;
 			}
 
+			if (skeleton)
+				_skeletons.push(_curFbxNode);
 			if (skeleton || bone)
-			{
 				_boneNodes.emplace(_curFbxNode);
-			}
 
 			// Need to reconstruct skeleton and animated matrices transforms.
 			if (skeleton || animatedMatrix)
 			{
 				Matrix matrixTransform;
 				if (node.getNumParents() > 0)
-					matrixTransform = buildParentMatrices(*node.getParent(0), numMatrixParents, false);
+					matrixTransform = buildParentMatrices(*node.getParent(0), numMatrixParents, hasAnimatedMatrixParent(node.getParent(0)) ? false : true);
 				matrix = matrixTransform * matrix;
 
 				// Fix for matrices without a first parent
@@ -554,10 +552,12 @@ namespace pluginfbx
 			_curFbxNode->LclScaling.Set(FbxDouble3(scl.x(), scl.y(), scl.z()));
 			currentNodeMatrix = _curFbxNode->EvaluateLocalTransform();	// for debug
 
-			// Apply globals transformation early because the way FBX calculates children matrix (the creation order matters)
+			// Apply transformations early because the way FBX calculates children matrix (the creation order matters)
 			// Must be after all above transforms are applied on node.
 			if (isFirstMatrix)
-				applyGlobalTransforms();
+				applyTransforms(_firstMatrixNode, _scaleModel, _rotateXAxis);
+			//if (skeleton)
+			//	applyTransforms(_curFbxNode, _scaleSkeleton, _rotateXAxis);
 		}
 
 		// Process Skeleton and Bones and create nodes before continuing

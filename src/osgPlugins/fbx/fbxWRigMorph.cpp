@@ -539,26 +539,28 @@ namespace pluginfbx
 		}
 		_pScene->AddPose(pose);
 
-		//FbxNode* pRoot = _pScene->GetRootNode();
-		//FbxUserNotification* status = FbxUserNotification::Create(_pSdkManager, "", "");
-		//bool success = pose->IsValidBindPoseVerbose(pRoot, status);
+		/*
+		FbxNode* pRoot = _pScene->GetRootNode();
+		FbxUserNotification* status = FbxUserNotification::Create(_pSdkManager, "", "");
+		bool success = pose->IsValidBindPoseVerbose(pRoot, status);
 
-		//if (!success)
-		//{
-		//	int numNotifications = status->GetNbEntries();
+		if (!success)
+		{
+			int numNotifications = status->GetNbEntries();
 
-		//	for (int i = 0; i < numNotifications; ++i) 
-		//	{
-		//		const FbxAccumulatorEntry* entry = status->GetEntry(i);
-		//		OSG_WARN << "Bind pose error: " << entry->GetDescription() << std::endl;
-		//		
-		//		for (int j = 0; j < entry->GetDetailsCount(); j++)
-		//		{
-		//			OSG_WARN << "      - " << entry->GetDetail(j)->Buffer() << std::endl;
-		//		}
-		//		
-		//	}
-		//}
+			for (int i = 0; i < numNotifications; ++i) 
+			{
+				const FbxAccumulatorEntry* entry = status->GetEntry(i);
+				OSG_WARN << "Bind pose error: " << entry->GetDescription() << std::endl;
+				
+				for (int j = 0; j < entry->GetDetailsCount(); j++)
+				{
+					OSG_WARN << "      - " << entry->GetDetail(j)->Buffer() << std::endl;
+				}
+				
+			}
+		}
+		*/
 	}
 
 	void WriterNodeVisitor::buildMeshSkin()
@@ -598,10 +600,6 @@ namespace pluginfbx
 				OSG_WARN << "WARNING: Vertex Influence without corresponding mesh" << std::endl;
 
 		}
-
-		// Construct bind pose
-		buildBindPose();
-
 	}
 
 }

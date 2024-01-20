@@ -835,7 +835,6 @@ namespace pluginfbx
 		if (rig && !rigMorph)
 		{
 			transformMatrix = getMatrixFromSkeletonToNode(geometry);
-			//_skeletonNodes.emplace(meshNode);
 		}		
 
 		// Build vertices, normals, tangents, texcoords, etc.

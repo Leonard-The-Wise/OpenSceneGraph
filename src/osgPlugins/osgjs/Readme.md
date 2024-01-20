@@ -52,11 +52,7 @@ osgconv file.osgjs file-export.fbx -O RotateXAxis=-90.0
 osgconv file.osgjs file-export.fbx -O ScaleModel=100
 ```
 
-In rare cases you may get an "out of bound indexes or vertexes", that usually means your model isn't vertex/index compressed (this was actually the default for old OSGJS original format). Since we can't programatically determine whether this model is compressed or not (depends on which version of sketchfab processor it was uploaded and time of upload), you must try different options manually.
-
-Defaultly, the plugin will try to decompress vertices and texcoords because most recent models use it, but if it is a legacy model and it fails to export or your vertices looks totally broken, try to export with the option `-O disableVertexDecompress` and it may fix the issue.
-
-You can also ignore rigging and animations while exporting (options `-O IgnoreRigging` and `-O IgnoreAnimations`). If you are having issues with rigging or animations distorting your model, use it. It won't export rigging, but it WILL reconstruct all bone nodes as normal "group" nodes (visible in Blender like a series of black dots in the air - just click the dots and you'll select the corresponding group), so you can still visualize how the model's skeleton would be like before distorting model.
+You can also ignore rigging, animations and vertex weights while exporting (options `-O NoRigging`, `-O NoAnimations` and `-O NoWeights`). If you are having issues with rigging or animations distorting your model, use them. `-O NoRigging` won't export rigging as Skeleton, but it WILL reconstruct all bone nodes as normal "group" nodes (visible in Blender like a series of black dots in the air - just click the dots and you'll select the corresponding group), so you can still visualize how the model's skeleton would be like before distorting model. `-O NoWeights` will build node as skeletons but won't paint any vertex weights (or influence) on the model. `-O NoAnimations` is self explanatory.
 
 ### Extra tip:
 
@@ -69,4 +65,4 @@ I put a convenience Batch file along with the exe called `OsgConvAll.bat`. With 
 
 That's all I can say for now.
 
-Cheers.
+Bye. :)

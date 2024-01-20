@@ -526,6 +526,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         bool ascii(false);
         bool ignoreBones(false);
         bool ignoreAnimations(false);
+        bool ignoreWeights(false);
         double rotateXAxis(0.0);
         double scaleModel(1.0);
         bool flipUVs(false);
@@ -569,13 +570,17 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                 {
                     iss >> exportVersion;
                 }
-                else if (pre_equals == "IgnoreRigging")
+                else if (pre_equals == "NoRigging")
                 {
                     ignoreBones = true;
                 }
-                else if (pre_equals == "IgnoreAnimations")
+                else if (pre_equals == "NoAnimations")
                 {
                     ignoreAnimations = true;
+                }
+                else if (pre_equals == "NoWeights")
+                {
+                    ignoreWeights = true;
                 }
                 else if (pre_equals == "RotateXAxis")
                 {
@@ -606,7 +611,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
 
         pluginfbx::WriterNodeVisitor writerNodeVisitor(pScene, pSdkManager, filename,
             options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
-            ignoreBones, ignoreAnimations, rotateXAxis, scaleModel, flipUVs);
+            ignoreBones, ignoreAnimations, ignoreWeights, rotateXAxis, scaleModel, flipUVs);
 
         OSG_NOTICE << "[FBX] Exporting Scene..." << std::endl;
 

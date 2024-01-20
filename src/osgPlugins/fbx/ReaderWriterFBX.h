@@ -20,16 +20,19 @@ public:
     ReaderWriterFBX()
     {
         supportsExtension("fbx", "FBX format");
-        supportsOption("Embedded", "(Write option) Embed textures in FBX file");
-        supportsOption("UseFbxRoot", "(Read) If the source OSG root node is a simple group with no stateset, the reader will put its children directly under the FBX root");
+        // Read options
         supportsOption("LightmapTextures", "(Read option) Interpret texture maps as overriding the lighting. 3D Studio Max may export files that should be interpreted in this way.");
+        supportsOption("UseFbxRoot", "(Read) If the source OSG root node is a simple group with no stateset, the reader will put its children directly under the FBX root");
         supportsOption("TessellatePolygons", "(Read option) Tessellate mesh polygons. If the model contains concave polygons this may be necessary, however tessellating can be very slow and may erroneously produce triangle shards.");
-        supportsOption("IgnoreRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
-        supportsOption("IgnoreAnimations", "(Write option) Ignore animations.");
-        supportsOption("RotateXAxis", "(Write option) Rotate models for Rigged and Morphed geometry. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0)");
+        // Write options
+        supportsOption("Embedded", "(Write option) Embed textures in FBX file");
         supportsOption("FBXASCII", "(Write option) Export as FBX ASCII format.");
-        supportsOption("ScaleModel", "(Write option) Scale model uniformly by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0)");
-        supportsOption("FlipUVs", "(Write option) Flip Y axis of texture UV's.");
+        supportsOption("FlipUVs", "(Write option) Flip textures UV's.");
+        supportsOption("NoAnimations", "(Write option) Ignore animations.");
+        supportsOption("NoRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
+        supportsOption("NoWeights", "(Write option) Export skeleton and animations without any vertex weights.");
+        supportsOption("RotateXAxis", "(Write option) Rotate models on X axis. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0).");
+        supportsOption("ScaleModel", "(Write option) Scale model uniformly by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0).");
     }
 
     const char* className() const { return "FBX reader/writer"; }

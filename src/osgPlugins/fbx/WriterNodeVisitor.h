@@ -91,6 +91,7 @@ namespace pluginfbx
             const std::string& srcDirectory,
             bool ignoreBones,
             bool ignoreAnimations,
+            bool ignoreWeights,
             double rotateXAxis,
             double scaleModel,
             bool flipUVs) :
@@ -107,6 +108,7 @@ namespace pluginfbx
             _firstNodeProcessed(false),
             _ignoreBones(ignoreBones),
             _ignoreAnimations(ignoreAnimations),
+            _ignoreWeights(ignoreWeights),
             _rotateXAxis(rotateXAxis),
             _scaleModel(scaleModel),
             _flipUVs(flipUVs),
@@ -127,9 +129,6 @@ namespace pluginfbx
         {
             osg::NodeVisitor::traverse(node);
         }
-
-        typedef std::map<const osg::Image*, std::string> ImageSet;
-        typedef std::set<std::string> ImageFilenameSet;        // Sub-optimal because strings are doubled (in ImageSet). Moreover, an unordered_set (= hashset) would be more efficient (Waiting for unordered_set to be included in C++ standard ;) ).
 
 
         class MaterialParser
@@ -226,7 +225,7 @@ namespace pluginfbx
 
         std::string buildNodePath(FbxNode* currentNode);
 
-        void applyGlobalTransforms();
+        void applyTransforms(FbxNode* transformNode, double scale, double rotation);
 
         /**
         * Build geometry triangles and control points (vertices)
@@ -324,6 +323,7 @@ namespace pluginfbx
         ///Export options
         bool _ignoreBones;                      // Tell the export engine to ignore Rigging for the mesh
         bool _ignoreAnimations;                 // Tell the export engine to not process animations
+        bool _ignoreWeights;                    // Tell the export engine to not paint bone weights on vertices
         double _rotateXAxis;                    // Tell the export engine to rotate rigged and morphed geometry Nº in X Axis
         double _scaleModel;                     // Scales model by a given factor
         bool _flipUVs;                          // Flip UVs on Y Axis
@@ -359,6 +359,7 @@ namespace pluginfbx
         std::set<FbxNode*> _boneNodes;
         std::set<std::string> _animationTargetNames;          // Animation targets
         std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
+        std::stack<FbxNode*> _skeletons;
 
     };
 
