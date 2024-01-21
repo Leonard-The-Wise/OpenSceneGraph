@@ -135,7 +135,7 @@ namespace pluginfbx
 				else
 					relativePath = tex->getImage(0)->getFileName();
 
-				FbxFileTexture* fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
+				FbxFileTexture* fbxTexture = FbxFileTexture::Create(pSdkManager, osgDB::getStrippedName(relativePath).c_str());
 				fbxTexture->SetFileName(relativePath.c_str());
 				fbxTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
 				fbxTexture->SetMappingType(FbxTexture::eUV);
@@ -153,6 +153,7 @@ namespace pluginfbx
 					switch (textureLayer)
 					{
 					case MaterialSurfaceLayer::Ambient:
+						fbxTexture->SetTextureUse(FbxTexture::eShadowMap);
 						_fbxMaterial->Ambient.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Diffuse:
@@ -176,6 +177,7 @@ namespace pluginfbx
 						_fbxMaterial->Reflection.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Shininess:
+						fbxTexture->SetTextureUse(FbxTexture::eSphereReflectionMap);
 						_fbxMaterial->Shininess.ConnectSrcObject(fbxTexture);
 						break;
 					case MaterialSurfaceLayer::Specular:
@@ -198,7 +200,7 @@ namespace pluginfbx
 		if (!texture || !material)
 			return MaterialSurfaceLayer::None;
 
-		std::string textureFile = texture->getImage(0)->getFileName();
+		std::string textureFile = osgDB::getSimpleFileName(texture->getImage(0)->getFileName());
 		std::string layerName;
 
 		// Run through all known layer names and try to match textureFile
@@ -206,16 +208,18 @@ namespace pluginfbx
 		{
 			std::string materialFile;
 			std::ignore = material->getUserValue(std::string("textureLayer_") + knownLayer, materialFile);
-			if (materialFile == osgDB::getSimpleFileName(textureFile))
+			if (materialFile == textureFile)
 			{
-				if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" ||
+				if (knownLayer == "AOPBR" || knownLayer == "Matcap")
+					return MaterialSurfaceLayer::Ambient;
+				else if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" ||
 					knownLayer == "DiffuseIntensity")
 					return MaterialSurfaceLayer::Diffuse;
 				else if (knownLayer == "NormalMap" || knownLayer == "BumpMap" || knownLayer == "ClearCoatNormalMap")
 					return MaterialSurfaceLayer::NormalMap;
 				else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor" || knownLayer == "SpecularHardness")
 					return MaterialSurfaceLayer::Specular;
-				else if (knownLayer == "Displacement" || knownLayer == "CavityPBR" || "AOPBR")
+				else if (knownLayer == "Displacement" || knownLayer == "CavityPBR")
 					return MaterialSurfaceLayer::DisplacementColor;
 				else if (knownLayer == "EmitColor")
 					return MaterialSurfaceLayer::Emissive;

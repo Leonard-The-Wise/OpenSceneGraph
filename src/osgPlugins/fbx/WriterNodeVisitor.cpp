@@ -504,7 +504,7 @@ namespace pluginfbx
 		FbxAMatrix currentNodeMatrix;
 		_matrixStack.push_back(std::make_pair(nodeName, matrix));
 
-		// Only build the appropriate nodes that apply
+		// Only build the appropriate nodes
 		if (isFirstMatrix || skeleton || bone || animatedMatrix || _ignoreBones)
 		{
 			_curFbxNode = FbxNode::Create(_pSdkManager, nodeName.c_str());
@@ -556,8 +556,6 @@ namespace pluginfbx
 			// Must be after all above transforms are applied on node.
 			if (isFirstMatrix)
 				applyTransforms(_firstMatrixNode, _scaleModel, _rotateXAxis);
-			//if (skeleton)
-			//	applyTransforms(_curFbxNode, _scaleSkeleton, _rotateXAxis);
 		}
 
 		// Process Skeleton and Bones and create nodes before continuing
