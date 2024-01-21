@@ -1,9 +1,6 @@
 /* -*-c++-*- */
-/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
-* Copyright 2020 Pelican Mapping
-* http://osgearth.org
-*
-* osgEarth is free software; you can redistribute it and/or modify
+/* 
+* This is free software; you can redistribute it and/or modify
 * it under the terms of the GNU Lesser General Public License as published by
 * the Free Software Foundation; either version 2 of the License, or
 * (at your option) any later version.
@@ -19,6 +16,7 @@
 * You should have received a copy of the GNU Lesser General Public License
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
+
 #include <osg/Notify>
 
 #define TINYGLTF_IMPLEMENTATION
@@ -27,16 +25,14 @@
 #define TINYGLTF_NO_EXTERNAL_IMAGE
 #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
 
-#define TINYGLTF_USE_RAPIDJSON
-#define TINYGLTF_USE_RAPIDJSON_CRTALLOCATOR
+// #define TINYGLTF_USE_RAPIDJSON
+// #define TINYGLTF_USE_RAPIDJSON_CRTALLOCATOR
 
 #include "tiny_gltf.h"
 using namespace tinygltf;
 
 #include "GLTFReader.h"
 #include "GLTFWriter.h"
-//#include "B3DMReader.h"
-//#include "B3DMWriter.h"
 
 #include <osgDB/FileNameUtils>
 #include <osgDB/Registry>

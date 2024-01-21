@@ -29,6 +29,21 @@
 #include <osgDB/FileUtils>
 #include <osgDB/WriteFile>
 #include <stack>
+#include <iomanip>
+
+#include <osgAnimation/RigGeometry>
+#include <osgAnimation/MorphGeometry>
+
+#include <osgAnimation/BasicAnimationManager>
+#include <osgAnimation/Animation>
+#include <osgAnimation/UpdateBone>
+#include <osgAnimation/UpdateMatrixTransform>
+#include <osgAnimation/StackedTranslateElement>
+#include <osgAnimation/StackedQuaternionElement>
+#include <osgAnimation/StackedRotateAxisElement>
+#include <osgAnimation/StackedMatrixElement>
+#include <osgAnimation/StackedScaleElement>
+
 
 /**
  * Assembles and returns an inline string using a stream-like << operator.
@@ -509,6 +524,8 @@ public:
             }
 
             osg::Geometry* geom = drawable.asGeometry();
+            if (dynamic_cast<osgAnimation::RigGeometry*>(geom))
+                dynamic_cast<osgAnimation::RigGeometry*>(geom)->copyFrom(*dynamic_cast<osgAnimation::RigGeometry*>(geom)->getSourceGeometry());
 
             _model.meshes.push_back(tinygltf::Mesh());
             tinygltf::Mesh& mesh = _model.meshes.back();
