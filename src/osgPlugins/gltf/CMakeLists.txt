@@ -1,15 +1,19 @@
 SET(TARGET_H
-    GLTFReader.h
     GLTFWriter.h
-#    B3DMReader.h
-#    B3DMWriter.h
+    OsgtoGLTF.h
+    pch.h
+    Stringify.h
+    tiny_gltf.h
+    json.hpp
 )
 
 SET(TARGET_SRC
+    GLTFWriter.cpp
+    OSGtoGLTF.cpp
+    pch.cpp
     ReaderWriterGLTF.cpp
 )
 
-INCLUDE_DIRECTORIES(tinygltf rapidjson/include/rapidjson)
-
+SET(TARGET_ADDED_LIBRARIES osgAnimation)
 #### end var setup  ###
 SETUP_PLUGIN(gltf)

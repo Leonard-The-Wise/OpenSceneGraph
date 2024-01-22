@@ -173,7 +173,7 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
             }
 
             // Helper for FBX plugin (don't show option on help here because FBX already displays it)
-            if (pre_equals == "IgnoreAnimations")
+            if (pre_equals == "NoAnimations")
             {
                 localOptions.ignoreAnimations = true;
             }

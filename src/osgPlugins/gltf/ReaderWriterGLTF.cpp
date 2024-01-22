@@ -25,13 +25,9 @@
 #define TINYGLTF_NO_EXTERNAL_IMAGE
 #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
 
-// #define TINYGLTF_USE_RAPIDJSON
-// #define TINYGLTF_USE_RAPIDJSON_CRTALLOCATOR
-
 #include "tiny_gltf.h"
 using namespace tinygltf;
 
-#include "GLTFReader.h"
 #include "GLTFWriter.h"
 
 #include <osgDB/FileNameUtils>
@@ -39,15 +35,11 @@ using namespace tinygltf;
 
 class GLTFReaderWriter : public osgDB::ReaderWriter
 {
-private:
-    mutable GLTFReader::TextureCache _cache;
-
 public:
     GLTFReaderWriter()
     {
         supportsExtension("gltf", "glTF ascii loader");
         supportsExtension("glb", "glTF binary loader");
-        //supportsExtension("b3dm", "b3dm loader");
     }
 
     virtual const char* className() const { return "glTF plugin"; }
@@ -59,68 +51,15 @@ public:
 
     ReadResult readNode(const std::string& location, const osgDB::Options* options) const
     {
-        std::string ext = osgDB::getFileExtension(location);
-        if (!acceptsExtension(ext))
-            return ReadResult::FILE_NOT_HANDLED;
-
-        if (ext == "gltf")
-        {
-            GLTFReader reader;
-            reader.setTextureCache(&_cache);
-            tinygltf::Model model;
-            return reader.read(location, false, options);
-        }
-        else if (ext == "glb")
-        {
-            GLTFReader reader;
-            reader.setTextureCache(&_cache);
-            tinygltf::Model model;
-            return reader.read(location, true, options);
-        }
-        //else if (ext == "b3dm")
-        //{
-        //    std::string data = URI(location).getString(options);
-        //    B3DMReader reader;
-        //    reader.setTextureCache(&_cache);
-        //    return reader.read(location, data, options);
-        //}
-        else return ReadResult::FILE_NOT_HANDLED;
+        OSG_FATAL << "This plugin does not support reading GLTF files, only writting." << std::endl;
+        return ReadResult::FILE_NOT_HANDLED;
     }
 
     //! Read from a stream:
     ReadResult readNode(std::istream& inputStream, const osgDB::Options* options) const
     {
-        // load entire stream into a buffer
-        std::istreambuf_iterator<char> eof;
-        std::string buffer(std::istreambuf_iterator<char>(inputStream), eof);
-
-#if ENABLE_OE
-        // Find referrer in the options
-        URIContext context(options);
-#endif // ENABLE_OE
-
-        // Determine format by peeking the magic header:
-        std::string magic(buffer, 0, 4);
-
-        if (magic == "glTF")
-        {
-            // non-functional -- fix - TODO
-            GLTFReader reader;
-            reader.setTextureCache(&_cache);
-            tinygltf::Model model;
-#if ENABLE_OE
-            return reader.read(context.referrer(), true, options); // binary=yes
-#else
-            return reader.read(nullptr, true, options);
-#endif // ENABLE_OE
-        }
-        //else if (magic == "b3dm")
-        //{
-        //    B3DMReader reader;
-        //    reader.setTextureCache(&_cache);
-        //    return reader.read(context.referrer(), buffer, options);
-        //}
-        else return ReadResult::FILE_NOT_HANDLED;
+        OSG_FATAL << "This plugin does not support reading GLTF files, only writting." << std::endl;
+        return ReadResult::FILE_NOT_HANDLED;
     }
 
     //! Writes a node to GLTF.
@@ -140,11 +79,6 @@ public:
             GLTFWriter writer;
             return writer.write(node, location, true, options);
         }
-        //else if (ext == "b3dm")
-        //{
-        //    B3DMWriter writer;
-        //    return writer.write(node, location, true, options);
-        //}
 
         return WriteResult::ERROR_IN_WRITING_FILE;
     }
