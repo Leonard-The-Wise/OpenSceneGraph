@@ -467,13 +467,9 @@ namespace pluginfbx
 		OSG_NOTICE << "Processing " << bam->getAnimationList().size() << " animation(s)..." << std::endl;
 
 		// Run through all animations
-		int i = 0;
 		for (auto& animation : bam->getAnimationList())
 		{
 			createAnimationStack(animation);
-			if (i > 2)
-				break;
-			++i;
 		}
 	}
 
