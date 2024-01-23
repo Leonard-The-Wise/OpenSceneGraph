@@ -276,19 +276,6 @@ void OSGtoGLTF::createNode(osg::Node& node)
 		_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
 		_gltfBoneIDNames[gnode.name] = boneID;
 	}
-
-	// Fix node matrix for rig
-	osgAnimation::RigGeometry* rig = dynamic_cast<osgAnimation::RigGeometry*>(&node);
-	if (rig)
-	{
-		osg::Matrix matrixTransform = getMatrixFromSkeletonToNode(*rig);
-		if (!matrixTransform.isIdentity())
-		{
-			const double* ptr = matrixTransform.ptr();
-			for (unsigned i = 0; i < 16; ++i)
-				_model.nodes.back().matrix.push_back(*ptr++);
-		}
-	}
 }
 
 void OSGtoGLTF::apply(osg::Group& group)
@@ -462,7 +449,6 @@ int OSGtoGLTF::getOrCreateBuffer(const osg::BufferData* data, GLenum type)
 	int id = _model.buffers.size() - 1;
 	_buffers[data] = id;
 
-	//int bytes = getBytesInDataType(type);
 	buffer.data.resize(data->getTotalDataSize());
 
 	//TODO: account for endianess
@@ -580,12 +566,9 @@ int OSGtoGLTF::createBindMatrixAccessor(const BindMatrices& matrix, int componen
 
 int OSGtoGLTF::getOrCreateAccessor(const osg::Array* data, int numElements, int componentType, int accessorType, int bufferTarget)
 {
-	//osg::ref_ptr<const osg::BufferData> arrayData = data;
-	//ArraySequenceMap::iterator a = _accessors.find(arrayData);
-	//if (a != _accessors.end())
-	//	return a->second;
-
-	//_accessors.emplace(arrayData);
+	ArraySequenceMap::iterator a = _accessors.find(data);
+	if (a != _accessors.end())
+		return a->second;
 
 	int bufferViewId = getOrCreateBufferView(data, componentType, bufferTarget);
 
@@ -879,12 +862,15 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			if (a > -1)
 			{
 				tinygltf::Accessor& posacc = _model.accessors[a];
-				posacc.minValues.push_back(posMin.x());
-				posacc.minValues.push_back(posMin.y());
-				posacc.minValues.push_back(posMin.z());
-				posacc.maxValues.push_back(posMax.x());
-				posacc.maxValues.push_back(posMax.y());
-				posacc.maxValues.push_back(posMax.z());
+				if (posacc.minValues.size() == 0 && posacc.maxValues.size() == 0)
+				{
+					posacc.minValues.push_back(posMin.x());
+					posacc.minValues.push_back(posMin.y());
+					posacc.minValues.push_back(posMin.z());
+					posacc.maxValues.push_back(posMax.x());
+					posacc.maxValues.push_back(posMax.y());
+					posacc.maxValues.push_back(posMax.z());
+				}
 
 				if (normals)
 					getOrCreateGeometryAccessor(normals, pset, primitive, "NORMAL");
