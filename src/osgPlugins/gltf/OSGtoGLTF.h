@@ -50,7 +50,7 @@ private:
     BindMatrices _skeletonInvBindMatrices;
     BoneIDNames _gltfBoneIDNames;
 
-    std::set<std::string> _animationTargetNames;          // Animation targets
+    std::map<std::string, osg::Node*> _animationTargetNames;          // Animation targets
     std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
 
 
@@ -103,6 +103,10 @@ private:
     void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix = false);
 
     bool isMatrixAnimated(const osg::MatrixTransform* node);
+
+    bool hasAnimatedMatrixParent(const osg::Node* node);
+
+    osg::Matrix OSGtoGLTF::buildParentMatrices(const osg::Node& node, bool useAllParents);
 
     int getCurrentMaterial();
 
