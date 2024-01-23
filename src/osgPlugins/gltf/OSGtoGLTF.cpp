@@ -28,7 +28,7 @@
 #include "Stringify.h"
 #include "OSGtoGLTF.h"
 
-using namespace tinygltf;
+// using namespace tinygltf;
 
 
 
@@ -75,7 +75,8 @@ hashToString(const std::string& input)
 	return Stringify() << std::hex << std::setw(8) << std::setfill('0') << hashString(input);
 }
 
-osg::ref_ptr<osg::Array> reinterpretDoubleArray(const osg::Array* array)
+template <typename T>
+osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 {
 	osg::ref_ptr<osg::Array> returnArray;
 
@@ -119,7 +120,7 @@ osg::ref_ptr<osg::Array> reinterpretDoubleArray(const osg::Array* array)
 		break;
 	}
 
-	return returnArray;
+	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
 void OSGtoGLTF::apply(osg::Node& node)
@@ -139,6 +140,14 @@ void OSGtoGLTF::apply(osg::Node& node)
 		pushedStateSet = pushStateSet(ss.get());
 	}
 
+	// Build our Skin (skeletons) early, before traverse and save pair (ID/Skin)
+	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
+	if (skeleton)
+	{
+		_model.skins.push_back(tinygltf::Skin());
+		_gltfSkeletons.push(std::make_pair(_model.skins.size()-1, &_model.skins.back()));
+	}
+
 	traverse(node);
 
 	if (ss && pushedStateSet)
@@ -149,13 +158,24 @@ void OSGtoGLTF::apply(osg::Node& node)
 	_model.nodes.push_back(tinygltf::Node());
 	tinygltf::Node& gnode = _model.nodes.back();
 	int id = _model.nodes.size() - 1;
-	gnode.name = ::Stringify() << "_gltfNode_" << id;
+	gnode.name = ::Stringify() << (node.getName().empty() ? (Stringify() << "_gltfNode_" << id) : node.getName());
 	_osgNodeSeqMap[&node] = id;
 
 	if (isRoot)
 	{
 		// replace the placeholder with the actual root id.
 		_model.scenes[_model.defaultScene].nodes.back() = id;
+	}
+
+	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
+	if (bone)
+	{
+		// The same as above
+		int boneID = _model.nodes.size() - 1;
+
+		_gltfSkeletons.top().second->joints.push_back(boneID);
+		_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
+		_gltfBoneIDNames[gnode.name] = boneID;
 	}
 }
 
@@ -174,11 +194,110 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 {
 	apply(static_cast<osg::Group&>(xform));
 
+	// Compute local matrices
 	osg::Matrix matrix;
 	xform.computeLocalToWorldMatrix(matrix, this);
-	const double* ptr = matrix.ptr();
-	for (unsigned i = 0; i < 16; ++i)
-		_model.nodes.back().matrix.push_back(*ptr++);
+
+	if (!matrix.isIdentity())
+	{
+		const double* ptr = matrix.ptr();
+		for (unsigned i = 0; i < 16; ++i)
+			_model.nodes.back().matrix.push_back(*ptr++);
+	}
+
+	// Post-process skeleton... create inverse bind matrices accessor and skin weights
+	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
+	if (skeleton)
+	{
+		int MatrixAccessor = createBindMatrixAccessor(_skeletonInvBindMatrices);
+		_gltfSkeletons.top().second->inverseBindMatrices = MatrixAccessor;
+
+		// Build skin weights and clear rigged mesh map, so we don't create duplicates
+		BuildSkinWeights(_riggedMeshMap, _gltfBoneIDNames);
+
+		// Clear queue and pop skeleton so any parent skeletons may be processed
+		_skeletonInvBindMatrices.clear();
+		_gltfSkeletons.pop();
+		_riggedMeshMap.clear();
+		_gltfBoneIDNames.clear();
+	}
+}
+
+int OSGtoGLTF::findBoneId(const std::string& boneName, const BoneIDNames& boneIdMap) {
+	auto it = boneIdMap.find(boneName);
+	if (it != boneIdMap.end()) 
+	{
+		return it->second;
+	}
+	return -1;
+}
+
+void OSGtoGLTF::BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNames& gltfBoneIDNames)
+{
+	for (auto& riggedMesh : rigStack)
+	{
+		tinygltf::Mesh& mesh = _model.meshes[riggedMesh.first];
+		const osgAnimation::VertexInfluenceMap* vim = riggedMesh.second->getInfluenceMap();
+
+		if (!vim)
+			continue;
+
+		osg::ref_ptr<osg::UShortArray> jointIndices = new osg::UShortArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
+		osg::ref_ptr<osg::FloatArray> vertexWeights = new osg::FloatArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
+
+		// Build influence map
+		for (const auto& influenceEntry : *vim)
+		{
+			const std::string& boneName = influenceEntry.first;
+			const osgAnimation::VertexInfluence& influence = influenceEntry.second;
+
+			// Find bone ID in bone map
+			int boneId = findBoneId(boneName, gltfBoneIDNames);
+
+			// Convert bone ID to joint ID (the order the bone was added to eht joint instead).
+			int boneOrder(0);
+			for (auto& joint : _gltfSkeletons.top().second->joints)
+			{
+				if (boneId == joint)
+				{
+					boneId = boneOrder;
+					break;
+				}
+				boneOrder++;
+			}
+
+			for (const auto& weightEntry : influence)
+			{
+				int vertexIndex = weightEntry.first;
+				float weight = weightEntry.second;
+
+				// Find first free position on vector to put weight
+				for (int i = 0; i < 4; ++i)
+				{
+					int index = vertexIndex * 4 + i;
+					if ((*vertexWeights)[index] == 0.0f)
+					{
+						(*jointIndices)[index] = boneId;
+						(*vertexWeights)[index] = weight;
+						break;
+					}
+				}
+			}
+		}
+
+		// Create JOINTS_0 and WEIGHTS_0 accessors
+		int joints = getOrCreateAccessor(jointIndices, jointIndices->getNumElements() / 4, TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT, 
+			TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
+		int weights = getOrCreateAccessor(vertexWeights, vertexWeights->getNumElements() / 4, TINYGLTF_PARAMETER_TYPE_FLOAT, 
+			TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+		// Set Accessors to mesh primitives
+		for (auto& primitive : mesh.primitives)
+		{
+			primitive.attributes["JOINTS_0"] = joints;
+			primitive.attributes["WEIGHTS_0"] = weights;
+		}
+	}
 }
 
 unsigned OSGtoGLTF::getBytesInDataType(GLenum dataType)
@@ -201,6 +320,23 @@ unsigned OSGtoGLTF::getBytesPerElement(const osg::DrawElements* data)
 		dynamic_cast<const osg::DrawElementsUByte*>(data) ? 1 :
 		dynamic_cast<const osg::DrawElementsUShort*>(data) ? 2 :
 		4;
+}
+
+osg::ref_ptr<osg::FloatArray> OSGtoGLTF::convertMatricesToFloatArray(const BindMatrices& matrix)
+{
+	osg::ref_ptr<osg::FloatArray> floatArray = new osg::FloatArray(16 * matrix.size());
+
+	size_t floatIndex(0);
+	for (auto& invMatrix : matrix)
+	{
+		for (unsigned int i = 0; i < 4; ++i) {
+			for (unsigned int j = 0; j < 4; ++j) {
+				(*floatArray)[floatIndex] = (*invMatrix.second)(i, j);
+				floatIndex++;
+			}
+		}
+	}
+	return floatArray;
 }
 
 int OSGtoGLTF::getOrCreateBuffer(const osg::BufferData* data, GLenum type)
@@ -246,16 +382,22 @@ int OSGtoGLTF::getOrCreateBufferView(const osg::BufferData* data, GLenum type, G
 	bv.buffer = bufferId;
 	bv.byteLength = data->getTotalDataSize();
 	bv.byteOffset = 0;
-	bv.target = target;
+
+	if (target != 0)
+		bv.target = target;
 
 	return id;
 }
 
-int OSGtoGLTF::getOrCreateAccessor(osg::Array* data, osg::PrimitiveSet* pset, tinygltf::Primitive& prim, const std::string& attr)
+
+int OSGtoGLTF::getOrCreateGeometryAccessor(const osg::Array* data, osg::PrimitiveSet* pset, tinygltf::Primitive& prim, const std::string& attr)
 {
+	//osg::ref_ptr<const osg::BufferData> arrayData = data;
 	ArraySequenceMap::iterator a = _accessors.find(data);
 	if (a != _accessors.end())
 		return a->second;
+
+	//_accessors.emplace(arrayData);
 
 	ArraySequenceMap::iterator bv = _bufferViews.find(data);
 	if (bv == _bufferViews.end())
@@ -307,6 +449,50 @@ int OSGtoGLTF::getOrCreateAccessor(osg::Array* data, osg::PrimitiveSet* pset, ti
 	return accessorId;
 }
 
+int OSGtoGLTF::createBindMatrixAccessor(const BindMatrices& matrix, int componentType)
+{
+	osg::ref_ptr<osg::FloatArray> matrixData = convertMatricesToFloatArray(matrix);
+
+	int bufferViewId = getOrCreateBufferView(matrixData, componentType, 0);
+
+	_model.accessors.push_back(tinygltf::Accessor());
+	tinygltf::Accessor& accessor = _model.accessors.back();
+	int accessorId = _model.accessors.size() - 1;
+
+	accessor.bufferView = bufferViewId;
+	accessor.byteOffset = 0;
+	accessor.componentType = componentType;
+	accessor.count = matrixData->getNumElements() / 16;
+	accessor.type = TINYGLTF_TYPE_MAT4;
+
+	return accessorId;
+}
+
+int OSGtoGLTF::getOrCreateAccessor(const osg::Array* data, int numElements, int componentType, int accessorType, int bufferTarget)
+{
+	//osg::ref_ptr<const osg::BufferData> arrayData = data;
+	//ArraySequenceMap::iterator a = _accessors.find(arrayData);
+	//if (a != _accessors.end())
+	//	return a->second;
+
+	//_accessors.emplace(arrayData);
+
+	int bufferViewId = getOrCreateBufferView(data, componentType, bufferTarget);
+
+	_model.accessors.push_back(tinygltf::Accessor());
+	tinygltf::Accessor& accessor = _model.accessors.back();
+	int accessorId = _model.accessors.size() - 1;
+
+	accessor.bufferView = bufferViewId;
+	accessor.byteOffset = 0;
+	accessor.componentType = componentType;
+	accessor.count = numElements;
+	accessor.type = accessorType;
+
+	return accessorId;
+}
+
+
 int OSGtoGLTF::getCurrentMaterial()
 {
 	if (_ssStack.size() > 0)
@@ -326,7 +512,6 @@ int OSGtoGLTF::getCurrentMaterial()
 				}
 			}
 
-			// FIXME
 			osg::ref_ptr< const osg::Image > osgImage; // = osgTexture->getImage(0);
 			if (osgImage)
 			{
@@ -334,50 +519,24 @@ int OSGtoGLTF::getCurrentMaterial()
 
 				_textures.push_back(osgTexture);
 
-								 
-				// Flip the image before writing
 				osg::ref_ptr<osg::Image> flipped = new osg::Image(*osgImage.get());
-				// flipped->flipVertical();
-
 				std::string filename = osgImage->getFileName();
 
-				//std::string ext = "png";// osgDB::getFileExtension(osgImage->getFileName());
-
-				//// If the image has a filename try to hash it so we only write out one copy of it.  
-				//if (!osgImage->getFileName().empty())
-				//{
-				//	filename = Stringify() << std::hex << hashString(osgImage->getFileName()) << "." << ext;                        
-
-				//	if (!osgDB::fileExists(filename))
-				//	{
-				//		osgDB::writeImageFile(*flipped.get(), filename);
-				//	}                        
-				//}
-				//else
-				//{                      
-				//	// Otherwise just find a filename that doesn't exist
-				//	int fileNameInc = 0;
-				//	do
-				//	{
-				//		std::stringstream ss;
-				//		ss << fileNameInc << "." << ext;
-				//		filename = ss.str();
-				//		fileNameInc++;
-				//	} while (osgDB::fileExists(filename));
-				//	osgDB::writeImageFile(*flipped.get(), filename);
-				//}
+				// Convert backslashes
+				for (char& c : filename) 
+				{
+					if (c == '\\') {
+						c = '/';
+					}
+				}
 							   
 				// Add the image
-				// TODO:  Find a better way to write out the image url.  Right now it's assuming a ../.. scheme.
-				Image image;
-				std::stringstream buf;
-				buf << "../../" << filename;
-				//buf << filename;
-				image.uri = buf.str();//filename;
+				tinygltf::Image image;
+				image.uri = filename;
 				_model.images.push_back(image);
 
 				// Add the sampler
-				Sampler sampler;
+				tinygltf::Sampler sampler;
 				osg::Texture::WrapMode wrapS = osgTexture->getWrap(osg::Texture::WRAP_S);
 				osg::Texture::WrapMode wrapT = osgTexture->getWrap(osg::Texture::WRAP_T);
 				osg::Texture::WrapMode wrapR = osgTexture->getWrap(osg::Texture::WRAP_R);
@@ -404,30 +563,30 @@ int OSGtoGLTF::getCurrentMaterial()
 				_model.samplers.push_back(sampler);
 
 				// Add the texture
-				Texture texture;
+				tinygltf::Texture texture;
 				texture.source = index;
 				texture.sampler = index;
 				_model.textures.push_back(texture);
 
 				// Add the material
-				Material mat;
-				Parameter textureParam;
+				tinygltf::Material mat;
+				tinygltf::Parameter textureParam;
 				textureParam.json_double_value["index"] = index;
 				textureParam.json_double_value["texCoord"] = 0;
 				mat.values["baseColorTexture"] = textureParam;
 
-				Parameter colorFactor;
+				tinygltf::Parameter colorFactor;
 				colorFactor.number_array.push_back(1.0);
 				colorFactor.number_array.push_back(1.0);
 				colorFactor.number_array.push_back(1.0);
 				colorFactor.number_array.push_back(1.0);
 
-				Parameter metallicFactor;
+				tinygltf::Parameter metallicFactor;
 				metallicFactor.has_number_value = true;
 				metallicFactor.number_value = 0.0;
 				mat.values["metallicFactor"] = metallicFactor;
 
-				Parameter roughnessFactor;
+				tinygltf::Parameter roughnessFactor;
 				roughnessFactor.number_value = 1.0;
 				roughnessFactor.has_number_value = true;
 				mat.values["roughnessFactor"] = roughnessFactor;
@@ -448,15 +607,10 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 {
 	if (drawable.asGeometry())
 	{
+		//Early checks to valid geometry
 		osg::Geometry* geom = drawable.asGeometry();
 		if (!geom)
 			return;
-
-		if (dynamic_cast<osgAnimation::RigGeometry*>(geom))
-		{
-			dynamic_cast<osgAnimation::RigGeometry*>(geom)->copyFrom(*dynamic_cast<osgAnimation::RigGeometry*>(geom)->getSourceGeometry());
-			geom->setName(dynamic_cast<osgAnimation::RigGeometry*>(geom)->getSourceGeometry()->getName());
-		}
 
 		apply(static_cast<osg::Node&>(drawable));
 
@@ -467,17 +621,40 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			pushedStateSet = pushStateSet(ss.get());
 		}
 
+		osgAnimation::RigGeometry* rigGeometry(nullptr);
+		if (rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geom))
+		{
+			rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
+			geom->setName(rigGeometry->getSourceGeometry()->getName());
+		}
+		std::string geomName = geom->getName();
+
 		osg::ref_ptr<osg::Vec3Array> positions = dynamic_cast<osg::Vec3Array*>(geom->getVertexArray());
 		osg::Vec3dArray* positionsd = dynamic_cast<osg::Vec3dArray*>(geom->getVertexArray());
 		if (positionsd)
-			positions = osg::dynamic_pointer_cast<osg::Vec3Array>(reinterpretDoubleArray(positionsd));
+			positions = doubleToFloatArray<osg::Vec3Array>(positionsd);
 
 		if (!positions)
+		{
+			if (pushedStateSet)
+			{
+				popStateSet();
+			}
 			return;
+		}
+
+		OSG_NOTICE << "[glTF] Building Mesh: " << geomName << " [" << positions->getNumElements() << " vertices]" << std::endl;
 
 		_model.meshes.push_back(tinygltf::Mesh());
 		tinygltf::Mesh& mesh = _model.meshes.back();
-		_model.nodes.back().mesh = _model.meshes.size() - 1;
+		int meshID = _model.meshes.size() - 1;
+		_model.nodes.back().mesh = meshID;
+
+		if (rigGeometry)
+		{
+			_riggedMeshMap[meshID] = rigGeometry;
+			_model.nodes.back().skin = _gltfSkeletons.top().first;
+		}
 
 		osg::Vec3f posMin(FLT_MAX, FLT_MAX, FLT_MAX);
 		osg::Vec3f posMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -497,19 +674,40 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		osg::ref_ptr<osg::Vec3Array> normals = dynamic_cast<osg::Vec3Array*>(geom->getNormalArray());
 		osg::Vec3dArray* normalsd = dynamic_cast<osg::Vec3dArray*>(geom->getNormalArray());
 		if (normalsd)
-			normals = osg::dynamic_pointer_cast<osg::Vec3Array>(reinterpretDoubleArray(normalsd));
+			normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
 
 		if (normals)
 		{
 			getOrCreateBufferView(normals, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
 		}
 
-		// TODO: Tangents
+		osg::ref_ptr<osg::Vec4Array> tangents;
+		osg::ref_ptr<osg::Vec4dArray> tangentsd;
+		for (auto& attrib : geom->getVertexAttribArrayList())
+		{
+			bool isTangent = false;
+			if (attrib->getUserValue("tangent", isTangent))
+			{
+				if (isTangent)
+				{
+					tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
+					tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
+					if (tangentsd)
+						tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
+					break;
+				}
+			}
+		}
+
+		if (tangents)
+		{
+			getOrCreateBufferView(tangents, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+		}
 
 		osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
 		osg::Vec4dArray* colorsd = dynamic_cast<osg::Vec4dArray*>(geom->getColorArray());
 		if (colorsd)
-			colors = osg::dynamic_pointer_cast<osg::Vec4Array>(reinterpretDoubleArray(colorsd));
+			colors = doubleToFloatArray<osg::Vec4Array>(colorsd);
 
 		if (colors)
 		{
@@ -519,7 +717,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(geom->getTexCoordArray(0));
 		osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(geom->getTexCoordArray(0));
 		if (texCoordsd)
-			texCoords = osg::dynamic_pointer_cast<osg::Vec2Array>(reinterpretDoubleArray(texCoordsd));
+			texCoords = doubleToFloatArray<osg::Vec2Array>(texCoordsd);
 
 		if (!texCoords.valid())
 		{                
@@ -565,7 +763,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 			int a(-1);
 			if (positions)
-				a = getOrCreateAccessor(positions, pset, primitive, "POSITION");
+				a = getOrCreateGeometryAccessor(positions, pset, primitive, "POSITION");
 
 			// record min/max for position array (required):
 			if (a > -1)
@@ -579,13 +777,16 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 				posacc.maxValues.push_back(posMax.z());
 
 				if (normals)
-					getOrCreateAccessor(normals, pset, primitive, "NORMAL");
+					getOrCreateGeometryAccessor(normals, pset, primitive, "NORMAL");
+
+				if (tangents)
+					getOrCreateGeometryAccessor(tangents, pset, primitive, "TANGENT");
 
 				if (colors)
-					getOrCreateAccessor(colors, pset, primitive, "COLOR_0");
+					getOrCreateGeometryAccessor(colors, pset, primitive, "COLOR_0");
 
 				if (texCoords)
-					getOrCreateAccessor(texCoords.get(), pset, primitive, "TEXCOORD_0");
+					getOrCreateGeometryAccessor(texCoords.get(), pset, primitive, "TEXCOORD_0");
 			}
 		}
 
