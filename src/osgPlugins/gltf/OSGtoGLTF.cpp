@@ -29,6 +29,8 @@
 #include "OSGtoGLTF.h"
 
 
+#pragma region Utility functions
+
 const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback>& callback)
 {
 	if (!callback)
@@ -191,7 +193,7 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 }
 
 template <typename T>
-osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
+osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array)
 {
 	osg::ref_ptr<osg::Array> returnArray;
 
@@ -289,7 +291,7 @@ static bool isEmptyNode(osg::Node* node)
 	return true;
 }
 
-void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix = false)
+static void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix = false)
 {
 	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(childNode);
 	osg::Group* group = dynamic_cast<osg::Group*>(childNode);
@@ -312,238 +314,7 @@ void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, 
 		output.push_back(childNode);
 }
 
-void OSGtoGLTF::apply(osg::Node& node)
-{
-	// Determine the nature of the node
-	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(&node);
-	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(&node);
-	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&node);
-	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
-	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
-
-	std::string NodeName = node.getName();
-	if (skeleton)
-		NodeName = NodeName.empty() ? "Skeleton" : NodeName;
-
-	// First matrix: GLTF uses a +X=right +y=up -z=forward coordinate system
-	// so we fix it here
-	if (_firstMatrix && matrix)
-	{
-		osg::Matrix transform = osg::Matrixd::rotate(osg::Z_AXIS, osg::Y_AXIS);
-		osg::Matrix original = matrix->getMatrix();
-		transform = transform * original;
-		matrix->setMatrix(transform);
-		_firstMatrix = false;
-	}
-
-	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
-	if (isRoot && matrix)
-	//if (isRoot)
-	{
-		// put a placeholder here just to prevent any other nodes
-		// from thinking they are the root
-		_model.scenes[_model.defaultScene].nodes.push_back(-1);
-	}
-
-	bool pushedStateSet = false;
-	osg::ref_ptr< osg::StateSet > ss = node.getStateSet();
-	if (ss)
-	{
-		pushedStateSet = pushStateSet(ss.get());
-	}
-
-	// Build our Skin (skeletons) early, before traverse and save pair (ID/Skin)
-	if (skeleton)
-	{
-		_model.skins.push_back(tinygltf::Skin());
-		_gltfSkeletons.push(std::make_pair(_model.skins.size()-1, &_model.skins.back()));
-	}
-
-	traverse(node);
-
-	if (ss && pushedStateSet)
-	{
-		popStateSet();
-	}
-
-	// TODO: Create matrices only if animated. Recalculate transforms
-	// We only create relevant nodes like geometries and transform matrices
-	//if (geometry || matrix)
-	if ( !isEmptyNode(&node) && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
-	{
-		_model.nodes.push_back(tinygltf::Node());
-		tinygltf::Node& gnode = _model.nodes.back();
-		int id = _model.nodes.size() - 1;
-		gnode.name = ::Stringify() << (NodeName.empty() ? (Stringify() << "_gltfNode_" << id) : NodeName);
-		
-		// For rig geometries, they are not children of any nodes.
-		if (!rigGeometry)
-			_osgNodeSeqMap[&node] = id;
-		else
-			_model.scenes[_model.defaultScene].nodes.push_back(id);
-
-		if (isRoot)
-		{
-			// replace the placeholder with the actual root id.
-			_model.scenes[_model.defaultScene].nodes[0] = id;
-		}
-
-		if (bone)
-		{
-			// The same as above
-			int boneID = _model.nodes.size() - 1;
-
-			_gltfSkeletons.top().second->joints.push_back(boneID);
-			_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
-			_gltfBoneIDNames[gnode.name] = boneID;
-		}
-	}
-}
-
-void OSGtoGLTF::apply(osg::Group& group)
-{
-	apply(static_cast<osg::Node&>(group));
-
-	// Determine nature of group
-	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
-
-	// Only aply children for matrices since we are skipping normal groups
-	if (matrix && !isEmptyNode(&group))
-	{
-		for (unsigned i = 0; i < group.getNumChildren(); ++i)
-		{
-			if (_osgNodeSeqMap.find(group.getChild(i)) != _osgNodeSeqMap.end())
-			{
-				int id = _osgNodeSeqMap.at(group.getChild(i));
-				_model.nodes.back().children.push_back(id);
-			}
-
-			// Get orphaned children of groups that were nested on this matrix
-			std::vector<osg::Node*> output;
-			getOrphanedChildren(group.getChild(i), output);
-			for (auto& node : output)
-			{
-				if (_osgNodeSeqMap.find(node) != _osgNodeSeqMap.end())
-				{
-					int id = _osgNodeSeqMap.at(node);
-					_model.nodes.back().children.push_back(id);
-				}
-			}
-		}
-	}
-}
-
-void OSGtoGLTF::apply(osg::Transform& xform)
-{
-	apply(static_cast<osg::Group&>(xform));
-
-	// Compute local matrices
-	osg::Matrix matrix;
-	xform.computeLocalToWorldMatrix(matrix, this);
-
-	if (!matrix.isIdentity() && !isEmptyNode(&xform))
-	{
-		const double* ptr = matrix.ptr();
-		for (unsigned i = 0; i < 16; ++i)
-			_model.nodes.back().matrix.push_back(*ptr++);
-	}
-
-	// Post-process skeleton... create inverse bind matrices accessor and skin weights
-	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
-	if (skeleton)
-	{
-		int MatrixAccessor = createBindMatrixAccessor(_skeletonInvBindMatrices);
-		_gltfSkeletons.top().second->inverseBindMatrices = MatrixAccessor;
-
-		// Build skin weights and clear rigged mesh map, so we don't create duplicates
-		BuildSkinWeights(_riggedMeshMap, _gltfBoneIDNames);
-
-		// Clear queue and pop skeleton so any parent skeletons may be processed
-		_skeletonInvBindMatrices.clear();
-		_gltfSkeletons.pop();
-		_riggedMeshMap.clear();
-		_gltfBoneIDNames.clear();
-	}
-}
-
-int OSGtoGLTF::findBoneId(const std::string& boneName, const BoneIDNames& boneIdMap) {
-	auto it = boneIdMap.find(boneName);
-	if (it != boneIdMap.end()) 
-	{
-		return it->second;
-	}
-	return -1;
-}
-
-void OSGtoGLTF::BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNames& gltfBoneIDNames)
-{
-	for (auto& riggedMesh : rigStack)
-	{
-		tinygltf::Mesh& mesh = _model.meshes[riggedMesh.first];
-		const osgAnimation::VertexInfluenceMap* vim = riggedMesh.second->getInfluenceMap();
-
-		if (!vim)
-			continue;
-
-		osg::ref_ptr<osg::UShortArray> jointIndices = new osg::UShortArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
-		osg::ref_ptr<osg::FloatArray> vertexWeights = new osg::FloatArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
-
-		// Build influence map
-		for (const auto& influenceEntry : *vim)
-		{
-			const std::string& boneName = influenceEntry.first;
-			const osgAnimation::VertexInfluence& influence = influenceEntry.second;
-
-			// Find bone ID in bone map
-			int boneId = findBoneId(boneName, gltfBoneIDNames);
-
-			// Convert bone ID to joint ID (the order the bone was added to eht joint instead).
-			int boneOrder(0);
-			for (auto& joint : _gltfSkeletons.top().second->joints)
-			{
-				if (boneId == joint)
-				{
-					boneId = boneOrder;
-					break;
-				}
-				boneOrder++;
-			}
-
-			for (const auto& weightEntry : influence)
-			{
-				int vertexIndex = weightEntry.first;
-				float weight = weightEntry.second;
-
-				// Find first free position on vector to put weight
-				for (int i = 0; i < 4; ++i)
-				{
-					int index = vertexIndex * 4 + i;
-					if ((*vertexWeights)[index] == 0.0f)
-					{
-						(*jointIndices)[index] = boneId;
-						(*vertexWeights)[index] = weight;
-						break;
-					}
-				}
-			}
-		}
-
-		// Create JOINTS_0 and WEIGHTS_0 accessors
-		int joints = getOrCreateAccessor(jointIndices, jointIndices->getNumElements() / 4, TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT, 
-			TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
-		int weights = getOrCreateAccessor(vertexWeights, vertexWeights->getNumElements() / 4, TINYGLTF_PARAMETER_TYPE_FLOAT, 
-			TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
-
-		// Set Accessors to mesh primitives
-		for (auto& primitive : mesh.primitives)
-		{
-			primitive.attributes["JOINTS_0"] = joints;
-			primitive.attributes["WEIGHTS_0"] = weights;
-		}
-	}
-}
-
-unsigned OSGtoGLTF::getBytesInDataType(GLenum dataType)
+unsigned getBytesInDataType(GLenum dataType)
 {
 	return
 		dataType == TINYGLTF_PARAMETER_TYPE_BYTE || dataType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE ? 1 :
@@ -552,12 +323,12 @@ unsigned OSGtoGLTF::getBytesInDataType(GLenum dataType)
 		0;
 }
 
-unsigned OSGtoGLTF::getBytesPerElement(const osg::Array* data)
+unsigned getBytesPerElement(const osg::Array* data)
 {
 	return data->getDataSize() * getBytesInDataType(data->getDataType());
 }
 
-unsigned OSGtoGLTF::getBytesPerElement(const osg::DrawElements* data)
+unsigned getBytesPerElement(const osg::DrawElements* data)
 {
 	return
 		dynamic_cast<const osg::DrawElementsUByte*>(data) ? 1 :
@@ -565,22 +336,11 @@ unsigned OSGtoGLTF::getBytesPerElement(const osg::DrawElements* data)
 		4;
 }
 
-osg::ref_ptr<osg::FloatArray> OSGtoGLTF::convertMatricesToFloatArray(const BindMatrices& matrix)
-{
-	osg::ref_ptr<osg::FloatArray> floatArray = new osg::FloatArray(16 * matrix.size());
+#pragma endregion
 
-	size_t floatIndex(0);
-	for (auto& invMatrix : matrix)
-	{
-		for (unsigned int i = 0; i < 4; ++i) {
-			for (unsigned int j = 0; j < 4; ++j) {
-				(*floatArray)[floatIndex] = (*invMatrix.second)(i, j);
-				floatIndex++;
-			}
-		}
-	}
-	return floatArray;
-}
+
+#pragma region Buffers and Accessors
+
 
 int OSGtoGLTF::getOrCreateBuffer(const osg::BufferData* data, GLenum type)
 {
@@ -731,6 +491,106 @@ int OSGtoGLTF::getOrCreateAccessor(const osg::Array* data, int numElements, int 
 	return accessorId;
 }
 
+
+#pragma endregion
+
+
+#pragma region Class Helpers and class utilities
+
+int OSGtoGLTF::findBoneId(const std::string& boneName, const BoneIDNames& boneIdMap) {
+	auto it = boneIdMap.find(boneName);
+	if (it != boneIdMap.end())
+	{
+		return it->second;
+	}
+	return -1;
+}
+
+osg::ref_ptr<osg::FloatArray> OSGtoGLTF::convertMatricesToFloatArray(const BindMatrices& matrix)
+{
+	osg::ref_ptr<osg::FloatArray> floatArray = new osg::FloatArray(16 * matrix.size());
+
+	size_t floatIndex(0);
+	for (auto& invMatrix : matrix)
+	{
+		for (unsigned int i = 0; i < 4; ++i) {
+			for (unsigned int j = 0; j < 4; ++j) {
+				(*floatArray)[floatIndex] = (*invMatrix.second)(i, j);
+				floatIndex++;
+			}
+		}
+	}
+	return floatArray;
+}
+
+void OSGtoGLTF::BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNames& gltfBoneIDNames)
+{
+	for (auto& riggedMesh : rigStack)
+	{
+		tinygltf::Mesh& mesh = _model.meshes[riggedMesh.first];
+		const osgAnimation::VertexInfluenceMap* vim = riggedMesh.second->getInfluenceMap();
+
+		if (!vim)
+			continue;
+
+		osg::ref_ptr<osg::UShortArray> jointIndices = new osg::UShortArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
+		osg::ref_ptr<osg::FloatArray> vertexWeights = new osg::FloatArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
+
+		// Build influence map
+		for (const auto& influenceEntry : *vim)
+		{
+			const std::string& boneName = influenceEntry.first;
+			const osgAnimation::VertexInfluence& influence = influenceEntry.second;
+
+			// Find bone ID in bone map
+			int boneId = findBoneId(boneName, gltfBoneIDNames);
+
+			// Convert bone ID to joint ID (the order the bone was added to eht joint instead).
+			int boneOrder(0);
+			for (auto& joint : _gltfSkeletons.top().second->joints)
+			{
+				if (boneId == joint)
+				{
+					boneId = boneOrder;
+					break;
+				}
+				boneOrder++;
+			}
+
+			for (const auto& weightEntry : influence)
+			{
+				int vertexIndex = weightEntry.first;
+				float weight = weightEntry.second;
+
+				// Find first free position on vector to put weight
+				for (int i = 0; i < 4; ++i)
+				{
+					int index = vertexIndex * 4 + i;
+					if ((*vertexWeights)[index] == 0.0f)
+					{
+						(*jointIndices)[index] = boneId;
+						(*vertexWeights)[index] = weight;
+						break;
+					}
+				}
+			}
+		}
+
+		// Create JOINTS_0 and WEIGHTS_0 accessors
+		int joints = getOrCreateAccessor(jointIndices, jointIndices->getNumElements() / 4, TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT,
+			TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
+		int weights = getOrCreateAccessor(vertexWeights, vertexWeights->getNumElements() / 4, TINYGLTF_PARAMETER_TYPE_FLOAT,
+			TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+		// Set Accessors to mesh primitives
+		for (auto& primitive : mesh.primitives)
+		{
+			primitive.attributes["JOINTS_0"] = joints;
+			primitive.attributes["WEIGHTS_0"] = weights;
+		}
+	}
+}
+
 int OSGtoGLTF::getCurrentMaterial()
 {
 	if (_ssStack.size() > 0)
@@ -839,6 +699,167 @@ int OSGtoGLTF::getCurrentMaterial()
 		}
 	}
 	return -1;
+}
+
+#pragma endregion
+
+
+#pragma region Main functions (public)
+
+
+void OSGtoGLTF::apply(osg::Node& node)
+{
+	// Determine the nature of the node
+	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(&node);
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(&node);
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&node);
+	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
+	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
+
+	std::string NodeName = node.getName();
+	if (skeleton)
+		NodeName = NodeName.empty() ? "Skeleton" : NodeName;
+
+	// First matrix: GLTF uses a +X=right +y=up -z=forward coordinate system
+	// so we fix it here
+	if (_firstMatrix && matrix)
+	{
+		osg::Matrix transform = osg::Matrixd::rotate(osg::Z_AXIS, osg::Y_AXIS);
+		osg::Matrix original = matrix->getMatrix();
+		transform = transform * original;
+		matrix->setMatrix(transform);
+		_firstMatrix = false;
+		_firstMatrixNode = &node;
+	}
+
+	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
+	if (isRoot && matrix)
+		//if (isRoot)
+	{
+		// put a placeholder here just to prevent any other nodes
+		// from thinking they are the root
+		_model.scenes[_model.defaultScene].nodes.push_back(-1);
+	}
+
+	bool pushedStateSet = false;
+	osg::ref_ptr< osg::StateSet > ss = node.getStateSet();
+	if (ss)
+	{
+		pushedStateSet = pushStateSet(ss.get());
+	}
+
+	// Build our Skin (skeletons) early, before traverse and save pair (ID/Skin)
+	if (skeleton)
+	{
+		_model.skins.push_back(tinygltf::Skin());
+		_gltfSkeletons.push(std::make_pair(_model.skins.size() - 1, &_model.skins.back()));
+	}
+
+	traverse(node);
+
+	if (ss && pushedStateSet)
+	{
+		popStateSet();
+	}
+
+	// TODO: Create matrices only if animated. Recalculate transforms
+	// We only create relevant nodes like geometries and transform matrices
+	//if (geometry || matrix)
+	if (!isEmptyNode(&node) && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
+	{
+		_model.nodes.push_back(tinygltf::Node());
+		tinygltf::Node& gnode = _model.nodes.back();
+		int id = _model.nodes.size() - 1;
+		gnode.name = ::Stringify() << (NodeName.empty() ? (Stringify() << "_gltfNode_" << id) : NodeName);
+
+		// For rig geometries, they are not children of any nodes.
+		if (!rigGeometry)
+			_osgNodeSeqMap[&node] = id;
+		else
+			_model.scenes[_model.defaultScene].nodes.push_back(id);
+
+		if (isRoot)
+		{
+			// replace the placeholder with the actual root id.
+			_model.scenes[_model.defaultScene].nodes[0] = id;
+		}
+
+		if (bone)
+		{
+			// The same as above
+			int boneID = _model.nodes.size() - 1;
+
+			_gltfSkeletons.top().second->joints.push_back(boneID);
+			_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
+			_gltfBoneIDNames[gnode.name] = boneID;
+		}
+	}
+}
+
+void OSGtoGLTF::apply(osg::Group& group)
+{
+	apply(static_cast<osg::Node&>(group));
+
+	// Determine nature of group
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
+
+	// Only aply children for matrices since we are skipping normal groups
+	if (matrix && !isEmptyNode(&group))
+	{
+		for (unsigned i = 0; i < group.getNumChildren(); ++i)
+		{
+			if (_osgNodeSeqMap.find(group.getChild(i)) != _osgNodeSeqMap.end())
+			{
+				int id = _osgNodeSeqMap.at(group.getChild(i));
+				_model.nodes.back().children.push_back(id);
+			}
+
+			// Get orphaned children of groups that were nested on this matrix
+			std::vector<osg::Node*> output;
+			getOrphanedChildren(group.getChild(i), output);
+			for (auto& node : output)
+			{
+				if (_osgNodeSeqMap.find(node) != _osgNodeSeqMap.end())
+				{
+					int id = _osgNodeSeqMap.at(node);
+					_model.nodes.back().children.push_back(id);
+				}
+			}
+		}
+	}
+}
+
+void OSGtoGLTF::apply(osg::Transform& xform)
+{
+	apply(static_cast<osg::Group&>(xform));
+
+	// Compute local matrices
+	osg::Matrix matrix;
+	xform.computeLocalToWorldMatrix(matrix, this);
+
+	if (!matrix.isIdentity() && !isEmptyNode(&xform))
+	{
+		const double* ptr = matrix.ptr();
+		for (unsigned i = 0; i < 16; ++i)
+			_model.nodes.back().matrix.push_back(*ptr++);
+	}
+
+	// Post-process skeleton... create inverse bind matrices accessor and skin weights
+	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
+	if (skeleton)
+	{
+		int MatrixAccessor = createBindMatrixAccessor(_skeletonInvBindMatrices);
+		_gltfSkeletons.top().second->inverseBindMatrices = MatrixAccessor;
+
+		// Build skin weights and clear rigged mesh map, so we don't create duplicates
+		BuildSkinWeights(_riggedMeshMap, _gltfBoneIDNames);
+
+		// Clear queue and pop skeleton so any parent skeletons may be processed
+		_skeletonInvBindMatrices.clear();
+		_gltfSkeletons.pop();
+		_riggedMeshMap.clear();
+		_gltfBoneIDNames.clear();
+	}
 }
 
 void OSGtoGLTF::apply(osg::Geometry& drawable)
@@ -1045,3 +1066,6 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		popStateSet();
 	}
 }
+
+
+#pragma endregion

@@ -4,6 +4,24 @@
 //! Visitor that builds a GLTF data model from an OSG scene graph.
 class OSGtoGLTF : public osg::NodeVisitor
 {
+
+
+public:
+    OSGtoGLTF(tinygltf::Model& model) : _model(model), _firstMatrix(true)
+    {
+        setTraversalMode(TRAVERSE_ALL_CHILDREN);
+        _model.scenes.push_back(tinygltf::Scene());
+        _model.defaultScene = 0;
+    }
+    void apply(osg::Node& node);
+
+    void apply(osg::Group& group);
+
+    void apply(osg::Transform& xform);
+
+    void apply(osg::Geometry& geometry);
+
+
 private:
     typedef std::map<osg::ref_ptr<const osg::Node>, int> OsgNodeSequenceMap;
     typedef std::map<osg::ref_ptr<const osg::BufferData>, int> ArraySequenceMap;
@@ -24,22 +42,12 @@ private:
     StateSetStack _ssStack;
     RiggedMeshStack _riggedMeshMap;
     bool _firstMatrix;
+    osg::Node* _firstMatrixNode;
 
     std::stack<std::pair<int, tinygltf::Skin*>> _gltfSkeletons;
     BindMatrices _skeletonInvBindMatrices;
     BoneIDNames _gltfBoneIDNames;
 
-public:
-    OSGtoGLTF(tinygltf::Model& model) : _model(model), _firstMatrix(true)
-    {
-        setTraversalMode(TRAVERSE_ALL_CHILDREN);
-        //setNodeMaskOverride(~0);
-
-        // default root scene:
-        _model.scenes.push_back(tinygltf::Scene());
-        //tinygltf::Scene& scene = _model.scenes.back();
-        _model.defaultScene = 0;
-    }
 
     void push(tinygltf::Node& gnode)
     {
@@ -68,24 +76,18 @@ public:
         _ssStack.pop_back();
     }
 
-    template <typename T>
-    osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array);
-
-    void apply(osg::Node& node);
-
-    void apply(osg::Group& group);
-
-    void apply(osg::Transform& xform);
-
     int findBoneId(const std::string& boneName, const BoneIDNames& boneIdMap);
 
     void BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNames& gltfBoneIDNames);
 
-    unsigned getBytesInDataType(GLenum dataType);
+    // template <typename T>
+    // osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array);
 
-    unsigned getBytesPerElement(const osg::Array* data);
+    // unsigned getBytesInDataType(GLenum dataType);
 
-    unsigned getBytesPerElement(const osg::DrawElements* data);
+    // unsigned getBytesPerElement(const osg::Array* data);
+
+    // unsigned getBytesPerElement(const osg::DrawElements* data);
 
     osg::ref_ptr<osg::FloatArray> convertMatricesToFloatArray(const BindMatrices& matrix);
 
@@ -102,5 +104,5 @@ public:
 
     int getCurrentMaterial();
 
-    void apply(osg::Geometry& geometry);
+
 };

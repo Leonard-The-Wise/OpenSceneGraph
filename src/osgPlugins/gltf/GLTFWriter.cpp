@@ -59,16 +59,4 @@ void GLTFWriter::convertOSGtoGLTF(const osg::Node& node, tinygltf::Model& model)
 
 	OSGtoGLTF converter(model);
 	nc_node.accept(converter);
-
-	//nc_node.ref();
-
-	// GLTF uses a +X=right +y=up -z=forward coordinate system
-	//osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform;
-	//transform->setMatrix(osg::Matrixd::rotate(osg::Z_AXIS, osg::Y_AXIS));
-	//transform->addChild(&nc_node);
-
-	//transform->accept(converter);
-
-	//transform->removeChild(&nc_node);
-	//nc_node.unref_nodelete();
 }
