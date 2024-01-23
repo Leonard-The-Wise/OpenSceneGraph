@@ -126,6 +126,69 @@ osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node)
 	return retMatrix;
 }
 
+/// <summary>
+/// Transforms a vector with a matrix. For Vec3Array, we can transform vertices and normals. For tangents
+/// we always use Vec4Array.
+/// </summary>
+/// <param name="array">Input array</param>
+/// <param name="transform">Transform matrix</param>
+/// <param name="normalize">If set to true, then treats Vec3Array as normals and Vec4Array as tangents</param>
+/// <returns></returns>
+template <typename T>
+osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, bool normalize)
+{
+	osg::ref_ptr<osg::Array> returnArray;
+	osg::Matrix transposeInverse = transform;
+	transposeInverse.transpose(transposeInverse);
+	transposeInverse = osg::Matrix::inverse(transposeInverse);
+
+	switch (array->getType())
+	{
+	case osg::Array::Vec4ArrayType:
+	{
+		returnArray = new osg::Vec4Array();
+		returnArray->reserveArray(array->getNumElements());
+		for (auto& vec : *osg::dynamic_pointer_cast<osg::Vec4Array>(array))
+		{
+			osg::Vec4 v;
+			if (normalize)
+			{
+				osg::Vec3 tangentVec3(vec.x(), vec.y(), vec.z());
+				tangentVec3 = tangentVec3 * transposeInverse;
+				tangentVec3.normalize();
+				v = osg::Vec4(tangentVec3.x(), tangentVec3.y(), tangentVec3.z(), vec.w());
+			}
+			else
+				v = vec * transform;
+			osg::dynamic_pointer_cast<osg::Vec4Array>(returnArray)->push_back(v);
+		}
+		break;
+	}
+	case osg::Array::Vec3ArrayType:
+	{
+		returnArray = new osg::Vec3Array();
+		returnArray->reserveArray(array->getNumElements());
+		for (auto& vec : *osg::dynamic_pointer_cast<osg::Vec3Array>(array))
+		{
+			osg::Vec3 v; 
+			if (normalize)
+			{
+				v = vec * transposeInverse;
+				v.normalize();
+			}
+			else
+				v = vec * transform;
+				
+			osg::dynamic_pointer_cast<osg::Vec3Array>(returnArray)->push_back(v);
+		}
+		break;
+	}
+	default:
+		OSG_WARN << "WARNING: Unsuported array to transform." << std::endl;
+	}
+
+	return osg::dynamic_pointer_cast<T>(returnArray);
+}
 
 template <typename T>
 osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
@@ -169,6 +232,9 @@ osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 			float f = (*dynamic_cast<const osg::DoubleArray*>(array))[i];
 			osg::dynamic_pointer_cast<osg::FloatArray>(returnArray)->push_back(f);
 		}
+		break;
+	default:
+		OSG_WARN << "Unsuported float array." << std::endl;
 		break;
 	}
 
@@ -701,6 +767,10 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	{
 		_riggedMeshMap[meshID] = rigGeometry;
 		_model.nodes.back().skin = _gltfSkeletons.top().first;
+
+		// Transform vertices
+		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
+		positions = transformArray(positions, transformMatrix, false);
 	}
 
 	osg::Vec3f posMin(FLT_MAX, FLT_MAX, FLT_MAX);
@@ -722,6 +792,20 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	if (normalsd)
 		normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
 
+	// Transform normals for rig (use only rotation and scale)
+	if (rigGeometry)
+	{
+		osg::Vec3 scl, tr;
+		osg::Quat rot, so;
+		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
+		transformMatrix.decompose(tr, rot, scl, so);
+		transformMatrix.makeIdentity();
+		transformMatrix.preMultRotate(rot);
+		transformMatrix.preMultScale(scl);
+
+		normals = transformArray(normals, transformMatrix, true);
+	}
+
 	osg::ref_ptr<osg::Vec4Array> tangents;
 	osg::ref_ptr<osg::Vec4dArray> tangentsd;
 	for (auto& attrib : geom->getVertexAttribArrayList())
@@ -738,6 +822,20 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 				break;
 			}
 		}
+	}
+
+	// Transform tangents for rig (use only rotation and scale)
+	if (rigGeometry)
+	{
+		osg::Vec3 scl, tr;
+		osg::Quat rot, so;
+		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
+		transformMatrix.decompose(tr, rot, scl, so);
+		transformMatrix.makeIdentity();
+		transformMatrix.preMultRotate(rot);
+		transformMatrix.preMultScale(scl);
+
+		tangents = transformArray(tangents, transformMatrix, true);
 	}
 
 	osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
