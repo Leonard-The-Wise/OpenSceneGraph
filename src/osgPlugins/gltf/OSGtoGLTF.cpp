@@ -241,7 +241,13 @@ osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
-bool isEmptyGeometry(osg::Node* node)
+inline static bool isEmptyRig(osgAnimation::RigGeometry* rigGeometry)
+{
+	osg::Geometry* geometry = rigGeometry->getSourceGeometry();
+	return !geometry->getVertexArray();
+}
+
+static bool isEmptyGeometry(osg::Node* node)
 {
 	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(node);
 	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(node);
@@ -255,7 +261,7 @@ bool isEmptyGeometry(osg::Node* node)
 	return !geometry->getVertexArray();
 }
 
-bool isEmptyNode(osg::Node* node)
+static bool isEmptyNode(osg::Node* node)
 {
 	if (!node)
 		return true;
@@ -340,7 +346,7 @@ void OSGtoGLTF::apply(osg::Node& node)
 	// TODO: Create matrices only if animated. Recalculate transforms
 	// We only create relevant nodes like geometries and transform matrices
 	//if (geometry || matrix)
-	if (!isEmptyNode(&node) || rigGeometry)
+	if ( !isEmptyNode(&node)  || (rigGeometry && !isEmptyRig(rigGeometry)))
 	{
 		_model.nodes.push_back(tinygltf::Node());
 		tinygltf::Node& gnode = _model.nodes.back();
@@ -376,10 +382,10 @@ void OSGtoGLTF::apply(osg::Group& group)
 	apply(static_cast<osg::Node&>(group));
 
 	// Determine nature of group
-	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
+	//osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
 
 	// Only aply children for (future animated) matrices since we are skipping normal groups
-	//if (matrix)
+	//if (matrix && !isEmptyNode(&group))
 	//{
 		for (unsigned i = 0; i < group.getNumChildren(); ++i)
 		{
