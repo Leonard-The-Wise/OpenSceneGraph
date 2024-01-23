@@ -28,52 +28,6 @@
 #include "Stringify.h"
 #include "OSGtoGLTF.h"
 
-// using namespace tinygltf;
-
-
-
-/** MurmurHash 2.0 (http://sites.google.com/site/murmurhash/) */
-unsigned
-hashString(const std::string& input)
-{
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-	unsigned int len = input.length();
-	const char* data = input.c_str();
-	unsigned int h = m ^ len; // using "m" as the seed.
-
-	while (len >= 4)
-	{
-		unsigned int k = *(unsigned int*)data;
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-		h *= m;
-		h ^= k;
-		data += 4;
-		len -= 4;
-	}
-
-	switch (len)
-	{
-	case 3: h ^= data[2] << 16;
-	case 2: h ^= data[1] << 8;
-	case 1: h ^= data[0];
-		h *= m;
-	};
-
-	h ^= h >> 13;
-	h *= m;
-	h ^= h >> 15;
-
-	return h;
-}
-
-std::string
-hashToString(const std::string& input)
-{
-	return Stringify() << std::hex << std::setw(8) << std::setfill('0') << hashString(input);
-}
 
 const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback>& callback)
 {
@@ -700,197 +654,173 @@ int OSGtoGLTF::getCurrentMaterial()
 
 void OSGtoGLTF::apply(osg::Geometry& drawable)
 {
-	if (drawable.asGeometry())
+	//Early checks to valid geometry
+	osg::Geometry* geom = drawable.asGeometry();
+	if (!geom)
+		return;
+
+	apply(static_cast<osg::Node&>(drawable));
+
+	osg::ref_ptr< osg::StateSet > ss = drawable.getStateSet();
+	bool pushedStateSet = false;
+	if (ss.valid())
 	{
-		//Early checks to valid geometry
-		osg::Geometry* geom = drawable.asGeometry();
-		if (!geom)
-			return;
+		pushedStateSet = pushStateSet(ss.get());
+	}
 
-		apply(static_cast<osg::Node&>(drawable));
+	osgAnimation::RigGeometry* rigGeometry(nullptr);
+	if (rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geom))
+	{
+		rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
+		geom->setName(rigGeometry->getSourceGeometry()->getName());
+	}
+	std::string geomName = geom->getName();
 
-		osg::ref_ptr< osg::StateSet > ss = drawable.getStateSet();
-		bool pushedStateSet = false;
-		if (ss.valid())
-		{
-			pushedStateSet = pushStateSet(ss.get());
-		}
+	osg::ref_ptr<osg::Vec3Array> positions = dynamic_cast<osg::Vec3Array*>(geom->getVertexArray());
+	osg::Vec3dArray* positionsd = dynamic_cast<osg::Vec3dArray*>(geom->getVertexArray());
+	if (positionsd)
+		positions = doubleToFloatArray<osg::Vec3Array>(positionsd);
 
-		osgAnimation::RigGeometry* rigGeometry(nullptr);
-		if (rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geom))
-		{
-			rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
-			geom->setName(rigGeometry->getSourceGeometry()->getName());
-		}
-		std::string geomName = geom->getName();
-
-		osg::ref_ptr<osg::Vec3Array> positions = dynamic_cast<osg::Vec3Array*>(geom->getVertexArray());
-		osg::Vec3dArray* positionsd = dynamic_cast<osg::Vec3dArray*>(geom->getVertexArray());
-		if (positionsd)
-			positions = doubleToFloatArray<osg::Vec3Array>(positionsd);
-
-		if (!positions)
-		{
-			if (pushedStateSet)
-			{
-				popStateSet();
-			}
-			return;
-		}
-
-		OSG_NOTICE << "[glTF] Building Mesh: " << geomName << " [" << positions->getNumElements() << " vertices]" << std::endl;
-
-		_model.meshes.push_back(tinygltf::Mesh());
-		tinygltf::Mesh& mesh = _model.meshes.back();
-		int meshID = _model.meshes.size() - 1;
-		_model.nodes.back().mesh = meshID;
-
-		if (rigGeometry)
-		{
-			_riggedMeshMap[meshID] = rigGeometry;
-			_model.nodes.back().skin = _gltfSkeletons.top().first;
-		}
-
-		osg::Vec3f posMin(FLT_MAX, FLT_MAX, FLT_MAX);
-		osg::Vec3f posMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-
-		// getOrCreateBufferView(positions, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		for (unsigned i = 0; i < positions->size(); ++i)
-		{
-			const osg::Vec3f& v = (*positions)[i];
-			posMin.x() = osg::minimum(posMin.x(), v.x());
-			posMin.y() = osg::minimum(posMin.y(), v.y());
-			posMin.z() = osg::minimum(posMin.z(), v.z());
-			posMax.x() = osg::maximum(posMax.x(), v.x());
-			posMax.y() = osg::maximum(posMax.y(), v.y());
-			posMax.z() = osg::maximum(posMax.z(), v.z());
-		}
-
-		osg::ref_ptr<osg::Vec3Array> normals = dynamic_cast<osg::Vec3Array*>(geom->getNormalArray());
-		osg::Vec3dArray* normalsd = dynamic_cast<osg::Vec3dArray*>(geom->getNormalArray());
-		if (normalsd)
-			normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
-
-		//if (normals)
-		//{
-		//	getOrCreateBufferView(normals, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		//}
-
-		osg::ref_ptr<osg::Vec4Array> tangents;
-		osg::ref_ptr<osg::Vec4dArray> tangentsd;
-		for (auto& attrib : geom->getVertexAttribArrayList())
-		{
-			bool isTangent = false;
-			if (attrib->getUserValue("tangent", isTangent))
-			{
-				if (isTangent)
-				{
-					tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
-					tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
-					if (tangentsd)
-						tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
-					break;
-				}
-			}
-		}
-
-		//if (tangents)
-		//{
-		//	getOrCreateBufferView(tangents, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		//}
-
-		osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
-		osg::Vec4dArray* colorsd = dynamic_cast<osg::Vec4dArray*>(geom->getColorArray());
-		if (colorsd)
-			colors = doubleToFloatArray<osg::Vec4Array>(colorsd);
-
-		//if (colors)
-		//{
-		//	getOrCreateBufferView(colors, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		//}
-
-		osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(geom->getTexCoordArray(0));
-		osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(geom->getTexCoordArray(0));
-		if (texCoordsd)
-			texCoords = doubleToFloatArray<osg::Vec2Array>(texCoordsd);
-
-		if (!texCoords.valid())
-		{                
-			// See if we have 3d texture coordinates and convert them to vec2
-			osg::Vec3Array* texCoords3 = dynamic_cast<osg::Vec3Array*>(geom->getTexCoordArray(0));
-			if (texCoords3)
-			{
-				texCoords = new osg::Vec2Array;
-				for (unsigned int i = 0; i < texCoords3->size(); i++)
-				{
-					texCoords->push_back(osg::Vec2((*texCoords3)[i].x(), (*texCoords3)[i].y()));
-				}
-				//geom->setTexCoordArray(0, texCoords.get());
-			}
-		}
-
-		//if (texCoords.valid())
-		//{
-		//	getOrCreateBufferView(texCoords.get(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		//}
-
-		for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
-		{
-			osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);
-
-			mesh.primitives.push_back(tinygltf::Primitive());
-			tinygltf::Primitive& primitive = mesh.primitives.back();
-
-			int currentMaterial = getCurrentMaterial();
-			if (currentMaterial >= 0)
-			{
-				// Cesium may crash if using texture without texCoords
-				// gltf_validator will report it as errors
-				// ThreeJS seems to be fine though
-				// TODO: check if the material actually has any texture in it
-				// TODO: the material should not be added if not used anywhere
-				if (texCoords.valid() || texCoordsd.valid()) {
-					primitive.material = currentMaterial;
-				}
-			}
-
-			primitive.mode = pset->getMode();
-
-			int a(-1);
-			if (positions)
-				a = getOrCreateGeometryAccessor(positions, pset, primitive, "POSITION");
-
-			// record min/max for position array (required):
-			if (a > -1)
-			{
-				tinygltf::Accessor& posacc = _model.accessors[a];
-				if (posacc.minValues.size() == 0 && posacc.maxValues.size() == 0)
-				{
-					posacc.minValues.push_back(posMin.x());
-					posacc.minValues.push_back(posMin.y());
-					posacc.minValues.push_back(posMin.z());
-					posacc.maxValues.push_back(posMax.x());
-					posacc.maxValues.push_back(posMax.y());
-					posacc.maxValues.push_back(posMax.z());
-				}
-
-				if (normals)
-					getOrCreateGeometryAccessor(normals, pset, primitive, "NORMAL");
-
-				if (tangents)
-					getOrCreateGeometryAccessor(tangents, pset, primitive, "TANGENT");
-
-				if (colors)
-					getOrCreateGeometryAccessor(colors, pset, primitive, "COLOR_0");
-
-				if (texCoords)
-					getOrCreateGeometryAccessor(texCoords.get(), pset, primitive, "TEXCOORD_0");
-			}
-		}
-
+	if (!positions)
+	{
 		if (pushedStateSet)
 		{
 			popStateSet();
 		}
+		return;
+	}
+
+	OSG_NOTICE << "[glTF] Building Mesh: " << geomName << " [" << positions->getNumElements() << " vertices]" << std::endl;
+
+	_model.meshes.push_back(tinygltf::Mesh());
+	tinygltf::Mesh& mesh = _model.meshes.back();
+	int meshID = _model.meshes.size() - 1;
+	_model.nodes.back().mesh = meshID;
+
+	if (rigGeometry)
+	{
+		_riggedMeshMap[meshID] = rigGeometry;
+		_model.nodes.back().skin = _gltfSkeletons.top().first;
+	}
+
+	osg::Vec3f posMin(FLT_MAX, FLT_MAX, FLT_MAX);
+	osg::Vec3f posMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+	for (unsigned i = 0; i < positions->size(); ++i)
+	{
+		const osg::Vec3f& v = (*positions)[i];
+		posMin.x() = osg::minimum(posMin.x(), v.x());
+		posMin.y() = osg::minimum(posMin.y(), v.y());
+		posMin.z() = osg::minimum(posMin.z(), v.z());
+		posMax.x() = osg::maximum(posMax.x(), v.x());
+		posMax.y() = osg::maximum(posMax.y(), v.y());
+		posMax.z() = osg::maximum(posMax.z(), v.z());
+	}
+
+	osg::ref_ptr<osg::Vec3Array> normals = dynamic_cast<osg::Vec3Array*>(geom->getNormalArray());
+	osg::Vec3dArray* normalsd = dynamic_cast<osg::Vec3dArray*>(geom->getNormalArray());
+	if (normalsd)
+		normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
+
+	osg::ref_ptr<osg::Vec4Array> tangents;
+	osg::ref_ptr<osg::Vec4dArray> tangentsd;
+	for (auto& attrib : geom->getVertexAttribArrayList())
+	{
+		bool isTangent = false;
+		if (attrib->getUserValue("tangent", isTangent))
+		{
+			if (isTangent)
+			{
+				tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
+				tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
+				if (tangentsd)
+					tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
+				break;
+			}
+		}
+	}
+
+	osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
+	osg::Vec4dArray* colorsd = dynamic_cast<osg::Vec4dArray*>(geom->getColorArray());
+	if (colorsd)
+		colors = doubleToFloatArray<osg::Vec4Array>(colorsd);
+
+	osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(geom->getTexCoordArray(0));
+	osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(geom->getTexCoordArray(0));
+	if (texCoordsd)
+		texCoords = doubleToFloatArray<osg::Vec2Array>(texCoordsd);
+
+	if (!texCoords.valid())
+	{                
+		// See if we have 3d texture coordinates and convert them to vec2
+		osg::Vec3Array* texCoords3 = dynamic_cast<osg::Vec3Array*>(geom->getTexCoordArray(0));
+		if (texCoords3)
+		{
+			texCoords = new osg::Vec2Array;
+			for (unsigned int i = 0; i < texCoords3->size(); i++)
+			{
+				texCoords->push_back(osg::Vec2((*texCoords3)[i].x(), (*texCoords3)[i].y()));
+			}
+			//geom->setTexCoordArray(0, texCoords.get());
+		}
+	}
+
+	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
+	{
+		osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);
+
+		mesh.primitives.push_back(tinygltf::Primitive());
+		tinygltf::Primitive& primitive = mesh.primitives.back();
+
+		int currentMaterial = getCurrentMaterial();
+		if (currentMaterial >= 0)
+		{
+			// Cesium may crash if using texture without texCoords
+			// gltf_validator will report it as errors
+			// ThreeJS seems to be fine though
+			// TODO: check if the material actually has any texture in it
+			// TODO: the material should not be added if not used anywhere
+			if (texCoords.valid() || texCoordsd.valid()) {
+				primitive.material = currentMaterial;
+			}
+		}
+
+		primitive.mode = pset->getMode();
+
+		int a(-1);
+		if (positions)
+			a = getOrCreateGeometryAccessor(positions, pset, primitive, "POSITION");
+
+		// record min/max for position array (required):
+		if (a > -1)
+		{
+			tinygltf::Accessor& posacc = _model.accessors[a];
+			if (posacc.minValues.size() == 0 && posacc.maxValues.size() == 0)
+			{
+				posacc.minValues.push_back(posMin.x());
+				posacc.minValues.push_back(posMin.y());
+				posacc.minValues.push_back(posMin.z());
+				posacc.maxValues.push_back(posMax.x());
+				posacc.maxValues.push_back(posMax.y());
+				posacc.maxValues.push_back(posMax.z());
+			}
+
+			if (normals)
+				getOrCreateGeometryAccessor(normals, pset, primitive, "NORMAL");
+
+			if (tangents)
+				getOrCreateGeometryAccessor(tangents, pset, primitive, "TANGENT");
+
+			if (colors)
+				getOrCreateGeometryAccessor(colors, pset, primitive, "COLOR_0");
+
+			if (texCoords)
+				getOrCreateGeometryAccessor(texCoords.get(), pset, primitive, "TEXCOORD_0");
+		}
+	}
+
+	if (pushedStateSet)
+	{
+		popStateSet();
 	}
 }
