@@ -289,6 +289,29 @@ static bool isEmptyNode(osg::Node* node)
 	return true;
 }
 
+void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix = false)
+{
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(childNode);
+	osg::Group* group = dynamic_cast<osg::Group*>(childNode);
+
+	if (matrix)
+	{
+		if (getMatrix)
+			output.push_back(childNode);
+		return;
+	}
+
+	if (group)
+	{
+		for (unsigned int i = 0; i < group->getNumChildren(); ++i)
+		{
+			getOrphanedChildren(group->getChild(i), output, true);
+		}
+	}
+	else
+		output.push_back(childNode);
+}
+
 void OSGtoGLTF::apply(osg::Node& node)
 {
 	// Determine the nature of the node
@@ -314,8 +337,8 @@ void OSGtoGLTF::apply(osg::Node& node)
 	}
 
 	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
-	//if (isRoot && matrix)
-	if (isRoot)
+	if (isRoot && matrix)
+	//if (isRoot)
 	{
 		// put a placeholder here just to prevent any other nodes
 		// from thinking they are the root
@@ -346,7 +369,7 @@ void OSGtoGLTF::apply(osg::Node& node)
 	// TODO: Create matrices only if animated. Recalculate transforms
 	// We only create relevant nodes like geometries and transform matrices
 	//if (geometry || matrix)
-	if ( !isEmptyNode(&node)  || (rigGeometry && !isEmptyRig(rigGeometry)))
+	if ( !isEmptyNode(&node) && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
 	{
 		_model.nodes.push_back(tinygltf::Node());
 		tinygltf::Node& gnode = _model.nodes.back();
@@ -382,11 +405,11 @@ void OSGtoGLTF::apply(osg::Group& group)
 	apply(static_cast<osg::Node&>(group));
 
 	// Determine nature of group
-	//osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
 
-	// Only aply children for (future animated) matrices since we are skipping normal groups
-	//if (matrix && !isEmptyNode(&group))
-	//{
+	// Only aply children for matrices since we are skipping normal groups
+	if (matrix && !isEmptyNode(&group))
+	{
 		for (unsigned i = 0; i < group.getNumChildren(); ++i)
 		{
 			if (_osgNodeSeqMap.find(group.getChild(i)) != _osgNodeSeqMap.end())
@@ -394,8 +417,20 @@ void OSGtoGLTF::apply(osg::Group& group)
 				int id = _osgNodeSeqMap.at(group.getChild(i));
 				_model.nodes.back().children.push_back(id);
 			}
+
+			// Get orphaned children of groups that were nested on this matrix
+			std::vector<osg::Node*> output;
+			getOrphanedChildren(group.getChild(i), output);
+			for (auto& node : output)
+			{
+				if (_osgNodeSeqMap.find(node) != _osgNodeSeqMap.end())
+				{
+					int id = _osgNodeSeqMap.at(node);
+					_model.nodes.back().children.push_back(id);
+				}
+			}
 		}
-	//}
+	}
 }
 
 void OSGtoGLTF::apply(osg::Transform& xform)
