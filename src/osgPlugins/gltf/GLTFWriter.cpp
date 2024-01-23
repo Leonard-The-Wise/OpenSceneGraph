@@ -58,5 +58,6 @@ void GLTFWriter::convertOSGtoGLTF(const osg::Node& node, tinygltf::Model& model)
 	osg::Node& nc_node = const_cast<osg::Node&>(node);
 
 	OSGtoGLTF converter(model);
+	converter.buildAnimationTargets(dynamic_cast<osg::Group*>(&nc_node));
 	nc_node.accept(converter);
 }

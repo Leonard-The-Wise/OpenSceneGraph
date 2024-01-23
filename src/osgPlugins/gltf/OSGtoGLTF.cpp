@@ -291,29 +291,6 @@ static bool isEmptyNode(osg::Node* node)
 	return true;
 }
 
-static void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix = false)
-{
-	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(childNode);
-	osg::Group* group = dynamic_cast<osg::Group*>(childNode);
-
-	if (matrix)
-	{
-		if (getMatrix)
-			output.push_back(childNode);
-		return;
-	}
-
-	if (group)
-	{
-		for (unsigned int i = 0; i < group->getNumChildren(); ++i)
-		{
-			getOrphanedChildren(group->getChild(i), output, true);
-		}
-	}
-	else
-		output.push_back(childNode);
-}
-
 unsigned getBytesInDataType(GLenum dataType)
 {
 	return
@@ -591,6 +568,57 @@ void OSGtoGLTF::BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNa
 	}
 }
 
+void OSGtoGLTF::getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix)
+{
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(childNode);
+	osg::Group* group = dynamic_cast<osg::Group*>(childNode);
+
+	if (matrix)
+	{
+		if (getMatrix)
+			output.push_back(childNode);
+		return;
+	}
+
+	if (group)
+	{
+		for (unsigned int i = 0; i < group->getNumChildren(); ++i)
+		{
+			getOrphanedChildren(group->getChild(i), output, true);
+		}
+	}
+	else
+		output.push_back(childNode);
+}
+
+bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
+{
+	if (!node)
+		return false;
+
+	// Search node callback
+	const osg::ref_ptr<osg::Callback> callback = const_cast<osg::Callback*>(node->getUpdateCallback());
+	osg::ref_ptr<osg::Callback> nodeCallback = getRealUpdateCallback(callback);
+	if (!nodeCallback)
+		return false;
+
+	if (dynamic_cast<const osgAnimation::Skeleton*>(node) || dynamic_cast<const osgAnimation::Bone*>(node))
+		return false;
+
+	// Search for UpdateMatrix callback
+	const osg::ref_ptr<osgAnimation::UpdateMatrixTransform> umt = osg::dynamic_pointer_cast<osgAnimation::UpdateMatrixTransform>(nodeCallback);
+	if (!umt)
+		return false;
+
+	// Look into animations list to see if this node is target of animations
+	std::string nodeName = umt->getName();
+	if (_animationTargetNames.find(nodeName) != _animationTargetNames.end())
+		return true;
+
+	return false;
+}
+
+
 int OSGtoGLTF::getCurrentMaterial()
 {
 	if (_ssStack.size() > 0)
@@ -701,6 +729,7 @@ int OSGtoGLTF::getCurrentMaterial()
 	return -1;
 }
 
+
 #pragma endregion
 
 
@@ -764,7 +793,6 @@ void OSGtoGLTF::apply(osg::Node& node)
 
 	// TODO: Create matrices only if animated. Recalculate transforms
 	// We only create relevant nodes like geometries and transform matrices
-	//if (geometry || matrix)
 	if (!isEmptyNode(&node) && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
 	{
 		_model.nodes.push_back(tinygltf::Node());
@@ -1064,6 +1092,45 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	if (pushedStateSet)
 	{
 		popStateSet();
+	}
+}
+
+void OSGtoGLTF::buildAnimationTargets(osg::Group* node)
+{
+	// Only build this list once
+	if (!node || _animationTargetNames.size() > 0)
+		return;
+
+	std::string nodeName = node->getName(); // for debug
+
+	// Traverse hierarchy looking for basic animations manager
+	osg::ref_ptr<osg::Callback> nodeCallback = const_cast<osg::Callback*>(node->getUpdateCallback());
+	osg::ref_ptr<osg::Callback> callback = getRealUpdateCallback(nodeCallback);
+
+	auto bam = osg::dynamic_pointer_cast<osgAnimation::BasicAnimationManager>(callback);
+	if (bam)
+	{
+		for (auto& animation : bam->getAnimationList())
+		{
+			for (auto& channel : animation->getChannels())
+			{
+				// Disconsider channels with 1 keyframe (non-animated). Mark them for reference
+				if (channel->getSampler() && channel->getSampler()->getKeyframeContainer() &&
+					channel->getSampler()->getKeyframeContainer()->size() > 1)
+					_animationTargetNames.emplace(channel->getTargetName());
+				else
+					_discardedAnimationTargetNames.emplace(channel->getTargetName());
+			}
+		}
+	}
+	else
+	{
+		for (unsigned int i = 0; i < node->getNumChildren(); ++i)
+		{
+			buildAnimationTargets(dynamic_cast<osg::Group*>(node->getChild(i)));
+			if (_animationTargetNames.size() > 0)
+				break;
+		}
 	}
 }
 

@@ -7,7 +7,8 @@ class OSGtoGLTF : public osg::NodeVisitor
 
 
 public:
-    OSGtoGLTF(tinygltf::Model& model) : _model(model), _firstMatrix(true)
+    OSGtoGLTF(tinygltf::Model& model) : 
+        _model(model), _firstMatrix(true), _firstMatrixNode(nullptr)
     {
         setTraversalMode(TRAVERSE_ALL_CHILDREN);
         _model.scenes.push_back(tinygltf::Scene());
@@ -21,6 +22,7 @@ public:
 
     void apply(osg::Geometry& geometry);
 
+    void OSGtoGLTF::buildAnimationTargets(osg::Group* node);
 
 private:
     typedef std::map<osg::ref_ptr<const osg::Node>, int> OsgNodeSequenceMap;
@@ -47,6 +49,9 @@ private:
     std::stack<std::pair<int, tinygltf::Skin*>> _gltfSkeletons;
     BindMatrices _skeletonInvBindMatrices;
     BoneIDNames _gltfBoneIDNames;
+
+    std::set<std::string> _animationTargetNames;          // Animation targets
+    std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
 
 
     void push(tinygltf::Node& gnode)
@@ -76,20 +81,6 @@ private:
         _ssStack.pop_back();
     }
 
-    int findBoneId(const std::string& boneName, const BoneIDNames& boneIdMap);
-
-    void BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNames& gltfBoneIDNames);
-
-    // template <typename T>
-    // osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array);
-
-    // unsigned getBytesInDataType(GLenum dataType);
-
-    // unsigned getBytesPerElement(const osg::Array* data);
-
-    // unsigned getBytesPerElement(const osg::DrawElements* data);
-
-    osg::ref_ptr<osg::FloatArray> convertMatricesToFloatArray(const BindMatrices& matrix);
 
     int getOrCreateBuffer(const osg::BufferData* data, GLenum type);
 
@@ -102,7 +93,19 @@ private:
     int getOrCreateAccessor(const osg::Array* data, int numElements, int componentType = TINYGLTF_PARAMETER_TYPE_FLOAT,
         int accessorType = TINYGLTF_TYPE_SCALAR, int bufferTarget = TINYGLTF_TARGET_ARRAY_BUFFER);
 
+
+    int findBoneId(const std::string& boneName, const BoneIDNames& boneIdMap);
+
+    osg::ref_ptr<osg::FloatArray> convertMatricesToFloatArray(const BindMatrices& matrix);
+
+    void BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNames& gltfBoneIDNames);
+
+    void getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*>& output, bool getMatrix = false);
+
+    bool isMatrixAnimated(const osg::MatrixTransform* node);
+
     int getCurrentMaterial();
 
-
 };
+
+
