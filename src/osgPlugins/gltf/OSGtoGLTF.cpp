@@ -140,7 +140,6 @@ osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callbac
 	return nodeMatrix;
 }
 
-
 osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node)
 {
 	osg::Matrix retMatrix;
@@ -222,7 +221,7 @@ osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
-void OSGtoGLTF::createNode(osg::Node& node)
+void OSGtoGLTF::apply(osg::Node& node)
 {
 	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
 	if (isRoot)
@@ -280,7 +279,7 @@ void OSGtoGLTF::createNode(osg::Node& node)
 
 void OSGtoGLTF::apply(osg::Group& group)
 {
-	createNode(static_cast<osg::Node&>(group));
+	apply(static_cast<osg::Node&>(group));
 
 	for (unsigned i = 0; i < group.getNumChildren(); ++i)
 	{
@@ -475,11 +474,12 @@ int OSGtoGLTF::getOrCreateBufferView(const osg::BufferData* data, GLenum type, G
 	_model.bufferViews.push_back(tinygltf::BufferView());
 	tinygltf::BufferView& bv = _model.bufferViews.back();
 	int id = _model.bufferViews.size() - 1;
-	_bufferViews[data] = id;
+	// _bufferViews[data] = id;
 
 	bv.buffer = bufferId;
 	bv.byteLength = data->getTotalDataSize();
 	bv.byteOffset = 0;
+	bv.byteStride = 0;
 
 	if (target != 0)
 		bv.target = target;
@@ -496,8 +496,11 @@ int OSGtoGLTF::getOrCreateGeometryAccessor(const osg::Array* data, osg::Primitiv
 		return a->second;
 
 	ArraySequenceMap::iterator bv = _bufferViews.find(data);
+	int bvID(-1);
 	if (bv == _bufferViews.end())
-		return -1;
+		bvID = getOrCreateBufferView(data, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+	else
+		bvID = bv->second;
 
 	_model.accessors.push_back(tinygltf::Accessor());
 	tinygltf::Accessor& accessor = _model.accessors.back();
@@ -511,7 +514,7 @@ int OSGtoGLTF::getOrCreateGeometryAccessor(const osg::Array* data, osg::Primitiv
 		data->getDataSize() == 4 ? TINYGLTF_TYPE_VEC4 :
 		TINYGLTF_TYPE_SCALAR;
 
-	accessor.bufferView = bv->second;
+	accessor.bufferView = bvID;
 	accessor.byteOffset = 0;
 	accessor.componentType = data->getDataType();
 	accessor.count = data->getNumElements();
@@ -548,7 +551,6 @@ int OSGtoGLTF::getOrCreateGeometryAccessor(const osg::Array* data, osg::Primitiv
 int OSGtoGLTF::createBindMatrixAccessor(const BindMatrices& matrix, int componentType)
 {
 	osg::ref_ptr<osg::FloatArray> matrixData = convertMatricesToFloatArray(matrix);
-
 	int bufferViewId = getOrCreateBufferView(matrixData, componentType, 0);
 
 	_model.accessors.push_back(tinygltf::Accessor());
@@ -705,7 +707,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		if (!geom)
 			return;
 
-		createNode(static_cast<osg::Node&>(drawable));
+		apply(static_cast<osg::Node&>(drawable));
 
 		osg::ref_ptr< osg::StateSet > ss = drawable.getStateSet();
 		bool pushedStateSet = false;
@@ -752,7 +754,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		osg::Vec3f posMin(FLT_MAX, FLT_MAX, FLT_MAX);
 		osg::Vec3f posMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
-		getOrCreateBufferView(positions, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+		// getOrCreateBufferView(positions, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
 		for (unsigned i = 0; i < positions->size(); ++i)
 		{
 			const osg::Vec3f& v = (*positions)[i];
@@ -769,10 +771,10 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		if (normalsd)
 			normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
 
-		if (normals)
-		{
-			getOrCreateBufferView(normals, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		}
+		//if (normals)
+		//{
+		//	getOrCreateBufferView(normals, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+		//}
 
 		osg::ref_ptr<osg::Vec4Array> tangents;
 		osg::ref_ptr<osg::Vec4dArray> tangentsd;
@@ -792,20 +794,20 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			}
 		}
 
-		if (tangents)
-		{
-			getOrCreateBufferView(tangents, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		}
+		//if (tangents)
+		//{
+		//	getOrCreateBufferView(tangents, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+		//}
 
 		osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
 		osg::Vec4dArray* colorsd = dynamic_cast<osg::Vec4dArray*>(geom->getColorArray());
 		if (colorsd)
 			colors = doubleToFloatArray<osg::Vec4Array>(colorsd);
 
-		if (colors)
-		{
-			getOrCreateBufferView(colors, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		}
+		//if (colors)
+		//{
+		//	getOrCreateBufferView(colors, TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+		//}
 
 		osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(geom->getTexCoordArray(0));
 		osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(geom->getTexCoordArray(0));
@@ -827,10 +829,10 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			}
 		}
 
-		if (texCoords.valid())
-		{
-			getOrCreateBufferView(texCoords.get(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
-		}
+		//if (texCoords.valid())
+		//{
+		//	getOrCreateBufferView(texCoords.get(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TARGET_ARRAY_BUFFER);
+		//}
 
 		for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
 		{
