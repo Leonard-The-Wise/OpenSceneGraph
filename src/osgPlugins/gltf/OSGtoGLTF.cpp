@@ -75,6 +75,105 @@ hashToString(const std::string& input)
 	return Stringify() << std::hex << std::setw(8) << std::setfill('0') << hashString(input);
 }
 
+const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::Callback>& callback)
+{
+	if (!callback)
+		return nullptr;
+
+	// Try to cast callback to a supported type
+	if (osg::dynamic_pointer_cast<osgAnimation::BasicAnimationManager>(callback))
+		return callback;
+	if (osg::dynamic_pointer_cast<osgAnimation::UpdateBone>(callback))
+		return callback;
+	if (osg::dynamic_pointer_cast<osgAnimation::UpdateMatrixTransform>(callback))
+		return callback;
+	if (osg::dynamic_pointer_cast<osgAnimation::UpdateMorph>(callback))
+		return callback;
+
+	return getRealUpdateCallback(callback->getNestedCallback());
+}
+
+osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback)
+{
+	const osg::ref_ptr<osgAnimation::UpdateMatrixTransform> umt = osg::dynamic_pointer_cast<osgAnimation::UpdateMatrixTransform>(callback);
+
+	osg::Matrix nodeMatrix;
+
+	if (!umt)
+		return nodeMatrix;
+
+	auto& stackedTransforms = umt->getStackedTransforms();
+
+	osg::Vec3d pos, scl;
+	osg::Quat rot, so;
+
+	// Should have only 1 of each or a matrix...
+	for (auto& stackedTransform : stackedTransforms)
+	{
+		if (auto translateElement = osg::dynamic_pointer_cast<osgAnimation::StackedTranslateElement>(stackedTransform))
+		{
+			nodeMatrix.preMultTranslate(translateElement->getTranslate());
+		}
+		else if (auto rotateElement = osg::dynamic_pointer_cast<osgAnimation::StackedQuaternionElement>(stackedTransform))
+		{
+			nodeMatrix.preMultRotate(rotateElement->getQuaternion());
+		}
+		else if (auto scaleElement = osg::dynamic_pointer_cast<osgAnimation::StackedScaleElement>(stackedTransform))
+		{
+			nodeMatrix.preMultScale(scaleElement->getScale());
+		}
+		else if (auto rotateAxisElement = osg::dynamic_pointer_cast<osgAnimation::StackedRotateAxisElement>(stackedTransform))
+		{
+			osg::Vec3 axis = rotateAxisElement->getAxis();
+			float angle = rotateAxisElement->getAngle();
+			osg::Quat rotQuat;
+			rotQuat.makeRotate(angle, axis);
+			nodeMatrix.preMultRotate(rotQuat);
+		}
+		else if (auto matrixElement = osg::dynamic_pointer_cast<osgAnimation::StackedMatrixElement>(stackedTransform))
+		{
+			nodeMatrix = matrixElement->getMatrix() * nodeMatrix;
+			break;
+		}
+	}
+
+	return nodeMatrix;
+}
+
+
+osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node)
+{
+	osg::Matrix retMatrix;
+	if (dynamic_cast<const osgAnimation::Skeleton*>(&node))
+	{
+		return retMatrix; // dynamic_cast<const Skeleton*>(&node)->getMatrix();
+	}
+	else if (dynamic_cast<const osg::MatrixTransform*>(&node))
+	{
+		osg::Matrix nodeMatrix = dynamic_cast<const osg::MatrixTransform*>(&node)->getMatrix();
+
+		// Check to see if it is animated.
+		osg::ref_ptr<osg::Callback> callback = const_cast<osg::Callback*>(node.getUpdateCallback());
+		osg::ref_ptr<osg::Callback> nodeCallback = getRealUpdateCallback(callback);
+
+		//if (!_ignoreAnimations && nodeCallback)
+		if (nodeCallback)
+		{
+			nodeMatrix = getAnimatedMatrixTransform(nodeCallback);
+		}
+
+		if (node.getNumParents() > 0)
+			return nodeMatrix * getMatrixFromSkeletonToNode(*node.getParent(0));
+		else
+			return nodeMatrix;
+	}
+	else if (node.getNumParents() > 0)
+		return getMatrixFromSkeletonToNode(*node.getParent(0));
+
+	return retMatrix;
+}
+
+
 template <typename T>
 osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 {
@@ -123,7 +222,7 @@ osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
-void OSGtoGLTF::apply(osg::Node& node)
+void OSGtoGLTF::createNode(osg::Node& node)
 {
 	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
 	if (isRoot)
@@ -177,11 +276,24 @@ void OSGtoGLTF::apply(osg::Node& node)
 		_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
 		_gltfBoneIDNames[gnode.name] = boneID;
 	}
+
+	// Fix node matrix for rig
+	osgAnimation::RigGeometry* rig = dynamic_cast<osgAnimation::RigGeometry*>(&node);
+	if (rig)
+	{
+		osg::Matrix matrixTransform = getMatrixFromSkeletonToNode(*rig);
+		if (!matrixTransform.isIdentity())
+		{
+			const double* ptr = matrixTransform.ptr();
+			for (unsigned i = 0; i < 16; ++i)
+				_model.nodes.back().matrix.push_back(*ptr++);
+		}
+	}
 }
 
 void OSGtoGLTF::apply(osg::Group& group)
 {
-	apply(static_cast<osg::Node&>(group));
+	createNode(static_cast<osg::Node&>(group));
 
 	for (unsigned i = 0; i < group.getNumChildren(); ++i)
 	{
@@ -397,8 +509,6 @@ int OSGtoGLTF::getOrCreateGeometryAccessor(const osg::Array* data, osg::Primitiv
 	if (a != _accessors.end())
 		return a->second;
 
-	//_accessors.emplace(arrayData);
-
 	ArraySequenceMap::iterator bv = _bufferViews.find(data);
 	if (bv == _bufferViews.end())
 		return -1;
@@ -612,7 +722,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		if (!geom)
 			return;
 
-		apply(static_cast<osg::Node&>(drawable));
+		createNode(static_cast<osg::Node&>(drawable));
 
 		osg::ref_ptr< osg::StateSet > ss = drawable.getStateSet();
 		bool pushedStateSet = false;

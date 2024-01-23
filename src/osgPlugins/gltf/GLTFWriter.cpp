@@ -71,4 +71,13 @@ void GLTFWriter::convertOSGtoGLTF(const osg::Node& node, tinygltf::Model& model)
 
 	transform->removeChild(&nc_node);
 	nc_node.unref_nodelete();
+
+	// Verificação básica da hierarquia de nós
+	for (const auto& modelnode : model.nodes) 
+	{
+		if (std::find(modelnode.children.begin(), modelnode.children.end(), &modelnode - &model.nodes[0]) != modelnode.children.end()) {
+			OSG_WARN << "Erro de hierarquia: Nó é filho de si mesmo" << std::endl;
+		}
+		// Adicione mais verificações conforme necessário
+	}
 }

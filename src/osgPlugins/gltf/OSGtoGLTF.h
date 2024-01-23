@@ -5,9 +5,9 @@
 class OSGtoGLTF : public osg::NodeVisitor
 {
 private:
-    typedef std::map<osg::ref_ptr< const osg::Node >, int> OsgNodeSequenceMap;
+    typedef std::map<osg::ref_ptr<const osg::Node>, int> OsgNodeSequenceMap;
     typedef std::map<osg::ref_ptr<const osg::BufferData>, int> ArraySequenceMap;
-    typedef std::map< osg::ref_ptr<const osg::Array>, int> AccessorSequenceMap;
+    typedef std::map<osg::ref_ptr<const osg::Array>, int> AccessorSequenceMap;
     typedef std::vector< osg::ref_ptr< osg::StateSet > > StateSetStack;
     typedef std::map<int, const osg::Matrix*> BindMatrices;
     typedef std::map<std::string, int> BoneIDNames;
@@ -70,7 +70,7 @@ public:
     template <typename T>
     osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array);
 
-    void apply(osg::Node& node);
+    void createNode(osg::Node& node);
 
     void apply(osg::Group& group);
 
