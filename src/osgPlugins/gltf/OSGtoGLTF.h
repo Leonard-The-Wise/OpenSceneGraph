@@ -23,13 +23,14 @@ private:
     ArraySequenceMap _accessors;
     StateSetStack _ssStack;
     RiggedMeshStack _riggedMeshMap;
+    bool _firstMatrix;
 
     std::stack<std::pair<int, tinygltf::Skin*>> _gltfSkeletons;
     BindMatrices _skeletonInvBindMatrices;
     BoneIDNames _gltfBoneIDNames;
 
 public:
-    OSGtoGLTF(tinygltf::Model& model) : _model(model)
+    OSGtoGLTF(tinygltf::Model& model) : _model(model), _firstMatrix(true)
     {
         setTraversalMode(TRAVERSE_ALL_CHILDREN);
         //setNodeMaskOverride(~0);

@@ -243,7 +243,29 @@ osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 
 void OSGtoGLTF::apply(osg::Node& node)
 {
+	// for debug
+	std::string NodeName = node.getName();
+
+	// Determine the nature of the node
+	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(&node);
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(&node);
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&node);
+	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
+	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
+
+	// First matrix: GLTF uses a +X=right +y=up -z=forward coordinate system
+	// so we fix it here
+	if (_firstMatrix && matrix)
+	{
+		osg::Matrix transform = osg::Matrixd::rotate(osg::Z_AXIS, osg::Y_AXIS);
+		osg::Matrix original = matrix->getMatrix();
+		transform = transform * original;
+		matrix->setMatrix(transform);
+		_firstMatrix = false;
+	}
+
 	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
+	//if (isRoot && matrix)
 	if (isRoot)
 	{
 		// put a placeholder here just to prevent any other nodes
@@ -259,7 +281,6 @@ void OSGtoGLTF::apply(osg::Node& node)
 	}
 
 	// Build our Skin (skeletons) early, before traverse and save pair (ID/Skin)
-	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
 	if (skeleton)
 	{
 		_model.skins.push_back(tinygltf::Skin());
@@ -273,39 +294,58 @@ void OSGtoGLTF::apply(osg::Node& node)
 		popStateSet();
 	}
 
-	_model.nodes.push_back(tinygltf::Node());
-	tinygltf::Node& gnode = _model.nodes.back();
-	int id = _model.nodes.size() - 1;
-	gnode.name = ::Stringify() << (node.getName().empty() ? (Stringify() << "_gltfNode_" << id) : node.getName());
-	_osgNodeSeqMap[&node] = id;
+	// TODO: Create matrices only if animated. Recalculate transforms
+	// We only create relevant nodes like geometries and transform matrices
+	//if (geometry || matrix)
+	//{
+		_model.nodes.push_back(tinygltf::Node());
+		tinygltf::Node& gnode = _model.nodes.back();
+		int id = _model.nodes.size() - 1;
+		gnode.name = ::Stringify() << (node.getName().empty() ? (Stringify() << "_gltfNode_" << id) : node.getName());
+		
+		// For rig geometries, they are not children of any nodes.
+		if (!rigGeometry)
+			_osgNodeSeqMap[&node] = id;
+		else
+			_model.scenes[_model.defaultScene].nodes.push_back(id);
 
-	if (isRoot)
-	{
-		// replace the placeholder with the actual root id.
-		_model.scenes[_model.defaultScene].nodes.back() = id;
-	}
+		if (isRoot)
+		{
+			// replace the placeholder with the actual root id.
+			_model.scenes[_model.defaultScene].nodes[0] = id;
+		}
 
-	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
-	if (bone)
-	{
-		// The same as above
-		int boneID = _model.nodes.size() - 1;
+		if (bone)
+		{
+			// The same as above
+			int boneID = _model.nodes.size() - 1;
 
-		_gltfSkeletons.top().second->joints.push_back(boneID);
-		_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
-		_gltfBoneIDNames[gnode.name] = boneID;
-	}
+			_gltfSkeletons.top().second->joints.push_back(boneID);
+			_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
+			_gltfBoneIDNames[gnode.name] = boneID;
+		}
+	//}
 }
 
 void OSGtoGLTF::apply(osg::Group& group)
 {
 	apply(static_cast<osg::Node&>(group));
 
-	for (unsigned i = 0; i < group.getNumChildren(); ++i)
-	{
-		int id = _osgNodeSeqMap[group.getChild(i)];
-		_model.nodes.back().children.push_back(id);
-	}
+	// Determine nature of group
+	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
+
+	// Only aply children for (future animated) matrices since we are skipping normal groups
+	//if (matrix)
+	//{
+		for (unsigned i = 0; i < group.getNumChildren(); ++i)
+		{
+			if (_osgNodeSeqMap.find(group.getChild(i)) != _osgNodeSeqMap.end())
+			{
+				int id = _osgNodeSeqMap.at(group.getChild(i));
+				_model.nodes.back().children.push_back(id);
+			}
+		}
+	//}
 }
 
 void OSGtoGLTF::apply(osg::Transform& xform)
@@ -507,7 +547,6 @@ int OSGtoGLTF::getOrCreateBufferView(const osg::BufferData* data, GLenum type, G
 	return id;
 }
 
-
 int OSGtoGLTF::getOrCreateGeometryAccessor(const osg::Array* data, osg::PrimitiveSet* pset, tinygltf::Primitive& prim, const std::string& attr)
 {
 	//osg::ref_ptr<const osg::BufferData> arrayData = data;
@@ -606,7 +645,6 @@ int OSGtoGLTF::getOrCreateAccessor(const osg::Array* data, int numElements, int 
 
 	return accessorId;
 }
-
 
 int OSGtoGLTF::getCurrentMaterial()
 {
