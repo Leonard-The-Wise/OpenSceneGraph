@@ -241,17 +241,60 @@ osg::ref_ptr<T> OSGtoGLTF::doubleToFloatArray(const osg::Array* array)
 	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
+bool isEmptyGeometry(osg::Node* node)
+{
+	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(node);
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(node);
+
+	if (!geometry)
+		return true;
+
+	if (rigGeometry)
+		return true; // geometry = rigGeometry->getSourceGeometry();
+
+	return !geometry->getVertexArray();
+}
+
+bool isEmptyNode(osg::Node* node)
+{
+	if (!node)
+		return true;
+
+	osg::Group* group = dynamic_cast<osg::Group*>(node);
+	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(node);
+	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(node);
+	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(node);
+
+	if (skeleton || bone)
+		return false;
+
+	if (geometry)
+		return isEmptyGeometry(node);
+
+	if (group)
+	{
+		for (unsigned int i = 0; i < group->getNumChildren(); ++i)
+		{
+			if (!isEmptyNode(group->getChild(i)))
+				return false;
+		}
+	}
+	
+	return true;
+}
+
 void OSGtoGLTF::apply(osg::Node& node)
 {
-	// for debug
-	std::string NodeName = node.getName();
-
 	// Determine the nature of the node
 	osg::Geometry* geometry = dynamic_cast<osg::Geometry*>(&node);
 	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(&node);
 	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&node);
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
 	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
+
+	std::string NodeName = node.getName();
+	if (skeleton)
+		NodeName = NodeName.empty() ? "Skeleton" : NodeName;
 
 	// First matrix: GLTF uses a +X=right +y=up -z=forward coordinate system
 	// so we fix it here
@@ -297,11 +340,12 @@ void OSGtoGLTF::apply(osg::Node& node)
 	// TODO: Create matrices only if animated. Recalculate transforms
 	// We only create relevant nodes like geometries and transform matrices
 	//if (geometry || matrix)
-	//{
+	if (!isEmptyNode(&node) || rigGeometry)
+	{
 		_model.nodes.push_back(tinygltf::Node());
 		tinygltf::Node& gnode = _model.nodes.back();
 		int id = _model.nodes.size() - 1;
-		gnode.name = ::Stringify() << (node.getName().empty() ? (Stringify() << "_gltfNode_" << id) : node.getName());
+		gnode.name = ::Stringify() << (NodeName.empty() ? (Stringify() << "_gltfNode_" << id) : NodeName);
 		
 		// For rig geometries, they are not children of any nodes.
 		if (!rigGeometry)
@@ -324,7 +368,7 @@ void OSGtoGLTF::apply(osg::Node& node)
 			_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
 			_gltfBoneIDNames[gnode.name] = boneID;
 		}
-	//}
+	}
 }
 
 void OSGtoGLTF::apply(osg::Group& group)
@@ -356,7 +400,7 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 	osg::Matrix matrix;
 	xform.computeLocalToWorldMatrix(matrix, this);
 
-	if (!matrix.isIdentity())
+	if (!matrix.isIdentity() && !isEmptyNode(&xform))
 	{
 		const double* ptr = matrix.ptr();
 		for (unsigned i = 0; i < 16; ++i)
@@ -942,16 +986,16 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			}
 
 			if (normals)
-				getOrCreateGeometryAccessor(normals, pset, primitive, "NORMAL");
+				getOrCreateGeometryAccessor(normals, nullptr, primitive, "NORMAL");
 
 			if (tangents)
-				getOrCreateGeometryAccessor(tangents, pset, primitive, "TANGENT");
+				getOrCreateGeometryAccessor(tangents, nullptr, primitive, "TANGENT");
 
 			if (colors)
-				getOrCreateGeometryAccessor(colors, pset, primitive, "COLOR_0");
+				getOrCreateGeometryAccessor(colors, nullptr, primitive, "COLOR_0");
 
 			if (texCoords)
-				getOrCreateGeometryAccessor(texCoords.get(), pset, primitive, "TEXCOORD_0");
+				getOrCreateGeometryAccessor(texCoords.get(), nullptr, primitive, "TEXCOORD_0");
 		}
 	}
 
