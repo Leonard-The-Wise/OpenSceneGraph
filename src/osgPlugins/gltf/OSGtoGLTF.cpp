@@ -817,7 +817,6 @@ void OSGtoGLTF::createFloatSampler(tinygltf::Animation& gltfAnimation, int targe
 	gltfAnimation.channels.push_back(channel);
 }
 
-
 void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgAnimation)
 {
 	std::string animationName = osgAnimation->getName().c_str();
