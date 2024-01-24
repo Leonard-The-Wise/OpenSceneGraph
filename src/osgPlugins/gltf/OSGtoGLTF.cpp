@@ -573,9 +573,7 @@ void OSGtoGLTF::getOrphanedChildren(osg::Node* childNode, std::vector<osg::Node*
 	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(childNode);
 	osg::Group* group = dynamic_cast<osg::Group*>(childNode);
 
-	// Don't invert the logic. 
-	// First check if animated, then grab it (push_back) if it is to get matrix or else just return
-	if (isMatrixAnimated(matrix))
+	if (matrix)
 	{
 		if (getMatrix)
 			output.push_back(childNode);
@@ -598,18 +596,13 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 	if (!node)
 		return false;
 
-	// We always consider the first matrix as animated (because it is the main placeholder of things)
-	if (node == _firstMatrixNode)
-		return true;
-
-	// We also consider bones and skeleton as always animated
-	if (dynamic_cast<const osgAnimation::Skeleton*>(node) || dynamic_cast<const osgAnimation::Bone*>(node))
-		return true;
-
 	// Search node callback
 	const osg::ref_ptr<osg::Callback> callback = const_cast<osg::Callback*>(node->getUpdateCallback());
 	osg::ref_ptr<osg::Callback> nodeCallback = getRealUpdateCallback(callback);
 	if (!nodeCallback)
+		return false;
+
+	if (dynamic_cast<const osgAnimation::Skeleton*>(node) || dynamic_cast<const osgAnimation::Bone*>(node))
 		return false;
 
 	// Search for UpdateMatrix callback
@@ -623,57 +616,6 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 		return true;
 
 	return false;
-}
-
-bool OSGtoGLTF::hasAnimatedMatrixParent(const osg::Node* node)
-{
-	if (!node)
-		return false;
-
-	if (dynamic_cast<const osg::MatrixTransform*>(node) && isMatrixAnimated(dynamic_cast<const osg::MatrixTransform*>(node)))
-		return true;
-
-	if (node->getNumParents() == 0)
-		return false;
-
-	return hasAnimatedMatrixParent(node->getParent(0));
-}
-
-
-osg::Matrix OSGtoGLTF::buildParentMatrices(const osg::Node& node, bool useAllParents)
-{
-	osg::Matrix mult;
-	std::string nodeName = node.getName();
-
-	if (!useAllParents)
-	{
-		if (isMatrixAnimated(dynamic_cast<const osg::MatrixTransform*>(&node)) || dynamic_cast<const osgAnimation::Skeleton*>(&node))
-		{
-			return mult;
-		}
-	}
-
-	if (node.getNumParents() > 0)
-	{
-		mult = buildParentMatrices(*node.getParent(0), useAllParents);
-	}
-
-	if (auto matrixObj = dynamic_cast<const osg::MatrixTransform*>(&node))
-	{
-		osg::Matrix m = matrixObj->getMatrix();
-
-		// Check to see if it has update callback
-		osg::ref_ptr<osg::Callback> callback = const_cast<osg::Callback*>(node.getUpdateCallback());
-		osg::ref_ptr<osg::Callback> nodeCallback = getRealUpdateCallback(callback);
-		if (nodeCallback)
-		{
-			m = getAnimatedMatrixTransform(nodeCallback);
-		}
-
-		return m * mult;
-	}
-
-	return mult;
 }
 
 
@@ -820,9 +762,11 @@ void OSGtoGLTF::apply(osg::Node& node)
 	}
 
 	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
-	if (isRoot && isMatrixAnimated(matrix)) // Matrix Animated also accounts for first matrix
+	if (isRoot && matrix)
+		//if (isRoot)
 	{
-		// put a placeholder to later fill up
+		// put a placeholder here just to prevent any other nodes
+		// from thinking they are the root
 		_model.scenes[_model.defaultScene].nodes.push_back(-1);
 	}
 
@@ -849,7 +793,7 @@ void OSGtoGLTF::apply(osg::Node& node)
 
 	// TODO: Create matrices only if animated. Recalculate transforms
 	// We only create relevant nodes like geometries and transform matrices
-	if (!isEmptyNode(&node) && (geometry || isMatrixAnimated(matrix)) || (rigGeometry && !isEmptyRig(rigGeometry)))
+	if (!isEmptyNode(&node) && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
 	{
 		_model.nodes.push_back(tinygltf::Node());
 		tinygltf::Node& gnode = _model.nodes.back();
@@ -886,10 +830,9 @@ void OSGtoGLTF::apply(osg::Group& group)
 
 	// Determine nature of group
 	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
-	std::string NodeName = group.getName();
 
 	// Only aply children for matrices since we are skipping normal groups
-	if (isMatrixAnimated(matrix) && !isEmptyNode(&group))
+	if (matrix && !isEmptyNode(&group))
 	{
 		for (unsigned i = 0; i < group.getNumChildren(); ++i)
 		{
@@ -918,20 +861,16 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 {
 	apply(static_cast<osg::Group&>(xform));
 
-	// Compute local matrices for created matrix nodes
-	//if (isMatrixAnimated(dynamic_cast<osg::MatrixTransform*>(&xform)))
-	//{
-		osg::Matrix matrix;
-		xform.computeLocalToWorldMatrix(matrix, this);
+	// Compute local matrices
+	osg::Matrix matrix;
+	xform.computeLocalToWorldMatrix(matrix, this);
 
-		//matrix = buildParentMatrices(*xform.getParent(0), hasAnimatedMatrixParent(xform.getParent(0)) ? false : true);
-		if (!matrix.isIdentity() && !isEmptyNode(&xform))
-		{
-			const double* ptr = matrix.ptr();
-			for (unsigned i = 0; i < 16; ++i)
-				_model.nodes.back().matrix.push_back(*ptr++);
-		}
-	//}
+	if (!matrix.isIdentity() && !isEmptyNode(&xform))
+	{
+		const double* ptr = matrix.ptr();
+		for (unsigned i = 0; i < 16; ++i)
+			_model.nodes.back().matrix.push_back(*ptr++);
+	}
 
 	// Post-process skeleton... create inverse bind matrices accessor and skin weights
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
@@ -996,7 +935,6 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	int meshID = _model.meshes.size() - 1;
 	_model.nodes.back().mesh = meshID;
 
-	osg::Matrix mainTransform = buildParentMatrices(*geom, hasAnimatedMatrixParent(geom) ? false : true);
 	if (rigGeometry)
 	{
 		_riggedMeshMap[meshID] = rigGeometry;
@@ -1006,10 +944,6 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
 		positions = transformArray(positions, transformMatrix, false);
 	}
-	//else
-	//{
-	//	positions = transformArray(positions, mainTransform, false);
-	//}
 
 	osg::Vec3f posMin(FLT_MAX, FLT_MAX, FLT_MAX);
 	osg::Vec3f posMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -1043,10 +977,6 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 		normals = transformArray(normals, transformMatrix, true);
 	}
-	//else
-	//{
-	//	normals = transformArray(normals, mainTransform, true);
-	//}
 
 	osg::ref_ptr<osg::Vec4Array> tangents;
 	osg::ref_ptr<osg::Vec4dArray> tangentsd;
@@ -1079,10 +1009,6 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 		tangents = transformArray(tangents, transformMatrix, true);
 	}
-	//else
-	//{
-	//	tangents = transformArray(tangents, mainTransform, true);
-	//}
 
 	osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
 	osg::Vec4dArray* colorsd = dynamic_cast<osg::Vec4dArray*>(geom->getColorArray());
@@ -1191,7 +1117,7 @@ void OSGtoGLTF::buildAnimationTargets(osg::Group* node)
 				// Disconsider channels with 1 keyframe (non-animated). Mark them for reference
 				if (channel->getSampler() && channel->getSampler()->getKeyframeContainer() &&
 					channel->getSampler()->getKeyframeContainer()->size() > 1)
-					_animationTargetNames.emplace(channel->getTargetName(), node);
+					_animationTargetNames.emplace(channel->getTargetName());
 				else
 					_discardedAnimationTargetNames.emplace(channel->getTargetName());
 			}
