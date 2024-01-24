@@ -123,7 +123,7 @@ private:
 
     bool isMatrixAnimated(const osg::MatrixTransform* node);
 
-    void createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, bool isRigMorph);
+    void createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph);
 
     void createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel);
 

@@ -153,7 +153,7 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 	{
 		returnArray = new osg::Vec4Array();
 		returnArray->reserveArray(array->getNumElements());
-		for (auto& vec : *osg::dynamic_pointer_cast<osg::Vec4Array>(array))
+		for (auto& vec : *osg::dynamic_pointer_cast<const osg::Vec4Array>(array))
 		{
 			osg::Vec4 v;
 			if (normalize)
@@ -173,7 +173,7 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 	{
 		returnArray = new osg::Vec3Array();
 		returnArray->reserveArray(array->getNumElements());
-		for (auto& vec : *osg::dynamic_pointer_cast<osg::Vec3Array>(array))
+		for (auto& vec : *osg::dynamic_pointer_cast<const osg::Vec3Array>(array))
 		{
 			osg::Vec3 v; 
 			if (normalize)
@@ -646,7 +646,15 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 
 #pragma region Morph Geometry processing
 
-void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, bool isRigMorph)
+/// <summary>
+/// FIXME: This function is disabled for now... only marking dummy missing targets so animations won't emit warnings, 
+/// until we find a way to convert morph animations from OSG. (see for loop).
+/// </summary>
+/// <param name="geometry"></param>
+/// <param name="mesh"></param>
+/// <param name="meshNodeId"></param>
+/// <param name="isRigMorph"></param>
+void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph)
 {
 	const osgAnimation::MorphGeometry* morph = isRigMorph ?
 		dynamic_cast<const osgAnimation::MorphGeometry*>(dynamic_cast<const osgAnimation::RigGeometry*>(geometry)->getSourceGeometry()) :
@@ -669,18 +677,103 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 		const osg::Geometry* morphTarget = morphTargetItem.getGeometry();
 		std::string morphTargetName = morphTarget->getName();
 
-		const osg::Array* vertices = morphTarget->getVertexArray();
+		// FIXME:: DISABLED for now. Only put a dummy name here to avoid warnings.
+		missingTargets.emplace(morphTargetName);
+		continue;
+
+		// Create vertices accessor
+		osg::ref_ptr<const osg::Vec3Array> vertices = dynamic_cast<const osg::Vec3Array*>(morphTarget->getVertexArray());
+		const osg::Vec3dArray* verticesd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getVertexArray());
+		if (verticesd)
+			vertices = doubleToFloatArray<osg::Vec3Array>(verticesd);
+
 		if (!vertices)
 		{
 			OSG_WARN << "WARNING: Morph target contains no vertices: " << morphTargetName << std::endl;
 			continue;
 		}
 
-		int accessorIndex = getOrCreateAccessor(vertices, vertices->getNumElements(),
+		if (!transformMatrix.isIdentity())
+			vertices = transformArray(vertices, transformMatrix, false);
+
+		osg::Vec3f verticesMin(FLT_MAX, FLT_MAX, FLT_MAX);
+		osg::Vec3f verticesMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+		for (unsigned i = 0; i < vertices->size(); ++i)
+		{
+			const osg::Vec3f& v = (*vertices)[i];
+			verticesMin.x() = osg::minimum(verticesMin.x(), v.x());
+			verticesMin.y() = osg::minimum(verticesMin.y(), v.y());
+			verticesMin.z() = osg::minimum(verticesMin.z(), v.z());
+			verticesMax.x() = osg::maximum(verticesMax.x(), v.x());
+			verticesMax.y() = osg::maximum(verticesMax.y(), v.y());
+			verticesMax.z() = osg::maximum(verticesMax.z(), v.z());
+		}
+
+		int vertexAccessorIndex = getOrCreateAccessor(vertices, vertices->getNumElements(),
 			TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
 
-		tinygltf::Value morphTargetAttributes;
-		morphTargetAttributes.Get<tinygltf::Value::Object>().emplace("POSITION", tinygltf::Value(accessorIndex));
+		tinygltf::Accessor& vertexAccessor = _model.accessors[vertexAccessorIndex];
+		vertexAccessor.minValues.push_back(verticesMin.x());
+		vertexAccessor.minValues.push_back(verticesMin.y());
+		vertexAccessor.minValues.push_back(verticesMin.z());
+		vertexAccessor.maxValues.push_back(verticesMax.x());
+		vertexAccessor.maxValues.push_back(verticesMax.y());
+		vertexAccessor.maxValues.push_back(verticesMax.z());
+
+		std::map<std::string, int> morphTargetAttributes;
+		morphTargetAttributes["POSITION"] = vertexAccessorIndex;
+
+		// Create normals accesssor
+		osg::ref_ptr<const osg::Vec3Array> normals = dynamic_cast<const osg::Vec3Array*>(morphTarget->getNormalArray());
+		const osg::Vec3dArray* normalsd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getNormalArray());
+		if (normalsd)
+			normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
+
+		if (normals)
+		{
+			if (!transformMatrix.isIdentity())
+				normals = transformArray(normals, transformMatrix, true);
+
+			int normalAccessorIndex = getOrCreateAccessor(normals, normals->getNumElements(),
+				TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+			morphTargetAttributes["NORMAL"] = normalAccessorIndex;
+		}
+
+		// Create tangents accessor
+		osg::ref_ptr<const osg::Vec4Array> tangents;
+		const osg::Vec4dArray* tangentsd(nullptr);
+		for (auto& attrib : morphTarget->getVertexAttribArrayList())
+		{
+			bool isTangent = false;
+			if (attrib->getUserValue("tangent", isTangent))
+			{
+				if (isTangent)
+				{
+					tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
+					tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
+					if (tangentsd)
+						tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
+					break;
+				}
+			}
+		}
+
+		if (tangents)
+		{
+			if (!transformMatrix.isIdentity())
+				tangents = transformArray(tangents, transformMatrix, true);
+
+			int tangentAccessorIndex = getOrCreateAccessor(tangents, tangents->getNumElements(),
+				TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+			morphTargetAttributes["TANGENT"] = tangentAccessorIndex;
+		}
+
+		primitive.targets.push_back(morphTargetAttributes);
+
+		_gltfAnimationTargets[morphTargetName] = meshNodeId;
 	}
 }
 
@@ -1466,6 +1559,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	tinygltf::Mesh& mesh = _model.meshes.back();
 	int meshID = _model.meshes.size() - 1;
 	_model.nodes.back().mesh = meshID;
+	int meshNodeId = _model.nodes.size() - 1;
 
 	if (rigGeometry)
 	{
@@ -1570,6 +1664,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	if (texCoords)
 		texCoords = flipUVs(texCoords);
 
+	int currentMaterial = getCurrentMaterial();
 	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
 	{
 		osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);
@@ -1577,14 +1672,8 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		mesh.primitives.push_back(tinygltf::Primitive());
 		tinygltf::Primitive& primitive = mesh.primitives.back();
 
-		int currentMaterial = getCurrentMaterial();
 		if (currentMaterial >= 0)
 		{
-			// Cesium may crash if using texture without texCoords
-			// gltf_validator will report it as errors
-			// ThreeJS seems to be fine though
-			// TODO: check if the material actually has any texture in it
-			// TODO: the material should not be added if not used anywhere
 			if (texCoords.valid()) 
 			{
 				primitive.material = currentMaterial;
@@ -1628,12 +1717,12 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	// Process morphed geometry
 	if (morph)
 	{
-		createMorphTargets(morph, mesh, false);
+		createMorphTargets(morph, mesh, meshNodeId, false);
 	}
 
 	// Look for morph geometries inside rig
 	if (rigMorph)
-		createMorphTargets(rigGeometry, mesh, true); // We always pass the parent geometry as parameter.
+		createMorphTargets(rigGeometry, mesh, meshNodeId, true); // We always pass the parent geometry as parameter.
 
 
 	if (pushedStateSet)
