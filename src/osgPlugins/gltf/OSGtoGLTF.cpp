@@ -2,6 +2,7 @@
 
 #include <osg/Node>
 #include <osg/Geometry>
+#include <osg/Material>
 #include <osg/MatrixTransform>
 #include <osgDB/FileNameUtils>
 #include <osgDB/ReaderWriter>
@@ -28,6 +29,8 @@
 #include "Stringify.h"
 #include "OSGtoGLTF.h"
 
+// Avoid spamming missing targets
+static std::set<std::string> missingTargets;
 
 #pragma region Utility functions
 
@@ -192,6 +195,18 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
+static osg::ref_ptr<osg::Vec2Array> flipUVs(const osg::ref_ptr<osg::Vec2Array>& texCoords)
+{
+	osg::ref_ptr<osg::Vec2Array> returnArray = new osg::Vec2Array(*texCoords);
+
+	for (auto& v : *returnArray)
+	{
+		v = osg::Vec2(v.x(), 1 - v.y());
+	}
+
+	return returnArray;
+}
+
 template <typename T>
 osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array)
 {
@@ -320,15 +335,6 @@ static std::string getLastNamePart(const std::string& input)
 		return input.substr(pos + 1);
 	}
 	return input;
-}
-
-osg::Quat normalizeQuaternion(const osg::Quat& quat)
-{
-	float length = sqrt(quat.x() * quat.x() + quat.y() * quat.y() + quat.z() * quat.z() + quat.w() * quat.w());
-	if (length == 0) {
-		return osg::Quat(0, 0, 0, 1);
-	}
-	return osg::Quat(quat.x() / length, quat.y() / length, quat.z() / length, quat.w() / length);
 }
 
 #pragma endregion
@@ -636,6 +642,51 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 	return false;
 }
 
+#pragma endregion
+
+#pragma region Morph Geometry processing
+
+void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, bool isRigMorph)
+{
+	const osgAnimation::MorphGeometry* morph = isRigMorph ?
+		dynamic_cast<const osgAnimation::MorphGeometry*>(dynamic_cast<const osgAnimation::RigGeometry*>(geometry)->getSourceGeometry()) :
+		dynamic_cast<const osgAnimation::MorphGeometry*>(geometry);
+
+	if (!morph)
+		return;
+
+	// Calculate transforms for geometry
+	// Always use parent geometry to calculate matrices because morph can be nested inside geometry.
+	osg::Matrix transformMatrix;
+	if (isRigMorph)
+		transformMatrix = getMatrixFromSkeletonToNode(*geometry); 
+
+	tinygltf::Primitive& primitive = mesh.primitives.back();
+	std::string morphName = morph->getName();
+
+	for (auto& morphTargetItem : morph->getMorphTargetList())
+	{
+		const osg::Geometry* morphTarget = morphTargetItem.getGeometry();
+		std::string morphTargetName = morphTarget->getName();
+
+		const osg::Array* vertices = morphTarget->getVertexArray();
+		if (!vertices)
+		{
+			OSG_WARN << "WARNING: Morph target contains no vertices: " << morphTargetName << std::endl;
+			continue;
+		}
+
+		int accessorIndex = getOrCreateAccessor(vertices, vertices->getNumElements(),
+			TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+		tinygltf::Value morphTargetAttributes;
+		morphTargetAttributes.Get<tinygltf::Value::Object>().emplace("POSITION", tinygltf::Value(accessorIndex));
+	}
+}
+
+#pragma endregion
+
+
 #pragma region Animations Processing
 
 void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel)
@@ -836,8 +887,13 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 			targetId = _gltfAnimationTargets.at(targetName);
 		else
 		{
-			OSG_WARN << "WARNING: Animation target " << targetName << " not found." << std::endl;
-			continue;
+			if (missingTargets.find(targetName) == missingTargets.end() && 
+				_discardedAnimationTargetNames.find(targetName) == _discardedAnimationTargetNames.end())
+			{
+				OSG_WARN << "WARNING: Animation target " << targetName << " not found." << std::endl;
+				missingTargets.emplace(targetName);
+				continue;
+			}
 		}
 
 		if (auto vec3Channel = dynamic_cast<osgAnimation::Vec3LinearChannel*>(channel.get()))
@@ -888,116 +944,304 @@ void OSGtoGLTF::addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callb
 
 #pragma endregion
 
+
 #pragma region Materials Processing
+
+OSGtoGLTF::MaterialSurfaceLayer OSGtoGLTF::getTexMaterialLayer(const osg::Material* material, const osg::Texture* texture)
+{
+	if (!texture || !material)
+		return MaterialSurfaceLayer::None;
+
+	std::string textureFile = osgDB::getSimpleFileName(texture->getImage(0)->getFileName());
+	std::string layerName;
+
+	// Run through all known layer names and try to match textureFile
+	for (auto& knownLayer : _knownMaterialLayerNames)
+	{
+		std::string materialFile;
+		std::ignore = material->getUserValue(std::string("textureLayer_") + knownLayer, materialFile);
+		if (materialFile == textureFile)
+		{
+			if (knownLayer == "AOPBR")
+				return MaterialSurfaceLayer::AmbientOcclusion;
+			else if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" ||
+				knownLayer == "DiffuseIntensity")
+				return MaterialSurfaceLayer::Albedo;
+			else if (knownLayer == "ClearCoat" || knownLayer == "Matcap")
+				return MaterialSurfaceLayer::ClearCoat;
+			else if (knownLayer == "NormalMap" || knownLayer == "BumpMap")
+				return MaterialSurfaceLayer::NormalMap;
+			else if (knownLayer == "ClearCoatNormalMap")
+				return MaterialSurfaceLayer::ClearCoatNormal;
+			else if (knownLayer == "ClearCoatRoughness")
+				return MaterialSurfaceLayer::ClearCoatRoughness;
+			else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor" || knownLayer == "SpecularHardness")
+				return MaterialSurfaceLayer::Specular;
+			else if (knownLayer == "Displacement" || knownLayer == "CavityPBR")
+				return MaterialSurfaceLayer::DisplacementColor;
+			else if (knownLayer == "EmitColor")
+				return MaterialSurfaceLayer::Emissive;
+			else if (knownLayer == "GlossinessPBR" || knownLayer == "RoughnessPBR" || knownLayer == "SheenRoughness")
+				return MaterialSurfaceLayer::Roughness;
+			else if (knownLayer == "Opacity" || knownLayer == "AlphaMask")
+				return MaterialSurfaceLayer::Transparency;
+			else if (knownLayer == "MetalnessPBR")
+				return MaterialSurfaceLayer::Metallic;
+			else if (knownLayer == "Sheen")
+				return MaterialSurfaceLayer::Sheen;
+			else if (knownLayer == "SheenRoughness")
+				return MaterialSurfaceLayer::SheenRoughness;
+		}
+	}
+
+	return MaterialSurfaceLayer::None;
+}
+
+int OSGtoGLTF::createTexture(const osg::Texture* texture)
+{
+	const osg::Image* osgImage = texture->getImage(0);
+	std::string fileName = osgImage->getFileName();
+
+	// Replace backslash
+	for (auto& c : fileName)
+	{
+		if (c == '\\')
+			c = '/';
+	}
+
+	tinygltf::Image gltfImage;
+	gltfImage.uri = fileName;
+	int imageIndex = _model.images.size();
+	_model.images.push_back(gltfImage);
+
+	tinygltf::Sampler sampler;
+	sampler.magFilter = texture->getFilter(osg::Texture::MAG_FILTER);
+	sampler.minFilter = texture->getFilter(osg::Texture::MIN_FILTER);
+	sampler.wrapS = texture->getWrap(osg::Texture::WRAP_S);
+	sampler.wrapT = texture->getWrap(osg::Texture::WRAP_T);
+	int samplerIndex = _model.samplers.size();
+	_model.samplers.push_back(sampler);
+
+	tinygltf::Texture gltfTexture;
+	gltfTexture.sampler = samplerIndex;
+	gltfTexture.source = imageIndex;
+
+	int textureIndex = _model.textures.size();
+	_model.textures.push_back(gltfTexture);
+
+	return textureIndex;
+}
 
 int OSGtoGLTF::getCurrentMaterial()
 {
-	if (_ssStack.size() > 0)
+	if (_ssStack.size() == 0)
+		return -1;
+
+	int materialIndex(-1);
+
+	osg::Vec4 diffuse(1, 1, 1, 1),
+		ambient(0.2, 0.2, 0.2, 1),
+		specular(0, 0, 0, 1),
+		emission(1, 1, 1, 1);
+
+	float shininess(0);
+	float transparency(0);
+
+	// Push material and textures from OSG
+	osg::ref_ptr<osg::StateSet> stateSet = _ssStack.back();
+	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
+	std::vector<const osg::Texture*> texArray;
+	for (unsigned int i = 0; i < stateSet->getNumTextureAttributeLists(); i++)
 	{
-		osg::ref_ptr< osg::StateSet > stateSet = _ssStack.back();
+		texArray.push_back(dynamic_cast<const osg::Texture*>(stateSet->getTextureAttribute(i, osg::StateAttribute::TEXTURE)));
+	}
 
-		// Try to get the current texture
-		osg::Texture* osgTexture = dynamic_cast<osg::Texture*>(stateSet->getTextureAttribute(0, osg::StateAttribute::TEXTURE));
-		if (osgTexture)
+	if (mat)
+	{
+		diffuse = mat->getDiffuse(osg::Material::FRONT);
+		ambient = mat->getAmbient(osg::Material::FRONT);
+		specular = mat->getSpecular(osg::Material::FRONT);
+		shininess = mat->getShininess(osg::Material::FRONT);
+		emission = mat->getEmission(osg::Material::FRONT);
+		transparency = 1 - diffuse.w();
+
+		tinygltf::Material material;
+		material.name = mat->getName();
+
+		material.pbrMetallicRoughness.baseColorFactor = { diffuse.r(), diffuse.g(), diffuse.b(), diffuse.a() };
+		material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
+
+		// Declare use of specular extension
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end()) 
 		{
-			// Try to find the existing texture, which corresponds to a material index
-			for (unsigned int i = 0; i < _textures.size(); i++)
+			_model.extensionsUsed.emplace_back("KHR_materials_specular");
+		}
+
+		tinygltf::Value specularColorFactorValue;
+		for (float component : {specular.x(), specular.y(), specular.z()}) 
+		{
+			specularColorFactorValue.Get<tinygltf::Value::Array>().emplace_back(component);
+		}
+
+		tinygltf::Value specularExtensionValue;
+		specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
+		material.extensions.emplace("KHR_materials_specular", specularExtensionValue);		
+
+		for (auto& tex : texArray)
+		{
+			MaterialSurfaceLayer textureLayer = getTexMaterialLayer(mat, tex);
+
+			int textureIndex = createTexture(tex);
+
+			switch (textureLayer)
 			{
-				if (_textures[i].get() == osgTexture)
-				{
-					return i;
-				}
+			case MaterialSurfaceLayer::Albedo:
+			{
+				material.pbrMetallicRoughness.baseColorTexture.index = textureIndex;
+				break;
 			}
-
-			osg::ref_ptr< const osg::Image > osgImage; // = osgTexture->getImage(0);
-			if (osgImage)
+			case MaterialSurfaceLayer::AmbientOcclusion:
 			{
-				int index = _textures.size();
-
-				_textures.push_back(osgTexture);
-
-				osg::ref_ptr<osg::Image> flipped = new osg::Image(*osgImage.get());
-				std::string filename = osgImage->getFileName();
-
-				// Convert backslashes
-				for (char& c : filename) 
+				material.occlusionTexture.index = textureIndex;
+				break;
+			}
+			case MaterialSurfaceLayer::ClearCoat:
+			{
+				// Declare use of clear coat extension
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
 				{
-					if (c == '\\') {
-						c = '/';
-					}
+					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
 				}
-							   
-				// Add the image
-				tinygltf::Image image;
-				image.uri = filename;
-				_model.images.push_back(image);
 
-				// Add the sampler
-				tinygltf::Sampler sampler;
-				osg::Texture::WrapMode wrapS = osgTexture->getWrap(osg::Texture::WRAP_S);
-				osg::Texture::WrapMode wrapT = osgTexture->getWrap(osg::Texture::WRAP_T);
-				osg::Texture::WrapMode wrapR = osgTexture->getWrap(osg::Texture::WRAP_R);
-
-				// Validate the clamp mode to be compatible with webgl
-				if ((wrapS == osg::Texture::CLAMP) || (wrapS == osg::Texture::CLAMP_TO_BORDER))
-				{                     
-					wrapS = osg::Texture::CLAMP_TO_EDGE;
+				if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end()) 
+				{
+					material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
 				}
-				if ((wrapT == osg::Texture::CLAMP) || (wrapT == osg::Texture::CLAMP_TO_BORDER))
-				{                     
-					wrapT = osg::Texture::CLAMP_TO_EDGE;
+				auto& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
+				tinygltf::Value clearcoatTextureValue;
+				clearcoatTextureValue.Get< tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatTexture", clearcoatTextureValue);								
+				break;
+			}
+			case MaterialSurfaceLayer::ClearCoatNormal:
+			{
+				// Declare use of clear coat extension
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+				{
+					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
 				}
-				if ((wrapR == osg::Texture::CLAMP) || (wrapR == osg::Texture::CLAMP_TO_BORDER))
-				{                     
-					wrapR = osg::Texture::CLAMP_TO_EDGE;
-				}                    
-				sampler.wrapS = wrapS;
-				sampler.wrapT = wrapT;
-				//sampler.wrapR = wrapR;
-				sampler.minFilter = osgTexture->getFilter(osg::Texture::MIN_FILTER);
-				sampler.magFilter = osgTexture->getFilter(osg::Texture::MAG_FILTER);
 
-				_model.samplers.push_back(sampler);
-
-				// Add the texture
-				tinygltf::Texture texture;
-				texture.source = index;
-				texture.sampler = index;
-				_model.textures.push_back(texture);
-
-				// Add the material
-				tinygltf::Material mat;
-				tinygltf::Parameter textureParam;
-				textureParam.json_double_value["index"] = index;
-				textureParam.json_double_value["texCoord"] = 0;
-				mat.values["baseColorTexture"] = textureParam;
-
-				tinygltf::Parameter colorFactor;
-				colorFactor.number_array.push_back(1.0);
-				colorFactor.number_array.push_back(1.0);
-				colorFactor.number_array.push_back(1.0);
-				colorFactor.number_array.push_back(1.0);
-
-				tinygltf::Parameter metallicFactor;
-				metallicFactor.has_number_value = true;
-				metallicFactor.number_value = 0.0;
-				mat.values["metallicFactor"] = metallicFactor;
-
-				tinygltf::Parameter roughnessFactor;
-				roughnessFactor.number_value = 1.0;
-				roughnessFactor.has_number_value = true;
-				mat.values["roughnessFactor"] = roughnessFactor;
-
-				if (stateSet->getMode(GL_BLEND) & osg::StateAttribute::ON) {
-					mat.alphaMode = "BLEND";
+				if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end())
+				{
+					material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
 				}
-				
-				_model.materials.push_back(mat);
-				return index;
+				tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
+				tinygltf::Value clearcoatNormalTexture;
+				clearcoatNormalTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatNormalTexture", clearcoatNormalTexture);
+				break;
+			}
+			case MaterialSurfaceLayer::ClearCoatRoughness:
+			{
+				// Declare use of clear coat extension
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+				{
+					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+				}
+
+				if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end())
+				{
+					material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
+				}
+				tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
+				tinygltf::Value clearcoatRoughnessTexture;
+				clearcoatRoughnessTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatRoughnessTexture", clearcoatRoughnessTexture);
+
+				break;
+			}
+			case MaterialSurfaceLayer::Emissive:
+			{
+				material.emissiveTexture.index = textureIndex;
+			}
+			case MaterialSurfaceLayer::Metallic:
+			{
+				material.pbrMetallicRoughness.metallicRoughnessTexture.index = textureIndex;
+				break;
+			}
+			case MaterialSurfaceLayer::NormalMap:
+			{
+				material.normalTexture.index = textureIndex;
+			}
+			case MaterialSurfaceLayer::Roughness: // Conflicts with metallic. Must study how to solve this
+			{
+				material.pbrMetallicRoughness.metallicRoughnessTexture.index = textureIndex;
+				break;
+			}
+			case MaterialSurfaceLayer::Sheen:
+			{
+				// Declare use of sheen extension
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
+				{
+					_model.extensionsUsed.emplace_back("KHR_materials_sheen");
+				}
+
+				if (material.extensions.find("KHR_materials_sheen") == material.extensions.end())
+				{
+					material.extensions["KHR_materials_sheen"] = tinygltf::Value();
+				}
+				tinygltf::Value& sheenExtension = material.extensions["KHR_materials_sheen"];
+				tinygltf::Value sheenTexture;
+				sheenTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+				sheenExtension.Get<tinygltf::Value::Object>().emplace("sheenColorTexture", sheenTexture);
+
+				break;
+			}
+			case MaterialSurfaceLayer::SheenRoughness:
+			{
+				// Declare use of sheen extension
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
+				{
+					_model.extensionsUsed.emplace_back("KHR_materials_sheen");
+				}
+
+				if (material.extensions.find("KHR_materials_sheen") == material.extensions.end())
+				{
+					material.extensions["KHR_materials_sheen"] = tinygltf::Value();
+				}
+
+				tinygltf::Value& sheenExtension = material.extensions["KHR_materials_sheen"];
+				tinygltf::Value sheenTexture;
+				sheenTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+				sheenExtension.Get<tinygltf::Value::Object>().emplace("sheenRoughnessTexture", sheenTexture);
+
+				break;
+			}
+			case MaterialSurfaceLayer::Specular:
+			{
+				if (material.extensions.find("KHR_materials_specular") == material.extensions.end())
+				{
+					material.extensions["KHR_materials_specular"] = tinygltf::Value();
+				}
+				tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_specular"];
+				tinygltf::Value specularColorTexture;
+				specularColorTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("specularColorTexture", specularColorTexture);
+
+				break;
+			}
+			default:
+			{
+				OSG_DEBUG << "Missing texture placement for: " << osgDB::getSimpleFileName(tex->getImage(0)->getFileName()) << std::endl;
+			}
 			}
 		}
+
+		materialIndex = _model.materials.size();
+		_model.materials.push_back(material);
 	}
-	return -1;
+
+	return materialIndex;
 }
 
 #pragma endregion
@@ -1191,12 +1435,15 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		pushedStateSet = pushStateSet(ss.get());
 	}
 
-	osgAnimation::RigGeometry* rigGeometry(nullptr);
-	if (rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geom))
+	const osgAnimation::MorphGeometry* morph = dynamic_cast<const osgAnimation::MorphGeometry*>(geom);
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geom);
+	if (rigGeometry)
 	{
 		rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
 		geom->setName(rigGeometry->getSourceGeometry()->getName());
 	}
+	const osgAnimation::MorphGeometry* rigMorph = rigGeometry ? dynamic_cast<const osgAnimation::MorphGeometry*>(rigGeometry->getSourceGeometry()) : nullptr;
+
 	std::string geomName = geom->getName();
 
 	osg::ref_ptr<osg::Vec3Array> positions = dynamic_cast<osg::Vec3Array*>(geom->getVertexArray());
@@ -1320,6 +1567,9 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		}
 	}
 
+	if (texCoords)
+		texCoords = flipUVs(texCoords);
+
 	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
 	{
 		osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);
@@ -1335,7 +1585,8 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			// ThreeJS seems to be fine though
 			// TODO: check if the material actually has any texture in it
 			// TODO: the material should not be added if not used anywhere
-			if (texCoords.valid() || texCoordsd.valid()) {
+			if (texCoords.valid()) 
+			{
 				primitive.material = currentMaterial;
 			}
 		}
@@ -1373,6 +1624,17 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 				getOrCreateGeometryAccessor(texCoords.get(), nullptr, primitive, "TEXCOORD_0");
 		}
 	}
+
+	// Process morphed geometry
+	if (morph)
+	{
+		createMorphTargets(morph, mesh, false);
+	}
+
+	// Look for morph geometries inside rig
+	if (rigMorph)
+		createMorphTargets(rigGeometry, mesh, true); // We always pass the parent geometry as parameter.
+
 
 	if (pushedStateSet)
 	{

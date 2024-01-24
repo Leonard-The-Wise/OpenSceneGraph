@@ -3,6 +3,7 @@
 
 #include <osg/Node>
 #include <osg/Geometry>
+#include <osg/Material>
 #include <osg/MatrixTransform>
 #include <osgDB/FileNameUtils>
 #include <osgDB/ReaderWriter>

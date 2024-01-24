@@ -35,6 +35,43 @@ private:
     std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
     std::map<std::string, int> _gltfAnimationTargets;     // Animated targets for gltf nodes
 
+    enum class MaterialSurfaceLayer {
+        None, AmbientOcclusion, Albedo, ClearCoat, ClearCoatNormal, ClearCoatRoughness, DisplacementColor, Emissive, Metallic, NormalMap, 
+        Reflection, Roughness, Specular, Sheen, SheenRoughness, Shininess, Transparency
+    };
+
+    std::set<std::string> _knownMaterialLayerNames =
+    {
+        "AOPBR",
+        "Sheen",
+        "Matcap",
+        "BumpMap",
+        "Opacity",
+        "AlbedoPBR",
+        "AlphaMask",
+        "CavityPBR",
+        "ClearCoat",
+        "EmitColor",
+        "NormalMap",
+        "Anisotropy",
+        "DiffusePBR",
+        "SpecularF0",
+        "SpecularPBR",
+        "DiffuseColor",
+        "Displacement",
+        "MetalnessPBR",
+        "RoughnessPBR",
+        "GlossinessPBR",
+        "SpecularColor",
+        "SheenRoughness",
+        "DiffuseIntensity",
+        "SpecularHardness",
+        "ClearCoatNormalMap",
+        "ClearCoatRoughness",
+        "SubsurfaceScattering",
+        "SubsurfaceTranslucency",
+    };
+
 
     void push(tinygltf::Node& gnode)
     {
@@ -86,6 +123,8 @@ private:
 
     bool isMatrixAnimated(const osg::MatrixTransform* node);
 
+    void createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, bool isRigMorph);
+
     void createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel);
 
     void createQuatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::QuatSphericalLinearChannel* quatChannel);
@@ -97,6 +136,10 @@ private:
     void applyBasicAnimation(const osg::ref_ptr<osg::Callback>& callback);
 
     void addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callback>& nodeCallback);
+
+    OSGtoGLTF::MaterialSurfaceLayer getTexMaterialLayer(const osg::Material* material, const osg::Texture* texture);
+
+    int createTexture(const osg::Texture* texture);
 
     int getCurrentMaterial();
 
