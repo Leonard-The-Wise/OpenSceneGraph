@@ -313,6 +313,24 @@ unsigned getBytesPerElement(const osg::DrawElements* data)
 		4;
 }
 
+static std::string getLastNamePart(const std::string& input)
+{
+	size_t pos = input.find_last_of('|');
+	if (pos != std::string::npos) {
+		return input.substr(pos + 1);
+	}
+	return input;
+}
+
+osg::Quat normalizeQuaternion(const osg::Quat& quat)
+{
+	float length = sqrt(quat.x() * quat.x() + quat.y() * quat.y() + quat.z() * quat.z() + quat.w() * quat.w());
+	if (length == 0) {
+		return osg::Quat(0, 0, 0, 1);
+	}
+	return osg::Quat(quat.x() / length, quat.y() / length, quat.z() / length, quat.w() / length);
+}
+
 #pragma endregion
 
 
@@ -618,6 +636,260 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 	return false;
 }
 
+#pragma region Animations Processing
+
+void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel)
+{
+	std::string transformType = vec3Channel->getName();
+	std::string targetPath;
+
+	if (transformType == "translate")
+		targetPath = "translation";
+	else if (transformType == "scale" || transformType == "ScalingCompensation")
+		targetPath = "scale";
+	else
+	{
+		OSG_WARN << "WARNING: Unknown animation channel target: " << transformType << std::endl;
+		return;
+	}
+
+	osgAnimation::Vec3KeyframeContainer* keyframes = vec3Channel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
+	osg::ref_ptr<osg::Vec3Array> keysArray = new osg::Vec3Array;
+
+	float timeMin(FLT_MAX);
+	float timeMax(-FLT_MAX);
+
+	timesArray->reserve(keyframes->size());
+	keysArray->reserve(keyframes->size());
+
+	size_t i = 0; // Keep track of time and try to correct equal times
+	for (const osgAnimation::Vec3Keyframe& keyframe : *keyframes) 
+	{
+		double timeValue = keyframe.getTime();
+		if (i > 0)
+		{
+			double oldTime = (*keyframes)[i - 1].getTime();
+			double delta = timeValue - oldTime;
+			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
+			{
+				timeValue += std::abs(delta) + 0.01; // 1 milissecond at a time
+			}
+		}
+		timesArray->push_back(timeValue);
+		keysArray->push_back(keyframe.getValue());
+
+		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
+		timeMax = osg::maximum(timeMax, static_cast<float>(keyframe.getTime()));
+		i++;
+	}
+
+	tinygltf::AnimationSampler sampler;
+	sampler.input = getOrCreateAccessor(timesArray, timesArray->size(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_SCALAR, 0);
+	sampler.output = getOrCreateAccessor(keysArray, keysArray->size(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, 0);
+	sampler.interpolation = "LINEAR";
+
+	tinygltf::Accessor& timesAccessor = _model.accessors[sampler.input];
+	timesAccessor.minValues.push_back(timeMin);
+	timesAccessor.maxValues.push_back(timeMax);
+
+	int samplerIndex = gltfAnimation.samplers.size();
+	gltfAnimation.samplers.push_back(sampler);
+
+	tinygltf::AnimationChannel channel;
+	channel.sampler = samplerIndex;
+	channel.target_node = targetId;
+	channel.target_path = targetPath;
+
+	gltfAnimation.channels.push_back(channel);
+}
+
+void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::QuatSphericalLinearChannel* quatChannel)
+{
+	// Assumindo que o channel de quaternions é sempre para rotação
+	std::string targetPath = "rotation";
+
+	osgAnimation::QuatKeyframeContainer* keyframes = quatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
+	osg::ref_ptr<osg::Vec4Array> keysArray = new osg::Vec4Array; // QuatArray is double, we need float!
+
+	float timeMin(FLT_MAX);
+	float timeMax(-FLT_MAX);
+
+	timesArray->reserve(keyframes->size());
+	keysArray->reserve(keyframes->size());
+
+	size_t i = 0; // Keep track of time and try to correct equal times
+	for (const osgAnimation::QuatKeyframe& keyframe : *keyframes)
+	{
+		double timeValue = keyframe.getTime();
+		if (i > 0)
+		{
+			double oldTime = (*keyframes)[i - 1].getTime();
+			double delta = timeValue - oldTime;
+			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
+			{
+				timeValue += std::abs(delta) + 0.01; // 1 milissecond at a time
+			}
+		}
+		timesArray->push_back(timeValue);
+		keysArray->push_back(osg::Vec4(keyframe.getValue().x(), keyframe.getValue().y(), keyframe.getValue().z(), keyframe.getValue().w()));
+
+		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
+		timeMax = osg::maximum(timeMax, static_cast<float>(keyframe.getTime()));
+		i++;
+	}
+
+	// Criar os accessors para os tempos e valores (quaternions)
+	tinygltf::AnimationSampler sampler;
+	sampler.input = getOrCreateAccessor(timesArray, timesArray->size(), TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_SCALAR, 0);
+	sampler.output = getOrCreateAccessor(keysArray, keysArray->size(), TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_VEC4, 0);
+	sampler.interpolation = "LINEAR";
+
+	tinygltf::Accessor& timesAccessor = _model.accessors[sampler.input];
+	timesAccessor.minValues.push_back(timeMin);
+	timesAccessor.maxValues.push_back(timeMax);
+
+	int samplerIndex = gltfAnimation.samplers.size();
+	gltfAnimation.samplers.push_back(sampler);
+
+	tinygltf::AnimationChannel channel;
+	channel.sampler = samplerIndex;
+	channel.target_node = targetId;
+	channel.target_path = targetPath;
+
+	gltfAnimation.channels.push_back(channel);
+}
+
+void OSGtoGLTF::createFloatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::FloatLinearChannel* floatChannel) 
+{
+	std::string targetPath = "weights";
+
+	osgAnimation::FloatKeyframeContainer* keyframes = floatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
+	osg::ref_ptr<osg::FloatArray> keysArray = new osg::FloatArray;
+
+	float timeMin(FLT_MAX);
+	float timeMax(-FLT_MAX);
+
+	timesArray->reserve(keyframes->size());
+	keysArray->reserve(keyframes->size());
+
+	size_t i = 0; // Keep track of time and try to correct equal times
+	for (const osgAnimation::FloatKeyframe& keyframe : *keyframes)
+	{
+		double timeValue = keyframe.getTime();
+		if (i > 0)
+		{
+			double oldTime = (*keyframes)[i - 1].getTime();
+			double delta = timeValue - oldTime;
+			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
+			{
+				timeValue += std::abs(delta) + 0.01; // 1 milissecond at a time
+			}
+		}
+		timesArray->push_back(timeValue);
+		keysArray->push_back(keyframe.getValue());
+
+		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
+		timeMax = osg::maximum(timeMax, static_cast<float>(keyframe.getTime()));
+		i++;
+	}
+
+	// Criar os accessors para os tempos e valores
+	tinygltf::AnimationSampler sampler;
+	sampler.input = getOrCreateAccessor(timesArray, timesArray->size(), TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_SCALAR, 0);
+	sampler.output = getOrCreateAccessor(keysArray, keysArray->size(), TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_SCALAR, 0);
+	sampler.interpolation = "LINEAR";
+
+	tinygltf::Accessor& timesAccessor = _model.accessors[sampler.input];
+	timesAccessor.minValues.push_back(timeMin);
+	timesAccessor.maxValues.push_back(timeMax);
+
+	int samplerIndex = gltfAnimation.samplers.size();
+	gltfAnimation.samplers.push_back(sampler);
+
+	tinygltf::AnimationChannel channel;
+	channel.sampler = samplerIndex;
+	channel.target_node = targetId;
+	channel.target_path = targetPath;
+
+	gltfAnimation.channels.push_back(channel);
+}
+
+
+void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgAnimation)
+{
+	std::string animationName = osgAnimation->getName().c_str();
+	animationName = getLastNamePart(animationName);
+
+	tinygltf::Animation gltfAnimation;
+	gltfAnimation.name = animationName;
+
+	for (auto& channel : osgAnimation->getChannels())
+	{
+		std::string targetName = channel->getTargetName();
+		int targetId(-1);
+
+		// TODO: Morph
+		// Get target ID from name
+		if (_gltfAnimationTargets.find(targetName) != _gltfAnimationTargets.end())
+			targetId = _gltfAnimationTargets.at(targetName);
+		else
+		{
+			OSG_WARN << "WARNING: Animation target " << targetName << " not found." << std::endl;
+			continue;
+		}
+
+		if (auto vec3Channel = dynamic_cast<osgAnimation::Vec3LinearChannel*>(channel.get()))
+		{
+			createVec3Sampler(gltfAnimation, targetId, vec3Channel);
+		}
+		else if (auto quatChannel = dynamic_cast<osgAnimation::QuatSphericalLinearChannel*>(channel.get())) 
+		{
+			createQuatSampler(gltfAnimation, targetId, quatChannel);
+		}
+		else if (auto floatChannel = dynamic_cast<osgAnimation::FloatLinearChannel*>(channel.get())) 
+		{
+			createFloatSampler(gltfAnimation, targetId, floatChannel);
+		}
+	}
+
+	_model.animations.push_back(gltfAnimation);
+}
+
+void OSGtoGLTF::applyBasicAnimation(const osg::ref_ptr<osg::Callback>& callback)
+{
+	if (!callback)
+		return;
+
+	auto bam = osg::dynamic_pointer_cast<osgAnimation::BasicAnimationManager>(callback);
+	if (!bam)
+		return;
+
+	OSG_NOTICE << "Processing " << bam->getAnimationList().size() << " animation(s)..." << std::endl;
+
+	// Run through all animations
+	for (auto& animation : bam->getAnimationList())
+	{
+		createAnimation(animation);
+	}
+}
+
+void OSGtoGLTF::addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callback>& nodeCallback)
+{
+	const osg::ref_ptr<osgAnimation::UpdateMatrixTransform> umt = osg::dynamic_pointer_cast<osgAnimation::UpdateMatrixTransform>(nodeCallback);
+
+	if (!umt)
+		return;
+
+	std::string updateMatrixName = umt->getName();
+	_gltfAnimationTargets[updateMatrixName] = gltfNodeId;
+}
+
+#pragma endregion
+
+#pragma region Materials Processing
 
 int OSGtoGLTF::getCurrentMaterial()
 {
@@ -729,7 +1001,6 @@ int OSGtoGLTF::getCurrentMaterial()
 	return -1;
 }
 
-
 #pragma endregion
 
 
@@ -821,6 +1092,9 @@ void OSGtoGLTF::apply(osg::Node& node)
 			_skeletonInvBindMatrices[boneID] = &bone->getInvBindMatrixInSkeletonSpace();
 			_gltfBoneIDNames[gnode.name] = boneID;
 		}
+
+		// See if this is an animation target
+		addAnimationTarget(id, getRealUpdateCallback(node.getUpdateCallback()));
 	}
 }
 
@@ -855,6 +1129,10 @@ void OSGtoGLTF::apply(osg::Group& group)
 			}
 		}
 	}
+
+	osg::ref_ptr<osg::Callback> nodeCallback = group.getUpdateCallback();
+	if (nodeCallback)
+		applyBasicAnimation(getRealUpdateCallback(nodeCallback));
 }
 
 void OSGtoGLTF::apply(osg::Transform& xform)
@@ -867,9 +1145,17 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 
 	if (!matrix.isIdentity() && !isEmptyNode(&xform))
 	{
-		const double* ptr = matrix.ptr();
-		for (unsigned i = 0; i < 16; ++i)
-			_model.nodes.back().matrix.push_back(*ptr++);
+		osg::Vec3 translation, scale;
+		osg::Quat rotation, so;
+		matrix.decompose(translation, rotation, scale, so);
+		_model.nodes.back().translation = { translation.x(), translation.y(), translation.z() };
+		_model.nodes.back().rotation = { rotation.x(), rotation.y(), rotation.z(), rotation.w() };
+		_model.nodes.back().scale = { scale.x(), scale.y(), scale.z() };
+
+		// Nodes with matrices cannot be animated
+		//const double* ptr = matrix.ptr();
+		//for (unsigned i = 0; i < 16; ++i)
+		//	_model.nodes.back().matrix.push_back(*ptr++);
 	}
 
 	// Post-process skeleton... create inverse bind matrices accessor and skin weights
@@ -1133,6 +1419,5 @@ void OSGtoGLTF::buildAnimationTargets(osg::Group* node)
 		}
 	}
 }
-
 
 #pragma endregion

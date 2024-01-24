@@ -5,25 +5,6 @@
 class OSGtoGLTF : public osg::NodeVisitor
 {
 
-
-public:
-    OSGtoGLTF(tinygltf::Model& model) : 
-        _model(model), _firstMatrix(true), _firstMatrixNode(nullptr)
-    {
-        setTraversalMode(TRAVERSE_ALL_CHILDREN);
-        _model.scenes.push_back(tinygltf::Scene());
-        _model.defaultScene = 0;
-    }
-    void apply(osg::Node& node);
-
-    void apply(osg::Group& group);
-
-    void apply(osg::Transform& xform);
-
-    void apply(osg::Geometry& geometry);
-
-    void OSGtoGLTF::buildAnimationTargets(osg::Group* node);
-
 private:
     typedef std::map<osg::ref_ptr<const osg::Node>, int> OsgNodeSequenceMap;
     typedef std::map<osg::ref_ptr<const osg::BufferData>, int> ArraySequenceMap;
@@ -50,8 +31,9 @@ private:
     BindMatrices _skeletonInvBindMatrices;
     BoneIDNames _gltfBoneIDNames;
 
-    std::set<std::string> _animationTargetNames;          // Animation targets
+    std::set<std::string> _animationTargetNames;          // Animation targets (for osg animated matrices)
     std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
+    std::map<std::string, int> _gltfAnimationTargets;     // Animated targets for gltf nodes
 
 
     void push(tinygltf::Node& gnode)
@@ -104,8 +86,38 @@ private:
 
     bool isMatrixAnimated(const osg::MatrixTransform* node);
 
+    void createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel);
+
+    void createQuatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::QuatSphericalLinearChannel* quatChannel);
+
+    void createFloatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::FloatLinearChannel* floatChannel);
+
+    void createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgAnimation);
+
+    void applyBasicAnimation(const osg::ref_ptr<osg::Callback>& callback);
+
+    void addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callback>& nodeCallback);
+
     int getCurrentMaterial();
 
+public:
+    OSGtoGLTF(tinygltf::Model& model) :
+        _model(model), _firstMatrix(true), _firstMatrixNode(nullptr)
+    {
+        setTraversalMode(TRAVERSE_ALL_CHILDREN);
+        _model.scenes.push_back(tinygltf::Scene());
+        _model.defaultScene = 0;
+    }
+
+    void apply(osg::Node& node);
+
+    void apply(osg::Group& group);
+
+    void apply(osg::Transform& xform);
+
+    void apply(osg::Geometry& geometry);
+
+    void buildAnimationTargets(osg::Group* node);
 };
 
 
