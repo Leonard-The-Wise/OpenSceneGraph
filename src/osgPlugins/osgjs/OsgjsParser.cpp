@@ -90,7 +90,7 @@ void OsgjsParser::buildMaterialAndtextures()
 
 void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -134,7 +134,7 @@ void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSO
 
 bool OsgjsParser::parseObject(ref_ptr<Object> currentObject, const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentObject ? currentObject->getName() : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -194,7 +194,7 @@ bool OsgjsParser::parseObject(ref_ptr<Object> currentObject, const json& current
 
 bool OsgjsParser::parseCallback(ref_ptr<Callback> currentCallback, const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -209,7 +209,7 @@ bool OsgjsParser::parseCallback(ref_ptr<Callback> currentCallback, const json& c
         // Lookup current node vertically, searching for JSON Callbacks to process
         for (auto itr = currentJSONNode.begin(); itr != currentJSONNode.end(); ++itr)
         {
-#ifdef DEBUG
+#ifndef NDEBUG
             std::string debugNodeKey = itr.key();
             std::string debugNodeValue = itr.value().dump();
             int debugNodeUniqueID = itr.value().contains("UniqueID") ? itr.value()["UniqueID"].get<int>() : -1;
@@ -244,7 +244,7 @@ bool OsgjsParser::parseCallback(ref_ptr<Callback> currentCallback, const json& c
 
 void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const json& currentJSONNode, UserDataContainerType containerType, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
@@ -325,7 +325,7 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
 
 void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -440,7 +440,7 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
 
 ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
@@ -507,7 +507,7 @@ ref_ptr<Object> OsgjsParser::parseOsgNode(const json& currentJSONNode, const std
 
 ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
@@ -609,7 +609,7 @@ ref_ptr<Object> OsgjsParser::parseOsgMatrixTransform(const json& currentJSONNode
 
 ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
@@ -692,7 +692,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         }
 
         // 2.2) Get VertexAttributeList arrays
-#ifdef DEBUG
+#ifndef NDEBUG
         std::string vertexNodestr = vertexNode ? vertexNode->dump() : "";
         std::string normalNodestr = normalNode ? normalNode->dump(): "";
         std::string colorNodestr = colorNode ? colorNode->dump() : "";
@@ -1013,7 +1013,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 
 ref_ptr<Object> OsgjsParser::parseComputeBoundingBoxCallback(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1029,19 +1029,13 @@ ref_ptr<Object> OsgjsParser::parseComputeBoundingBoxCallback(const json& current
 
 ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
-
-    if (!name.empty())
-    {
-        if (_materialMap.find(name) != _materialMap.end())
-            return _materialMap[name];
-    }
 
     ref_ptr<Material> newMaterial = new Material;
     Vec4 ambient, diffuse, specular, emission;
@@ -1081,15 +1075,12 @@ ref_ptr<Object> OsgjsParser::parseOsgMaterial(const json& currentJSONNode, const
         newMaterial->setShininess(Material::FRONT, shininess);
     }
 
-    if (!name.empty())
-        _materialMap[name] = newMaterial;
-
     return newMaterial;
 }
 
 ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     UniqueID = UniqueID; // Bypass compilation warning
@@ -1140,7 +1131,7 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
 
 ref_ptr<Object> OsgjsParser::parseOsgBlendFunc(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1163,7 +1154,7 @@ ref_ptr<Object> OsgjsParser::parseOsgBlendFunc(const json& currentJSONNode, cons
 
 ref_ptr<Object> OsgjsParser::parseOsgBlendColor(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1185,7 +1176,7 @@ ref_ptr<Object> OsgjsParser::parseOsgBlendColor(const json& currentJSONNode, con
 
 ref_ptr<Object> OsgjsParser::parseOsgCullFace(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1208,7 +1199,7 @@ ref_ptr<Object> OsgjsParser::parseOsgCullFace(const json& currentJSONNode, const
 
 ref_ptr<Object> OsgjsParser::parseOsgTextText(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1223,7 +1214,7 @@ ref_ptr<Object> OsgjsParser::parseOsgTextText(const json& currentJSONNode, const
 
 ref_ptr<Object> OsgjsParser::parseOsgProjection(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1238,7 +1229,7 @@ ref_ptr<Object> OsgjsParser::parseOsgProjection(const json& currentJSONNode, con
 
 ref_ptr<Object> OsgjsParser::parseOsgLight(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1253,7 +1244,7 @@ ref_ptr<Object> OsgjsParser::parseOsgLight(const json& currentJSONNode, const st
 
 ref_ptr<Object> OsgjsParser::parseOsgLightSource(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1268,7 +1259,7 @@ ref_ptr<Object> OsgjsParser::parseOsgLightSource(const json& currentJSONNode, co
 
 ref_ptr<Object> OsgjsParser::parseOsgPagedLOD(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1286,7 +1277,7 @@ ref_ptr<Object> OsgjsParser::parseOsgPagedLOD(const json& currentJSONNode, const
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationBasicAnimationManager(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1341,7 +1332,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationBasicAnimationManager(const json
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateBone(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1394,7 +1385,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateBone(const json& currentJS
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateSkeleton(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1406,7 +1397,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateSkeleton(const json& curre
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMorph(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1442,7 +1433,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMorph(const json& currentJ
 
 ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMatrixTransform(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1496,7 +1487,7 @@ ref_ptr<Callback> OsgjsParser::parseOsgAnimationUpdateMatrixTransform(const json
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1548,7 +1539,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONN
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedTranslate(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1569,7 +1560,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedTranslate(const json& curre
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedQuaternion(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1591,7 +1582,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedQuaternion(const json& curr
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedRotateAxis(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1616,7 +1607,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedRotateAxis(const json& curr
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedScale(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1637,7 +1628,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedScale(const json& currentJS
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedMatrix(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1664,7 +1655,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationStackedMatrix(const json& currentJ
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1742,7 +1733,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1821,7 +1812,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1869,7 +1860,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatLerpChannel(const json& curre
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -1932,7 +1923,7 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationFloatCubicBezierChannel(const json
 
 ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3CubicBezierChannel(const json& currentJSONNode, const std::string& nodeKey)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -2169,7 +2160,9 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, cons
 {
     // Only process materials that have external references
     std::string materialName = geometry->getName();
-
+#ifndef NDEBUG
+    std::string materialNameDebug = materialName;
+#endif
     // Override name (for geodes applying materials to children meshes)
     if (!materialNameOverride.empty())
         materialName = materialNameOverride;
@@ -2187,64 +2180,51 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, cons
     if (mat)
         return;
 
-    // Look for pre-existing shared materials
-    if (_materialMap.find(materialName) != _materialMap.end() )
+    ref_ptr<Material> newMaterial = new Material;
+    newMaterial->setName(materialName);
+    meshState->setAttribute(newMaterial, StateAttribute::MATERIAL);
+
+    // Pick missing textures for material
+    postProcessStateSet(meshState);
+
+    // Read all channels from KnownMaterial
+    for (auto& channel : knownMaterial.Channels)
     {
-        meshState->setAttribute(_materialMap[materialName], StateAttribute::MATERIAL);
+        std::string channelName = channel.first;
+        ChannelInfo2 channelInfo = channel.second;
 
-        // Pick missing textures for material
-        postProcessStateSet(meshState);
-    }
-    else
-    {
-        ref_ptr<Material> newMaterial = new Material;
-        newMaterial->setName(materialName);
+        if (!channelInfo.Enable)
+            continue;
 
-        meshState->setAttribute(newMaterial, StateAttribute::MATERIAL);
-        _materialMap[materialName] = newMaterial;
+        Vec4 color;
+        double factor(0);
 
-        // Pick missing textures for material
-        postProcessStateSet(meshState);
+        if (channelInfo.Color.size() == 3)
+            color = Vec4(channelInfo.Color[0], channelInfo.Color[1], channelInfo.Color[2], 1);
+        factor = channelInfo.Factor;
 
-        // Read all channels from KnownMaterial
-        for (auto& channel : knownMaterial.Channels)
-        {
-            std::string channelName = channel.first;
-            ChannelInfo2 channelInfo = channel.second;
-
-            if (!channelInfo.Enable)
-                continue;
-
-            Vec4 color;
-            double factor(0);
-
-            if (channelInfo.Color.size() == 3)
-                color = Vec4(channelInfo.Color[0], channelInfo.Color[1], channelInfo.Color[2], 1);
-            factor = channelInfo.Factor;
-
-            // Big IF for known channels. Notice one channel may affect multiple Phong surfaces
-            if (channelName == "AOPBR" || channelName == "CavityPBR")
-                newMaterial->setAmbient(Material::FRONT, color);
-            if (channelName == "AlbedoPBR" || channelName == "DiffusePBR" || channelName == "DiffuseColor" 
-                || channelName == "CavityPBR" || channelName == "DiffuseIntensity")
-                newMaterial->setDiffuse(Material::FRONT, color);
-            if (channelName == "Sheen" || channelName == "ClearCoat" || channelName == "SpecularF0" || channelName == "SpecularPBR" ||
-                channelName == "SpecularColor" || channelName == "MetalnessPBR" || channelName == "SpecularHardness")
-                newMaterial->setSpecular(Material::FRONT, color);
-            if (channelName == "Opacity" || channelName == "AlphaMask")
-                newMaterial->setTransparency(Material::FRONT, static_cast<float>(factor));
-            if (channelName == "EmitColor")
-                newMaterial->setEmission(Material::FRONT, color);
-            if (channelName == "GlossinessPBR" || channelName == "RoughnessPBR" || channelName == "SheenRoughness")
-                newMaterial->setShininess(Material::FRONT, factor);
-            // if (channelName == "BumpMap" || channelName == "NormalMap" || channelName == "ClearCoatNormalMap")
-        }
+        // Big IF for known channels. Notice one channel may affect multiple Phong surfaces
+        if (channelName == "AOPBR" || channelName == "CavityPBR")
+            newMaterial->setAmbient(Material::FRONT, color);
+        if (channelName == "AlbedoPBR" || channelName == "DiffusePBR" || channelName == "DiffuseColor" 
+            || channelName == "CavityPBR" || channelName == "DiffuseIntensity")
+            newMaterial->setDiffuse(Material::FRONT, color);
+        if (channelName == "Sheen" || channelName == "ClearCoat" || channelName == "SpecularF0" || channelName == "SpecularPBR" ||
+            channelName == "SpecularColor" || channelName == "MetalnessPBR" || channelName == "SpecularHardness")
+            newMaterial->setSpecular(Material::FRONT, color);
+        if (channelName == "Opacity" || channelName == "AlphaMask")
+            newMaterial->setTransparency(Material::FRONT, static_cast<float>(factor));
+        if (channelName == "EmitColor")
+            newMaterial->setEmission(Material::FRONT, color);
+        if (channelName == "GlossinessPBR" || channelName == "RoughnessPBR" || channelName == "SheenRoughness")
+            newMaterial->setShininess(Material::FRONT, factor);
+        // if (channelName == "BumpMap" || channelName == "NormalMap" || channelName == "ClearCoatNormalMap")
     }
 }
 
 void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode, const ref_ptr<Array>& indices)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
     int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
@@ -2416,14 +2396,11 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
 void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const json* currentJSONNode)
 {
-#ifdef DEBUG
-    if (currentJSONNode)
-    {
-        std::string debugCurrentJSONNode = currentJSONNode->dump();
-        std::string name = currentJSONNode->contains("Name") ? (*currentJSONNode)["Name"] : "";
-        int UniqueID = currentJSONNode->contains("UniqueID") ? (*currentJSONNode)["UniqueID"].get<int>() : 0;
-        UniqueID = UniqueID; // Bypass compilation warning
-    }
+#ifndef NDEBUG
+    std::string debugCurrentJSONNode = currentJSONNode ? currentJSONNode->dump() : "";
+    std::string name = currentJSONNode ? (currentJSONNode->contains("Name") ? (*currentJSONNode)["Name"] : "") : "";
+    int UniqueID = currentJSONNode ? (currentJSONNode->contains("UniqueID") ? (*currentJSONNode)["UniqueID"].get<int>() : 0) : -1;
+    UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
     // Try to get textures for material from stateset and model_info.txt

@@ -141,7 +141,6 @@ namespace osgJSONParser
         std::set<std::string> _notFoundTextures; // Keep track of not found textures to avoid multiple warnings
 
         // Keep track of Materials, Textures and Images
-        std::map<std::string, osg::ref_ptr<osg::Material>> _materialMap;
         std::map<std::string, osg::ref_ptr<osg::Texture>> _textureMap;
         std::map<std::string, osg::ref_ptr<osg::Image>> _imageMap;
 

@@ -1169,11 +1169,8 @@ int OSGtoGLTF::createTexture(const osg::Texture* texture)
 	return textureIndex;
 }
 
-int OSGtoGLTF::getCurrentMaterial()
+int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 {
-	if (_ssStack.size() == 0)
-		return -1;
-
 	int materialIndex(-1);
 
 	osg::Vec4 diffuse(1, 1, 1, 1),
@@ -1185,7 +1182,10 @@ int OSGtoGLTF::getCurrentMaterial()
 	float transparency(0);
 
 	// Push material and textures from OSG
-	osg::ref_ptr<osg::StateSet> stateSet = _ssStack.back();
+	osg::ref_ptr<osg::StateSet> stateSet = geometry->getStateSet();
+	if (!stateSet)
+		return -1;
+
 	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
 	std::vector<const osg::Texture*> texArray;
 	for (unsigned int i = 0; i < stateSet->getNumTextureAttributeLists(); i++)
@@ -1701,14 +1701,13 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			{
 				texCoords->push_back(osg::Vec2((*texCoords3)[i].x(), (*texCoords3)[i].y()));
 			}
-			//geom->setTexCoordArray(0, texCoords.get());
 		}
 	}
 
 	if (texCoords)
 		texCoords = flipUVs(texCoords);
 
-	int currentMaterial = getCurrentMaterial();
+	int currentMaterial = getCurrentMaterial(geom);
 	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
 	{
 		osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);

@@ -133,8 +133,6 @@ private:
 
     void createQuatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::QuatSphericalLinearChannel* quatChannel);
 
-    void createFloatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::FloatLinearChannel* floatChannel);
-
     void gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel);
 
     void flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int targetId);
@@ -149,7 +147,7 @@ private:
 
     int createTexture(const osg::Texture* texture);
 
-    int getCurrentMaterial();
+    int getCurrentMaterial(osg::Geometry* geometry);
 
 public:
     OSGtoGLTF(tinygltf::Model& model) :
