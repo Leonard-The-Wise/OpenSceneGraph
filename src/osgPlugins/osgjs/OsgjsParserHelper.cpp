@@ -72,7 +72,7 @@ bool ParserHelper::getSafeDouble(const std::string& in, double& outValue)
 ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int elementsPerItem, const FileCache& fileCache,
 	uint32_t& magic, bool needDecodeIndices, GLenum drawMode)
 {
-#ifdef DEBUG
+#ifndef NDEBUG
 	std::string CurrentNode = currentJSONNode.dump();
 #endif
 	ref_ptr<Array> returnArray;

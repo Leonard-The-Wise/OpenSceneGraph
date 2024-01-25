@@ -158,7 +158,11 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 			osg::Vec4 v;
 			if (normalize)
 			{
-				osg::Vec3 tangentVec3(vec.x(), vec.y(), vec.z());
+				osg::Vec3 tangentVec3;
+				if (vec.x() == 0.0f && vec.y() == 0.0f && vec.z() == 0.0f) // Fix non-direction vectors (paliative)
+					tangentVec3 = osg::Vec3(1.0f, 0.0f, 0.0f);
+				else
+					tangentVec3 = osg::Vec3(vec.x(), vec.y(), vec.z());
 				tangentVec3 = tangentVec3 * transposeInverse;
 				tangentVec3.normalize();
 				v = osg::Vec4(tangentVec3.x(), tangentVec3.y(), tangentVec3.z(), vec.w());
@@ -179,6 +183,8 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 			if (normalize)
 			{
 				v = vec * transposeInverse;
+				if (v.x() == 0.0f && v.y() == 0.0f && v.z() == 0.0f)  // Fix non-direction vector (paliative)
+					v = osg::Vec3(1.0f, 0.0f, 0.0f);
 				v.normalize();
 			}
 			else
@@ -800,7 +806,7 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 
 			primitive.targets.push_back(morphTargetAttributes);
 
-			_gltfAnimationTargets[morphTargetName] = meshNodeId;
+			_gltfMorphTargets[morphTargetName] = meshNodeId;
 		}
 	}
 }
@@ -837,7 +843,7 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 	keysArray->reserve(keyframes->size());
 
 	size_t i = 0; // Keep track of time and try to correct equal times
-	for (const osgAnimation::Vec3Keyframe& keyframe : *keyframes) 
+	for (osgAnimation::Vec3Keyframe& keyframe : *keyframes) 
 	{
 		double timeValue = keyframe.getTime();
 		if (i > 0)
@@ -846,7 +852,8 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 			double delta = timeValue - oldTime;
 			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
 			{
-				timeValue += std::abs(delta) + 0.01; // 1 milissecond at a time
+				timeValue += std::abs(delta) + 0.001; // 0.1 milissecond at a time
+				keyframe.setTime(timeValue);
 			}
 		}
 		timesArray->push_back(timeValue);
@@ -893,7 +900,7 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 	keysArray->reserve(keyframes->size());
 
 	size_t i = 0; // Keep track of time and try to correct equal times
-	for (const osgAnimation::QuatKeyframe& keyframe : *keyframes)
+	for (osgAnimation::QuatKeyframe& keyframe : *keyframes)
 	{
 		double timeValue = keyframe.getTime();
 		if (i > 0)
@@ -902,11 +909,16 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 			double delta = timeValue - oldTime;
 			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
 			{
-				timeValue += std::abs(delta) + 0.01; // 1 milissecond at a time
+				timeValue += std::abs(delta) + 0.001; // 0.1 milissecond at a time
+				keyframe.setTime(timeValue);
 			}
 		}
 		timesArray->push_back(timeValue);
-		keysArray->push_back(osg::Vec4(keyframe.getValue().x(), keyframe.getValue().y(), keyframe.getValue().z(), keyframe.getValue().w()));
+		osg::Vec4 quat(keyframe.getValue().x(), keyframe.getValue().y(), keyframe.getValue().z(), keyframe.getValue().w());
+		if (quat.x() == 0.0f && quat.y() == 0.0f && quat.z() == 0.0 && quat.w() == 0.0f) //fix broken quat
+			quat = osg::Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		quat.normalize();
+		keysArray->push_back(quat);
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
@@ -932,6 +944,10 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 	channel.target_path = targetPath;
 
 	gltfAnimation.channels.push_back(channel);
+#ifndef NDEBUG
+	int ChannelID = gltfAnimation.channels.size() - 1;
+	ChannelID = ChannelID;
+#endif
 }
 
 void OSGtoGLTF::gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel)
@@ -950,7 +966,8 @@ void OSGtoGLTF::gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel)
 	// Alternate key placement into vectors.
 	for (unsigned int i = 0; i < keyframes->size(); ++i)
 	{
-		_weightKeys[i].push_back((*keyframes)[i].getValue());
+		if (i < _weightKeys.size())
+			_weightKeys[i].push_back((*keyframes)[i].getValue());
 	}
 
 }
@@ -987,7 +1004,7 @@ void OSGtoGLTF::flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int t
 			double delta = timeValue - oldTime;
 			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
 			{
-				timeValue += std::abs(delta) + 0.01; // 1 milissecond at a time
+				timeValue += std::abs(delta) + 0.001; // 0.1 milissecond at a time
 			}
 		}
 		timesArray->push_back(timeValue);
@@ -1027,14 +1044,21 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 
 	int oldTargetId(-1);
 	int targetId(-1);
+	int realTarget(-1);
 	for (auto& channel : osgAnimation->getChannels())
 	{
 		std::string targetName = channel->getTargetName();
 
 		// TODO: Morph
 		// Get target ID from name
-		if (_gltfAnimationTargets.find(targetName) != _gltfAnimationTargets.end())
-			targetId = _gltfAnimationTargets.at(targetName);
+		if (_gltfAnimationTargets.find(targetName) != _gltfAnimationTargets.end()
+			|| _gltfMorphTargets.find(targetName) != _gltfMorphTargets.end())
+		{
+			if (_gltfAnimationTargets.find(targetName) != _gltfAnimationTargets.end())
+				targetId = _gltfAnimationTargets.at(targetName);
+			else
+				targetId = _gltfMorphTargets.at(targetName);
+		}
 		else
 		{
 			if (missingTargets.find(targetName) == missingTargets.end() && 
@@ -1066,20 +1090,32 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 			if (targetId == oldTargetId)
 			{
 				gatherFloatKeys(floatChannel);
+				realTarget = targetId;
 			}
 			else
 			{
 				flushWeightsKeySampler(gltfAnimation, oldTargetId);
 				gatherFloatKeys(floatChannel);
+				realTarget = targetId;
 				oldTargetId = targetId;
 			}			
 		}
+#ifndef NDEBUG
+		int ChannelID = gltfAnimation.channels.size() - 1;
+		ChannelID = ChannelID;
+#endif
 	}
 
 	// Ensure all float animations are saved
-	flushWeightsKeySampler(gltfAnimation, targetId);
+	flushWeightsKeySampler(gltfAnimation, realTarget);
 
 	_model.animations.push_back(gltfAnimation);
+
+#ifndef NDEBUG
+	int ChannelID = gltfAnimation.channels.size() - 1;
+	ChannelID = ChannelID;
+#endif
+
 }
 
 void OSGtoGLTF::applyBasicAnimation(const osg::ref_ptr<osg::Callback>& callback)
@@ -1479,11 +1515,16 @@ void OSGtoGLTF::apply(osg::Node& node)
 		pushedStateSet = pushStateSet(ss.get());
 	}
 
-	// Build our Skin (skeletons) early, before traverse and save pair (ID/Skin)
-	if (skeleton)
+	// Don't let 2 skeletons overlap (create only 1 skin)
+	if (skeleton && _gltfSkeletons.size() == 0)
 	{
 		_model.skins.push_back(tinygltf::Skin());
 		_gltfSkeletons.push(std::make_pair(_model.skins.size() - 1, &_model.skins.back()));
+	}
+	else if (skeleton && _gltfSkeletons.size() > 0)
+	{
+		// Mark a placeholder just to let the system know there are 2 or more skeletons
+		_gltfSkeletons.push(std::make_pair(-1, &_model.skins.back()));
 	}
 
 	traverse(node);
@@ -1591,7 +1632,7 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 
 	// Post-process skeleton... create inverse bind matrices accessor and skin weights
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
-	if (skeleton)
+	if (skeleton && _gltfSkeletons.size() == 1)
 	{
 		int MatrixAccessor = createBindMatrixAccessor(_skeletonInvBindMatrices);
 		_gltfSkeletons.top().second->inverseBindMatrices = MatrixAccessor;
@@ -1604,6 +1645,10 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 		_gltfSkeletons.pop();
 		_riggedMeshMap.clear();
 		_gltfBoneIDNames.clear();
+	}
+	else if (skeleton && _gltfSkeletons.size() > 0)
+	{
+		_gltfSkeletons.pop();
 	}
 }
 
@@ -1697,6 +1742,11 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		transformMatrix.preMultScale(scl);
 
 		normals = transformArray(normals, transformMatrix, true);
+	}
+	else
+	{
+		osg::Matrix identity;  // Just to ensure it is normalized
+		normals = transformArray(normals, identity, true);
 	}
 
 	osg::ref_ptr<osg::Vec4Array> tangents;

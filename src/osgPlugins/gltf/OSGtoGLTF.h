@@ -33,7 +33,8 @@ private:
 
     std::set<std::string> _animationTargetNames;          // Animation targets (for osg animated matrices)
     std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
-    std::map<std::string, int> _gltfAnimationTargets;     // Animated targets for gltf nodes
+    std::map<std::string, int> _gltfAnimationTargets;     // Animated targets for gltf Rig nodes
+    std::map<std::string, int> _gltfMorphTargets;         // Animated targets for gltf Morph nodes
     std::map<std::string, int> _gltfMaterials;
     std::map<std::string, int> _gltfTextures;
 
