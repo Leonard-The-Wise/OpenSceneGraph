@@ -663,6 +663,12 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 
 	std::string morphName = morph->getName();
 
+	// Refrain from re-creating the same array accessors for different primitives
+	// (because same pointers will result in reusing the same buffer)
+	std::map<std::string, osg::ref_ptr<const osg::Vec3Array>> morphVerticesMap;
+	std::map<std::string, osg::ref_ptr<const osg::Vec3Array>> morphNormalsMap;
+	std::map<std::string, osg::ref_ptr<osg::Vec3Array>> morphTangentsMap;
+
 	for (auto& primitive : mesh.primitives)
 	{
 		for (auto& morphTargetItem : morph->getMorphTargetList())
@@ -672,18 +678,25 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 
 			// Create vertices accessor
 			osg::ref_ptr<const osg::Vec3Array> vertices = dynamic_cast<const osg::Vec3Array*>(morphTarget->getVertexArray());
-			const osg::Vec3dArray* verticesd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getVertexArray());
-			if (verticesd)
-				vertices = doubleToFloatArray<osg::Vec3Array>(verticesd);
-
-			if (!vertices)
+			if (morphVerticesMap.find(morphTargetName) == morphVerticesMap.end())
 			{
-				OSG_WARN << "WARNING: Morph target contains no vertices: " << morphTargetName << std::endl;
-				continue;
-			}
+				const osg::Vec3dArray* verticesd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getVertexArray());
+				if (verticesd)
+					vertices = doubleToFloatArray<osg::Vec3Array>(verticesd);
 
-			if (!transformMatrix.isIdentity())
-				vertices = transformArray(vertices, transformMatrix, false);
+				if (!vertices)
+				{
+					OSG_WARN << "WARNING: Morph target contains no vertices: " << morphTargetName << std::endl;
+					continue;
+				}
+
+				if (!transformMatrix.isIdentity())
+					vertices = transformArray(vertices, transformMatrix, false);
+
+				morphVerticesMap.emplace(morphTargetName, vertices);
+			}
+			else
+				vertices = morphVerticesMap[morphTargetName];
 
 			osg::Vec3f verticesMin(FLT_MAX, FLT_MAX, FLT_MAX);
 			osg::Vec3f verticesMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -715,51 +728,70 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 
 			// Create normals accesssor
 			osg::ref_ptr<const osg::Vec3Array> normals = dynamic_cast<const osg::Vec3Array*>(morphTarget->getNormalArray());
-			const osg::Vec3dArray* normalsd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getNormalArray());
-			if (normalsd)
-				normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
+			if (morphNormalsMap.find(morphTargetName) == morphNormalsMap.end())
+			{
+				const osg::Vec3dArray* normalsd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getNormalArray());
+				if (normalsd)
+					normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
+
+				if (normals)
+				{
+					if (!transformMatrix.isIdentity())
+						normals = transformArray(normals, transformMatrix, true);
+				}
+
+				morphNormalsMap.emplace(morphTargetName, normals);
+			}
+			else
+				normals = morphNormalsMap[morphTargetName];
 
 			if (normals)
 			{
-				if (!transformMatrix.isIdentity())
-					normals = transformArray(normals, transformMatrix, true);
-
 				int normalAccessorIndex = getOrCreateAccessor(normals, normals->getNumElements(),
 					TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
-
 				morphTargetAttributes["NORMAL"] = normalAccessorIndex;
 			}
 
 			// Create tangents accessor
 			osg::ref_ptr<const osg::Vec4Array> tangents;
+			osg::ref_ptr<osg::Vec3Array> tangentsRefactor;
 			const osg::Vec4dArray* tangentsd(nullptr);
-			for (auto& attrib : morphTarget->getVertexAttribArrayList())
+			if (morphTangentsMap.find(morphTargetName) == morphTangentsMap.end())
 			{
-				bool isTangent = false;
-				if (attrib->getUserValue("tangent", isTangent))
+				for (auto& attrib : morphTarget->getVertexAttribArrayList())
 				{
-					if (isTangent)
+					bool isTangent = false;
+					if (attrib->getUserValue("tangent", isTangent))
 					{
-						tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
-						tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
-						if (tangentsd)
-							tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
-						break;
+						if (isTangent)
+						{
+							tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
+							tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
+							if (tangentsd)
+								tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
+							break;
+						}
 					}
 				}
+				if (tangents)
+				{
+					if (!transformMatrix.isIdentity())
+						tangents = transformArray(tangents, transformMatrix, true);
+
+					// Tangents on morph target is expected to be a Vec3Array, not Vec4, so we discard the 4th element.
+					tangentsRefactor = new osg::Vec3Array();
+					tangentsRefactor->reserveArray(tangents->size());
+					for (auto& v : *tangents)
+						tangentsRefactor->push_back(osg::Vec3(v.x(), v.y(), v.z()));
+				}
+
+				morphTangentsMap.emplace(morphTargetName, tangentsRefactor);
 			}
+			else
+				tangentsRefactor = morphTangentsMap[morphTargetName];
 
-			if (tangents)
+			if (tangentsRefactor)
 			{
-				if (!transformMatrix.isIdentity())
-					tangents = transformArray(tangents, transformMatrix, true);
-
-				// Tangents on morph target is expected to be a Vec3Array, not Vec4, so we discard the 4th element.
-				osg::ref_ptr<osg::Vec3Array> tangentsRefactor = new osg::Vec3Array();
-				tangentsRefactor->reserveArray(tangents->size());
-				for (auto& v : *tangents)
-					tangentsRefactor->push_back(osg::Vec3(v.x(), v.y(), v.z()));
-
 				int tangentAccessorIndex = getOrCreateAccessor(tangentsRefactor, tangentsRefactor->getNumElements(),
 					TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
 
