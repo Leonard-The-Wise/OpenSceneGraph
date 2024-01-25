@@ -25,7 +25,9 @@ private:
     StateSetStack _ssStack;
     RiggedMeshStack _riggedMeshMap;
     bool _firstMatrix;
+    bool _firstNamedMatrix;
     osg::Node* _firstMatrixNode;
+    std::string _modelName;
 
     std::stack<std::pair<int, tinygltf::Skin*>> _gltfSkeletons;
     BindMatrices _skeletonInvBindMatrices;
@@ -154,7 +156,7 @@ private:
 
 public:
     OSGtoGLTF(tinygltf::Model& model) :
-        _model(model), _firstMatrix(true), _firstMatrixNode(nullptr)
+        _model(model), _firstMatrix(true), _firstNamedMatrix(true), _firstMatrixNode(nullptr)
     {
         setTraversalMode(TRAVERSE_ALL_CHILDREN);
         _model.scenes.push_back(tinygltf::Scene());

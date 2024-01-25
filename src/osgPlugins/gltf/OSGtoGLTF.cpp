@@ -1483,13 +1483,21 @@ void OSGtoGLTF::apply(osg::Node& node)
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&node);
 	osgAnimation::Bone* bone = dynamic_cast<osgAnimation::Bone*>(&node);
 
+	bool emptyNode = isEmptyNode(&node);
 	std::string NodeName = node.getName();
 	if (skeleton)
 		NodeName = NodeName.empty() ? "Skeleton" : NodeName;
 
+	// Grab the model name from first matrix to use later (or now if it coincides)
+	if (_firstNamedMatrix && matrix)
+	{
+		_modelName = NodeName;
+		_firstNamedMatrix = false;
+	}
+
 	// First matrix: GLTF uses a +X=right +y=up -z=forward coordinate system
 	// so we fix it here
-	if (_firstMatrix && matrix)
+	if (_firstMatrix && matrix && !emptyNode)
 	{
 		osg::Matrix transform = osg::Matrixd::rotate(osg::Z_AXIS, osg::Y_AXIS);
 		osg::Matrix original = matrix->getMatrix();
@@ -1497,11 +1505,11 @@ void OSGtoGLTF::apply(osg::Node& node)
 		matrix->setMatrix(transform);
 		_firstMatrix = false;
 		_firstMatrixNode = &node;
+		NodeName = _modelName;
 	}
 
 	bool isRoot = _model.scenes[_model.defaultScene].nodes.empty();
-	if (isRoot && matrix)
-		//if (isRoot)
+	if (isRoot && matrix && !emptyNode)
 	{
 		// put a placeholder here just to prevent any other nodes
 		// from thinking they are the root
@@ -1536,7 +1544,7 @@ void OSGtoGLTF::apply(osg::Node& node)
 
 	// TODO: Create matrices only if animated. Recalculate transforms
 	// We only create relevant nodes like geometries and transform matrices
-	if (!isEmptyNode(&node) && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
+	if (!emptyNode && (geometry || matrix) || (rigGeometry && !isEmptyRig(rigGeometry)))
 	{
 		_model.nodes.push_back(tinygltf::Node());
 		tinygltf::Node& gnode = _model.nodes.back();
@@ -1623,14 +1631,10 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 		_model.nodes.back().translation = { translation.x(), translation.y(), translation.z() };
 		_model.nodes.back().rotation = { rotation.x(), rotation.y(), rotation.z(), rotation.w() };
 		_model.nodes.back().scale = { scale.x(), scale.y(), scale.z() };
-
-		// Nodes with matrices cannot be animated
-		//const double* ptr = matrix.ptr();
-		//for (unsigned i = 0; i < 16; ++i)
-		//	_model.nodes.back().matrix.push_back(*ptr++);
 	}
 
 	// Post-process skeleton... create inverse bind matrices accessor and skin weights
+	// Only for last skeleton
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
 	if (skeleton && _gltfSkeletons.size() == 1)
 	{
@@ -1640,7 +1644,7 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 		// Build skin weights and clear rigged mesh map, so we don't create duplicates
 		BuildSkinWeights(_riggedMeshMap, _gltfBoneIDNames);
 
-		// Clear queue and pop skeleton so any parent skeletons may be processed
+		// Clear queue and pop skeleton so other skeletons may be processed
 		_skeletonInvBindMatrices.clear();
 		_gltfSkeletons.pop();
 		_riggedMeshMap.clear();
