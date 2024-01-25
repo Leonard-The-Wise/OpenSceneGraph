@@ -35,6 +35,10 @@ private:
     std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
     std::map<std::string, int> _gltfAnimationTargets;     // Animated targets for gltf nodes
 
+    // Some structures to deal with morph targets
+    std::vector<float> _weightTimes;
+    std::vector<std::vector<float>> _weightKeys;
+
     enum class MaterialSurfaceLayer {
         None, AmbientOcclusion, Albedo, ClearCoat, ClearCoatNormal, ClearCoatRoughness, DisplacementColor, Emissive, Metallic, NormalMap, 
         Reflection, Roughness, Specular, Sheen, SheenRoughness, Shininess, Transparency
@@ -130,6 +134,10 @@ private:
     void createQuatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::QuatSphericalLinearChannel* quatChannel);
 
     void createFloatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::FloatLinearChannel* floatChannel);
+
+    void gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel);
+
+    void flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int targetId);
 
     void createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgAnimation);
 

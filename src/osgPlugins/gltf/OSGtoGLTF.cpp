@@ -646,14 +646,6 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 
 #pragma region Morph Geometry processing
 
-/// <summary>
-/// FIXME: This function is disabled for now... only marking dummy missing targets so animations won't emit warnings, 
-/// until we find a way to convert morph animations from OSG. (see for loop).
-/// </summary>
-/// <param name="geometry"></param>
-/// <param name="mesh"></param>
-/// <param name="meshNodeId"></param>
-/// <param name="isRigMorph"></param>
 void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph)
 {
 	const osgAnimation::MorphGeometry* morph = isRigMorph ?
@@ -669,111 +661,115 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 	if (isRigMorph)
 		transformMatrix = getMatrixFromSkeletonToNode(*geometry); 
 
-	tinygltf::Primitive& primitive = mesh.primitives.back();
 	std::string morphName = morph->getName();
 
-	for (auto& morphTargetItem : morph->getMorphTargetList())
+	for (auto& primitive : mesh.primitives)
 	{
-		const osg::Geometry* morphTarget = morphTargetItem.getGeometry();
-		std::string morphTargetName = morphTarget->getName();
-
-		// FIXME:: DISABLED for now. Only put a dummy name here to avoid warnings.
-		missingTargets.emplace(morphTargetName);
-		continue;
-
-		// Create vertices accessor
-		osg::ref_ptr<const osg::Vec3Array> vertices = dynamic_cast<const osg::Vec3Array*>(morphTarget->getVertexArray());
-		const osg::Vec3dArray* verticesd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getVertexArray());
-		if (verticesd)
-			vertices = doubleToFloatArray<osg::Vec3Array>(verticesd);
-
-		if (!vertices)
+		for (auto& morphTargetItem : morph->getMorphTargetList())
 		{
-			OSG_WARN << "WARNING: Morph target contains no vertices: " << morphTargetName << std::endl;
-			continue;
-		}
+			const osg::Geometry* morphTarget = morphTargetItem.getGeometry();
+			std::string morphTargetName = morphTarget->getName();
 
-		if (!transformMatrix.isIdentity())
-			vertices = transformArray(vertices, transformMatrix, false);
+			// Create vertices accessor
+			osg::ref_ptr<const osg::Vec3Array> vertices = dynamic_cast<const osg::Vec3Array*>(morphTarget->getVertexArray());
+			const osg::Vec3dArray* verticesd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getVertexArray());
+			if (verticesd)
+				vertices = doubleToFloatArray<osg::Vec3Array>(verticesd);
 
-		osg::Vec3f verticesMin(FLT_MAX, FLT_MAX, FLT_MAX);
-		osg::Vec3f verticesMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+			if (!vertices)
+			{
+				OSG_WARN << "WARNING: Morph target contains no vertices: " << morphTargetName << std::endl;
+				continue;
+			}
 
-		for (unsigned i = 0; i < vertices->size(); ++i)
-		{
-			const osg::Vec3f& v = (*vertices)[i];
-			verticesMin.x() = osg::minimum(verticesMin.x(), v.x());
-			verticesMin.y() = osg::minimum(verticesMin.y(), v.y());
-			verticesMin.z() = osg::minimum(verticesMin.z(), v.z());
-			verticesMax.x() = osg::maximum(verticesMax.x(), v.x());
-			verticesMax.y() = osg::maximum(verticesMax.y(), v.y());
-			verticesMax.z() = osg::maximum(verticesMax.z(), v.z());
-		}
-
-		int vertexAccessorIndex = getOrCreateAccessor(vertices, vertices->getNumElements(),
-			TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
-
-		tinygltf::Accessor& vertexAccessor = _model.accessors[vertexAccessorIndex];
-		vertexAccessor.minValues.push_back(verticesMin.x());
-		vertexAccessor.minValues.push_back(verticesMin.y());
-		vertexAccessor.minValues.push_back(verticesMin.z());
-		vertexAccessor.maxValues.push_back(verticesMax.x());
-		vertexAccessor.maxValues.push_back(verticesMax.y());
-		vertexAccessor.maxValues.push_back(verticesMax.z());
-
-		std::map<std::string, int> morphTargetAttributes;
-		morphTargetAttributes["POSITION"] = vertexAccessorIndex;
-
-		// Create normals accesssor
-		osg::ref_ptr<const osg::Vec3Array> normals = dynamic_cast<const osg::Vec3Array*>(morphTarget->getNormalArray());
-		const osg::Vec3dArray* normalsd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getNormalArray());
-		if (normalsd)
-			normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
-
-		if (normals)
-		{
 			if (!transformMatrix.isIdentity())
-				normals = transformArray(normals, transformMatrix, true);
+				vertices = transformArray(vertices, transformMatrix, false);
 
-			int normalAccessorIndex = getOrCreateAccessor(normals, normals->getNumElements(),
+			osg::Vec3f verticesMin(FLT_MAX, FLT_MAX, FLT_MAX);
+			osg::Vec3f verticesMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+			for (unsigned i = 0; i < vertices->size(); ++i)
+			{
+				const osg::Vec3f& v = (*vertices)[i];
+				verticesMin.x() = osg::minimum(verticesMin.x(), v.x());
+				verticesMin.y() = osg::minimum(verticesMin.y(), v.y());
+				verticesMin.z() = osg::minimum(verticesMin.z(), v.z());
+				verticesMax.x() = osg::maximum(verticesMax.x(), v.x());
+				verticesMax.y() = osg::maximum(verticesMax.y(), v.y());
+				verticesMax.z() = osg::maximum(verticesMax.z(), v.z());
+			}
+
+			int vertexAccessorIndex = getOrCreateAccessor(vertices, vertices->getNumElements(),
 				TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
 
-			morphTargetAttributes["NORMAL"] = normalAccessorIndex;
-		}
+			tinygltf::Accessor& vertexAccessor = _model.accessors[vertexAccessorIndex];
+			vertexAccessor.minValues.push_back(verticesMin.x());
+			vertexAccessor.minValues.push_back(verticesMin.y());
+			vertexAccessor.minValues.push_back(verticesMin.z());
+			vertexAccessor.maxValues.push_back(verticesMax.x());
+			vertexAccessor.maxValues.push_back(verticesMax.y());
+			vertexAccessor.maxValues.push_back(verticesMax.z());
 
-		// Create tangents accessor
-		osg::ref_ptr<const osg::Vec4Array> tangents;
-		const osg::Vec4dArray* tangentsd(nullptr);
-		for (auto& attrib : morphTarget->getVertexAttribArrayList())
-		{
-			bool isTangent = false;
-			if (attrib->getUserValue("tangent", isTangent))
+			std::map<std::string, int> morphTargetAttributes;
+			morphTargetAttributes["POSITION"] = vertexAccessorIndex;
+
+			// Create normals accesssor
+			osg::ref_ptr<const osg::Vec3Array> normals = dynamic_cast<const osg::Vec3Array*>(morphTarget->getNormalArray());
+			const osg::Vec3dArray* normalsd = dynamic_cast<const osg::Vec3dArray*>(morphTarget->getNormalArray());
+			if (normalsd)
+				normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
+
+			if (normals)
 			{
-				if (isTangent)
+				if (!transformMatrix.isIdentity())
+					normals = transformArray(normals, transformMatrix, true);
+
+				int normalAccessorIndex = getOrCreateAccessor(normals, normals->getNumElements(),
+					TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+				morphTargetAttributes["NORMAL"] = normalAccessorIndex;
+			}
+
+			// Create tangents accessor
+			osg::ref_ptr<const osg::Vec4Array> tangents;
+			const osg::Vec4dArray* tangentsd(nullptr);
+			for (auto& attrib : morphTarget->getVertexAttribArrayList())
+			{
+				bool isTangent = false;
+				if (attrib->getUserValue("tangent", isTangent))
 				{
-					tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
-					tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
-					if (tangentsd)
-						tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
-					break;
+					if (isTangent)
+					{
+						tangents = osg::dynamic_pointer_cast<osg::Vec4Array>(attrib);
+						tangentsd = osg::dynamic_pointer_cast<osg::Vec4dArray>(attrib);
+						if (tangentsd)
+							tangents = doubleToFloatArray<osg::Vec4Array>(tangentsd);
+						break;
+					}
 				}
 			}
+
+			if (tangents)
+			{
+				if (!transformMatrix.isIdentity())
+					tangents = transformArray(tangents, transformMatrix, true);
+
+				// Tangents on morph target is expected to be a Vec3Array, not Vec4, so we discard the 4th element.
+				osg::ref_ptr<osg::Vec3Array> tangentsRefactor = new osg::Vec3Array();
+				tangentsRefactor->reserveArray(tangents->size());
+				for (auto& v : *tangents)
+					tangentsRefactor->push_back(osg::Vec3(v.x(), v.y(), v.z()));
+
+				int tangentAccessorIndex = getOrCreateAccessor(tangentsRefactor, tangentsRefactor->getNumElements(),
+					TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, TINYGLTF_TARGET_ARRAY_BUFFER);
+
+				morphTargetAttributes["TANGENT"] = tangentAccessorIndex;
+			}
+
+			primitive.targets.push_back(morphTargetAttributes);
+
+			_gltfAnimationTargets[morphTargetName] = meshNodeId;
 		}
-
-		if (tangents)
-		{
-			if (!transformMatrix.isIdentity())
-				tangents = transformArray(tangents, transformMatrix, true);
-
-			int tangentAccessorIndex = getOrCreateAccessor(tangents, tangents->getNumElements(),
-				TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC4, TINYGLTF_TARGET_ARRAY_BUFFER);
-
-			morphTargetAttributes["TANGENT"] = tangentAccessorIndex;
-		}
-
-		primitive.targets.push_back(morphTargetAttributes);
-
-		_gltfAnimationTargets[morphTargetName] = meshNodeId;
 	}
 }
 
@@ -781,6 +777,7 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 
 
 #pragma region Animations Processing
+
 
 void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel)
 {
@@ -824,7 +821,7 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 		keysArray->push_back(keyframe.getValue());
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
-		timeMax = osg::maximum(timeMax, static_cast<float>(keyframe.getTime()));
+		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
 		i++;
 	}
 
@@ -880,7 +877,7 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 		keysArray->push_back(osg::Vec4(keyframe.getValue().x(), keyframe.getValue().y(), keyframe.getValue().z(), keyframe.getValue().w()));
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
-		timeMax = osg::maximum(timeMax, static_cast<float>(keyframe.getTime()));
+		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
 		i++;
 	}
 
@@ -905,27 +902,56 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 	gltfAnimation.channels.push_back(channel);
 }
 
-void OSGtoGLTF::createFloatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::FloatLinearChannel* floatChannel) 
+void OSGtoGLTF::gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel)
 {
-	std::string targetPath = "weights";
-
 	osgAnimation::FloatKeyframeContainer* keyframes = floatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
-	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
-	osg::ref_ptr<osg::FloatArray> keysArray = new osg::FloatArray;
 
+	// Begin a new channel
+	if (_weightTimes.size() == 0)
+	{
+		_weightTimes.reserve(keyframes->size());
+		_weightKeys.resize(keyframes->size());
+		for (const osgAnimation::FloatKeyframe& keyframe : *keyframes)
+			_weightTimes.push_back(keyframe.getTime());
+	}
+
+	// Alternate key placement into vectors.
+	for (unsigned int i = 0; i < keyframes->size(); ++i)
+	{
+		_weightKeys[i].push_back((*keyframes)[i].getValue());
+	}
+
+}
+
+void OSGtoGLTF::flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int targetId)
+{
+	// Check to see if we haven't already flushed this
+	if (_weightTimes.size() == 0)
+		return;
+
+	// Condense keys and times arrays into single vectors.
+	// keysArray should contain at least timesArray * weightTargets elements at the end.
+	osg::ref_ptr<osg::FloatArray> timesArrayTmp = new osg::FloatArray(_weightTimes.begin(), _weightTimes.end());
+	osg::ref_ptr<osg::FloatArray> keysArray = new osg::FloatArray;
+	for (auto& weightKeys : _weightKeys)
+		keysArray->insert(keysArray->end(), weightKeys.begin(), weightKeys.end());
+
+	// Clear old arrays so they may be reused
+	_weightTimes.clear();
+	_weightKeys.clear();
+
+	// Proceed with normal sampler creation
+	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
 	float timeMin(FLT_MAX);
 	float timeMax(-FLT_MAX);
 
-	timesArray->reserve(keyframes->size());
-	keysArray->reserve(keyframes->size());
-
+	timesArray->reserveArray(timesArrayTmp->size());
 	size_t i = 0; // Keep track of time and try to correct equal times
-	for (const osgAnimation::FloatKeyframe& keyframe : *keyframes)
+	for (auto& timeValue : *timesArrayTmp)
 	{
-		double timeValue = keyframe.getTime();
 		if (i > 0)
 		{
-			double oldTime = (*keyframes)[i - 1].getTime();
+			double oldTime = (*timesArrayTmp)[i - 1];
 			double delta = timeValue - oldTime;
 			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
 			{
@@ -933,11 +959,9 @@ void OSGtoGLTF::createFloatSampler(tinygltf::Animation& gltfAnimation, int targe
 			}
 		}
 		timesArray->push_back(timeValue);
-		keysArray->push_back(keyframe.getValue());
-
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
-		timeMax = osg::maximum(timeMax, static_cast<float>(keyframe.getTime()));
-		i++;
+		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
+		++i;
 	}
 
 	// Criar os accessors para os tempos e valores
@@ -956,7 +980,7 @@ void OSGtoGLTF::createFloatSampler(tinygltf::Animation& gltfAnimation, int targe
 	tinygltf::AnimationChannel channel;
 	channel.sampler = samplerIndex;
 	channel.target_node = targetId;
-	channel.target_path = targetPath;
+	channel.target_path = "weights";
 
 	gltfAnimation.channels.push_back(channel);
 }
@@ -969,10 +993,11 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 	tinygltf::Animation gltfAnimation;
 	gltfAnimation.name = animationName;
 
+	int oldTargetId(-1);
+	int targetId(-1);
 	for (auto& channel : osgAnimation->getChannels())
 	{
 		std::string targetName = channel->getTargetName();
-		int targetId(-1);
 
 		// TODO: Morph
 		// Get target ID from name
@@ -997,11 +1022,30 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 		{
 			createQuatSampler(gltfAnimation, targetId, quatChannel);
 		}
+
+		// Float samplers are treated different. It is animating node weights and so it needs to first
+		// gather all keys from different morph targets of the same node and then align them in a single channel, then flush it all
+		// to the animation stack. For this we need static structures as helpers.
 		else if (auto floatChannel = dynamic_cast<osgAnimation::FloatLinearChannel*>(channel.get())) 
 		{
-			createFloatSampler(gltfAnimation, targetId, floatChannel);
+			if (oldTargetId == -1)
+				oldTargetId = targetId;
+
+			if (targetId == oldTargetId)
+			{
+				gatherFloatKeys(floatChannel);
+			}
+			else
+			{
+				flushWeightsKeySampler(gltfAnimation, oldTargetId);
+				gatherFloatKeys(floatChannel);
+				oldTargetId = targetId;
+			}			
 		}
 	}
+
+	// Ensure all float animations are saved
+	flushWeightsKeySampler(gltfAnimation, targetId);
 
 	_model.animations.push_back(gltfAnimation);
 }
