@@ -1133,8 +1133,7 @@ OSGtoGLTF::MaterialSurfaceLayer OSGtoGLTF::getTexMaterialLayer(const osg::Materi
 		{
 			if (knownLayer == "AOPBR")
 				return MaterialSurfaceLayer::AmbientOcclusion;
-			else if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor" ||
-				knownLayer == "DiffuseIntensity")
+			else if (knownLayer == "AlbedoPBR" || knownLayer == "DiffusePBR" || knownLayer == "DiffuseColor")
 				return MaterialSurfaceLayer::Albedo;
 			else if (knownLayer == "ClearCoat" || knownLayer == "Matcap")
 				return MaterialSurfaceLayer::ClearCoat;
@@ -1144,13 +1143,13 @@ OSGtoGLTF::MaterialSurfaceLayer OSGtoGLTF::getTexMaterialLayer(const osg::Materi
 				return MaterialSurfaceLayer::ClearCoatNormal;
 			else if (knownLayer == "ClearCoatRoughness")
 				return MaterialSurfaceLayer::ClearCoatRoughness;
-			else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor" || knownLayer == "SpecularHardness")
+			else if (knownLayer == "SpecularPBR" || knownLayer == "SpecularF0" || knownLayer == "SpecularColor")
 				return MaterialSurfaceLayer::Specular;
 			else if (knownLayer == "Displacement" || knownLayer == "CavityPBR")
 				return MaterialSurfaceLayer::DisplacementColor;
 			else if (knownLayer == "EmitColor")
 				return MaterialSurfaceLayer::Emissive;
-			else if (knownLayer == "GlossinessPBR" || knownLayer == "RoughnessPBR" || knownLayer == "SheenRoughness")
+			else if (knownLayer == "GlossinessPBR" || knownLayer == "RoughnessPBR")
 				return MaterialSurfaceLayer::Roughness;
 			else if (knownLayer == "Opacity" || knownLayer == "AlphaMask")
 				return MaterialSurfaceLayer::Transparency;
@@ -1266,9 +1265,15 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
 		material.extensions.emplace("KHR_materials_specular", specularExtensionValue);		
 
+		std::set<MaterialSurfaceLayer> usedMaterials;
 		for (auto& tex : texArray)
 		{
 			MaterialSurfaceLayer textureLayer = getTexMaterialLayer(mat, tex);
+
+			// Don't overwrite materials.
+			if (usedMaterials.find(textureLayer) != usedMaterials.end())
+				continue;
+			usedMaterials.emplace(textureLayer);
 
 			int textureIndex = createTexture(tex);
 
@@ -1342,6 +1347,7 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 			case MaterialSurfaceLayer::Emissive:
 			{
 				material.emissiveTexture.index = textureIndex;
+				break;
 			}
 			case MaterialSurfaceLayer::Metallic:
 			{
@@ -1351,6 +1357,7 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 			case MaterialSurfaceLayer::NormalMap:
 			{
 				material.normalTexture.index = textureIndex;
+				break;
 			}
 			case MaterialSurfaceLayer::Roughness: // Conflicts with metallic. Must study how to solve this
 			{
