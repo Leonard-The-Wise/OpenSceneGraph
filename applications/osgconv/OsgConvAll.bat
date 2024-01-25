@@ -2,21 +2,29 @@
 
 SETLOCAL ENABLEDELAYEDEXPANSION
 
-REM Captura todos os parâmetros da linha de comando como uma string
+REM Capture all commandline parameters to a string
 SET "additionalParams=%*"
 
-REM Loop através de cada diretório na pasta principal
+REM Loop through every directory on current folder
 FOR /D %%D in (*) DO (
-    REM Entra no diretório
+    REM Enters directory
     cd "%%D"
     
-    REM Executa o comando usando o nome do diretório e os parâmetros adicionais da linha de comando
+    REM Execute conversion
 	echo Convertendo %%~nxD
-    osgconv file.osgjs %%~nxD.fbx !additionalParams!
+    osgconv file.osgjs %%~nxD.gltf !additionalParams!
+	
+	echo Creating output directory...
+	mkdir %%~nxD-output
+	move %%~nxD.gltf %%~nxD-output
+	cd %%~nxD-output
+	mkdir textures
+	copy ..\textures\*.* textures /Y
+	cd..
     
-    REM Retorna para a pasta principal
+    REM Return to main folder
     cd ..
 )
 
-echo Processo concluído.
+echo Conversions complete!
 pause

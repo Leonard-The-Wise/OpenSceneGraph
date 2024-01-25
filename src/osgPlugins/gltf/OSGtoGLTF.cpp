@@ -1178,6 +1178,9 @@ int OSGtoGLTF::createTexture(const osg::Texture* texture)
 			c = '/';
 	}
 
+	if (_gltfTextures.find(fileName) != _gltfTextures.end())
+		return _gltfTextures[fileName];
+
 	tinygltf::Image gltfImage;
 	gltfImage.uri = fileName;
 	int imageIndex = _model.images.size();
@@ -1197,6 +1200,8 @@ int OSGtoGLTF::createTexture(const osg::Texture* texture)
 
 	int textureIndex = _model.textures.size();
 	_model.textures.push_back(gltfTexture);
+
+	_gltfTextures.emplace(fileName, textureIndex);
 
 	return textureIndex;
 }
@@ -1219,6 +1224,11 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		return -1;
 
 	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
+
+	std::string materialName = mat->getName();
+	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
+		return _gltfMaterials[materialName];
+
 	std::vector<const osg::Texture*> texArray;
 	for (unsigned int i = 0; i < stateSet->getNumTextureAttributeLists(); i++)
 	{
@@ -1235,7 +1245,7 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		transparency = 1 - diffuse.w();
 
 		tinygltf::Material material;
-		material.name = mat->getName();
+		material.name = materialName;
 
 		material.pbrMetallicRoughness.baseColorFactor = { diffuse.r(), diffuse.g(), diffuse.b(), diffuse.a() };
 		material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
@@ -1408,6 +1418,8 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 
 		materialIndex = _model.materials.size();
 		_model.materials.push_back(material);
+
+		_gltfMaterials.emplace(materialName, materialIndex);
 	}
 
 	return materialIndex;
@@ -1710,6 +1722,11 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		transformMatrix.preMultScale(scl);
 
 		tangents = transformArray(tangents, transformMatrix, true);
+	}
+	else
+	{
+		osg::Matrix identity;
+		tangents = transformArray(tangents, identity, true); // just normalize vector
 	}
 
 	osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
