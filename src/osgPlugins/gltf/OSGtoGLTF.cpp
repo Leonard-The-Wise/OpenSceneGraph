@@ -1761,7 +1761,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	{
 		osg::Vec3 scl, tr;
 		osg::Quat rot, so;
-		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
+		osg::Matrix transformMatrix = rigGeometry->getMatrixFromSkeletonToGeometry();
 		transformMatrix.decompose(tr, rot, scl, so);
 		transformMatrix.makeIdentity();
 		transformMatrix.preMultRotate(rot);
@@ -1798,7 +1798,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	{
 		osg::Vec3 scl, tr;
 		osg::Quat rot, so;
-		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
+		osg::Matrix transformMatrix = rigGeometry->getMatrixFromSkeletonToGeometry();
 		transformMatrix.decompose(tr, rot, scl, so);
 		transformMatrix.makeIdentity();
 		transformMatrix.preMultRotate(rot);

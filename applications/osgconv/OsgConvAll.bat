@@ -11,17 +11,9 @@ FOR /D %%D in (*) DO (
     cd "%%D"
     
     REM Execute conversion
-	echo Cconverting... %%~nxD
+	echo Converting... %%~nxD
     osgconv file.osgjs %%~nxD.gltf !additionalParams!
 	
-	echo Creating output directory...
-	mkdir %%~nxD-output
-	move %%~nxD.gltf %%~nxD-output
-	cd %%~nxD-output
-	mkdir textures
-	copy ..\textures\*.* textures /Y
-	cd..
-    
     REM Return to main folder
     cd ..
 	
