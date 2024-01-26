@@ -657,7 +657,6 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
     ref_ptr<Array> weights;
     std::map<int, ref_ptr<Array>> texcoords;
     ref_ptr<Array> indices;
-    int vertexAttribArrays = 0;
     uint32_t magic = 0;
     GLenum drawMode = GL_POINTS;
 
@@ -765,7 +764,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         if (tangents)
         {
             tangents->setUserValue("tangent", true);
-            newGeometry->setVertexAttribArray(vertexAttribArrays++, tangents);
+            newGeometry->setVertexAttribArray(newGeometry->getVertexAttribArrayList().size(), tangents);
         }
 
         for (auto& texcoord : texcoords)
@@ -983,13 +982,13 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         if (bones)
         {
             bones->setUserValue("bones", true);
-            rigGeometry->setVertexAttribArray(vertexAttribArrays++, bones);
+            rigGeometry->setVertexAttribArray(newGeometry->getVertexAttribArrayList().size(), bones);
         }
 
         if (weights)
         {
-            bones->setUserValue("weights", true);
-            rigGeometry->setVertexAttribArray(vertexAttribArrays++, weights);
+            weights->setUserValue("weights", true);
+            rigGeometry->setVertexAttribArray(newGeometry->getVertexAttribArrayList().size(), weights);
         }
 
         // Build influence map
