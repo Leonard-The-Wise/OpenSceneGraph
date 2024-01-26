@@ -11,7 +11,7 @@ FOR /D %%D in (*) DO (
     cd "%%D"
     
     REM Execute conversion
-	echo Convertendo %%~nxD
+	echo Cconverting... %%~nxD
     osgconv file.osgjs %%~nxD.gltf !additionalParams!
 	
 	echo Creating output directory...
@@ -24,6 +24,8 @@ FOR /D %%D in (*) DO (
     
     REM Return to main folder
     cd ..
+	
+	echo.
 )
 
 echo Conversions complete!
