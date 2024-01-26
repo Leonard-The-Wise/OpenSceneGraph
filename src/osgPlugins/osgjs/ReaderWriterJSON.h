@@ -40,15 +40,16 @@ public:
     ReaderWriterJSON()
     {
         supportsExtension("osgjs", "OpenSceneGraph Javascript implementation format");
-        supportsOption("resizeTextureUpToPowerOf2=<int>", "(write option) Specify the maximum power of 2 allowed dimension for texture. Using 0 will disable the functionality and no image resizing will occur.");
-        supportsOption("useExternalBinaryArray", "(write option) create binary files for vertex arrays");
-        supportsOption("mergeAllBinaryFiles", "(write option) merge all binary files into one to avoid multi request on a server");
-        supportsOption("inlineImages", "(write option) insert base64 encoded images instead of referring to them");
-        supportsOption("varint", "(write option) Use varint encoding to serialize integer buffers");
-        supportsOption("useSpecificBuffer=userkey1[=uservalue1][:buffername1],userkey2[=uservalue2][:buffername2]",
+        supportsOption("ResizeTextureUpToPowerOf2=<int>", "(write option) Specify the maximum power of 2 allowed dimension for texture. Using 0 will disable the functionality and no image resizing will occur.");
+        supportsOption("UseExternalBinaryArray", "(write option) create binary files for vertex arrays");
+        supportsOption("MergeAllBinaryFiles", "(write option) merge all binary files into one to avoid multi request on a server");
+        supportsOption("InlineImages", "(write option) insert base64 encoded images instead of referring to them");
+        supportsOption("Varint", "(write option) Use varint encoding to serialize integer buffers");
+        supportsOption("UseSpecificBuffer=userkey1[=uservalue1][:buffername1],userkey2[=uservalue2][:buffername2]",
             "(write option) uses specific buffers for unshared buffers attached to geometries having a specified user key/value. Buffer name *may* be specified after ':' and will be set to uservalue by default. If no value is set then only the existence of a uservalue with key string is performed.");
-        supportsOption("disableCompactBuffer", "(write option) keep source types and do not try to optimize buffers size");
-        supportsOption("disableStrictJson", "(write option) do not clean string (to utf8) or floating point (should be finite) values");
+        supportsOption("DisableCompactBuffer", "(write option) keep source types and do not try to optimize buffers size");
+        supportsOption("DisableStrictJson", "(write option) do not clean string (to utf8) or floating point (should be finite) values");
+        supportsOption("NoAnimations", "(read option) Import model without animations.");
     }
 
     virtual const char* className() const { return "OSGJS json Reader/Writer"; }

@@ -30,7 +30,6 @@ public:
         supportsOption("FlipUVs", "(Write option) Flip textures UV's.");
         supportsOption("NoAnimations", "(Write option) Ignore animations.");
         supportsOption("NoRigging", "(Write option) Ignore model rigging. This option also disables animations exporting.");
-        supportsOption("NoWeights", "(Write option) Export skeleton and animations without any vertex weights.");
         supportsOption("RotateXAxis", "(Write option) Rotate models on X axis. Use like: -O RotateXAxis=Angle (eg: RotateXAxis=-90.0).");
         supportsOption("ScaleModel", "(Write option) Scale model uniformly by given factor. Use like -O ScaleModel=Factor (eg: ScaleModel=100.0).");
     }

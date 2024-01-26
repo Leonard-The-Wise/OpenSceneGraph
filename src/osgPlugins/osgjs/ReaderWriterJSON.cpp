@@ -135,39 +135,39 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 pre_equals = opt;
             }
 
-            if (pre_equals == "useExternalBinaryArray")
+            if (pre_equals == "UseExternalBinaryArray")
             {
                 localOptions.useExternalBinaryArray = true;
             }
-            if (pre_equals == "mergeAllBinaryFiles")
+            if (pre_equals == "MergeAllBinaryFiles")
             {
                 localOptions.mergeAllBinaryFiles = true;
             }
-            if (pre_equals == "disableCompactBuffer")
+            if (pre_equals == "DisableCompactBuffer")
             {
                 localOptions.disableCompactBuffer = true;
             }
-            if (pre_equals == "disableStrictJson")
+            if (pre_equals == "DisableStrictJson")
             {
                 localOptions.strictJson = false;
             }
 
 
-            if (pre_equals == "inlineImages")
+            if (pre_equals == "InlineImages")
             {
                 localOptions.inlineImages = true;
             }
-            if (pre_equals == "varint")
+            if (pre_equals == "Varint")
             {
                 localOptions.varint = true;
             }
 
-            if (pre_equals == "rebuildMaterials")
+            if (pre_equals == "RebuildMaterials")
             {
                 localOptions.rebuildMaterials = true;
             }
 
-            if (pre_equals == "ignoreGzExtension")
+            if (pre_equals == "IgnoreGzExtension")
             {
                 localOptions.ignoreGzExtension = true;
             }
@@ -178,7 +178,7 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 localOptions.ignoreAnimations = true;
             }
 
-            if (pre_equals == "additionalSourceDir")
+            if (pre_equals == "AdditionalSourceDir")
             {
                 std::string path = post_equals;
                 path.erase(std::remove(path.begin(), path.end(), '\"'), path.end());
