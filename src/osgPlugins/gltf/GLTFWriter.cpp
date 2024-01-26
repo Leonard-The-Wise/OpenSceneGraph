@@ -59,5 +59,18 @@ void GLTFWriter::convertOSGtoGLTF(const osg::Node& node, tinygltf::Model& model)
 
 	OSGtoGLTF converter(model);
 	converter.buildAnimationTargets(dynamic_cast<osg::Group*>(&nc_node));
-	nc_node.accept(converter);
+
+	if (converter.hasTransformMatrix(&nc_node))
+		nc_node.accept(converter);
+	else
+	{
+		osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform;
+		transform->setName("GLTF Converted Scene");
+		transform->addChild(&nc_node);
+
+		transform->accept(converter);
+
+		transform->removeChild(&nc_node);
+		nc_node.unref_nodelete();
+	}
 }

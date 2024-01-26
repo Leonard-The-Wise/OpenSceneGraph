@@ -172,6 +172,8 @@ public:
     void apply(osg::Geometry& geometry);
 
     void buildAnimationTargets(osg::Group* node);
+    
+    bool hasTransformMatrix(const osg::Node* object);
 };
 
 

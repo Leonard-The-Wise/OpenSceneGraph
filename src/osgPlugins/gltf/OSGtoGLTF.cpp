@@ -343,6 +343,18 @@ static std::string getLastNamePart(const std::string& input)
 	return input;
 }
 
+bool hasMatrixParent(const osg::Node& object)
+{
+	if (dynamic_cast<const osg::MatrixTransform*>(&object))
+		return true;
+
+	if (object.getNumParents() == 0)
+		return false;
+
+	return hasMatrixParent(*object.getParent(0));
+}
+
+
 #pragma endregion
 
 
@@ -1259,6 +1271,8 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		return -1;
 
 	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
+	if (!mat)
+		return -1;
 
 	std::string materialName = mat->getName();
 	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
@@ -1270,200 +1284,198 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		texArray.push_back(dynamic_cast<const osg::Texture*>(stateSet->getTextureAttribute(i, osg::StateAttribute::TEXTURE)));
 	}
 
-	if (mat)
+	diffuse = mat->getDiffuse(osg::Material::FRONT);
+	ambient = mat->getAmbient(osg::Material::FRONT);
+	specular = mat->getSpecular(osg::Material::FRONT);
+	shininess = mat->getShininess(osg::Material::FRONT);
+	emission = mat->getEmission(osg::Material::FRONT);
+	transparency = 1 - diffuse.w();
+
+	tinygltf::Material material;
+	material.name = materialName;
+
+	material.pbrMetallicRoughness.baseColorFactor = { diffuse.r(), diffuse.g(), diffuse.b(), diffuse.a() };
+	material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
+
+	// Declare use of specular extension
+	if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end()) 
 	{
-		diffuse = mat->getDiffuse(osg::Material::FRONT);
-		ambient = mat->getAmbient(osg::Material::FRONT);
-		specular = mat->getSpecular(osg::Material::FRONT);
-		shininess = mat->getShininess(osg::Material::FRONT);
-		emission = mat->getEmission(osg::Material::FRONT);
-		transparency = 1 - diffuse.w();
-
-		tinygltf::Material material;
-		material.name = materialName;
-
-		material.pbrMetallicRoughness.baseColorFactor = { diffuse.r(), diffuse.g(), diffuse.b(), diffuse.a() };
-		material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
-
-		// Declare use of specular extension
-		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end()) 
-		{
-			_model.extensionsUsed.emplace_back("KHR_materials_specular");
-		}
-
-		tinygltf::Value specularColorFactorValue;
-		for (float component : {specular.x(), specular.y(), specular.z()}) 
-		{
-			specularColorFactorValue.Get<tinygltf::Value::Array>().emplace_back(component);
-		}
-
-		tinygltf::Value specularExtensionValue;
-		specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
-		material.extensions.emplace("KHR_materials_specular", specularExtensionValue);		
-
-		std::set<MaterialSurfaceLayer> usedMaterials;
-		for (auto& tex : texArray)
-		{
-			MaterialSurfaceLayer textureLayer = getTexMaterialLayer(mat, tex);
-
-			// Don't overwrite materials.
-			if (usedMaterials.find(textureLayer) != usedMaterials.end())
-				continue;
-			usedMaterials.emplace(textureLayer);
-
-			int textureIndex = createTexture(tex);
-
-			switch (textureLayer)
-			{
-			case MaterialSurfaceLayer::Albedo:
-			{
-				material.pbrMetallicRoughness.baseColorTexture.index = textureIndex;
-				break;
-			}
-			case MaterialSurfaceLayer::AmbientOcclusion:
-			{
-				material.occlusionTexture.index = textureIndex;
-				break;
-			}
-			case MaterialSurfaceLayer::ClearCoat:
-			{
-				// Declare use of clear coat extension
-				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
-				{
-					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
-				}
-
-				if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end()) 
-				{
-					material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
-				}
-				auto& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
-				tinygltf::Value clearcoatTextureValue;
-				clearcoatTextureValue.Get< tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
-				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatTexture", clearcoatTextureValue);								
-				break;
-			}
-			case MaterialSurfaceLayer::ClearCoatNormal:
-			{
-				// Declare use of clear coat extension
-				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
-				{
-					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
-				}
-
-				if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end())
-				{
-					material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
-				}
-				tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
-				tinygltf::Value clearcoatNormalTexture;
-				clearcoatNormalTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
-				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatNormalTexture", clearcoatNormalTexture);
-				break;
-			}
-			case MaterialSurfaceLayer::ClearCoatRoughness:
-			{
-				// Declare use of clear coat extension
-				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
-				{
-					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
-				}
-
-				if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end())
-				{
-					material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
-				}
-				tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
-				tinygltf::Value clearcoatRoughnessTexture;
-				clearcoatRoughnessTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
-				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatRoughnessTexture", clearcoatRoughnessTexture);
-
-				break;
-			}
-			case MaterialSurfaceLayer::Emissive:
-			{
-				material.emissiveTexture.index = textureIndex;
-				break;
-			}
-			case MaterialSurfaceLayer::Metallic:
-			{
-				material.pbrMetallicRoughness.metallicRoughnessTexture.index = textureIndex;
-				break;
-			}
-			case MaterialSurfaceLayer::NormalMap:
-			{
-				material.normalTexture.index = textureIndex;
-				break;
-			}
-			case MaterialSurfaceLayer::Roughness: // Conflicts with metallic. Must study how to solve this
-			{
-				material.pbrMetallicRoughness.metallicRoughnessTexture.index = textureIndex;
-				break;
-			}
-			case MaterialSurfaceLayer::Sheen:
-			{
-				// Declare use of sheen extension
-				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
-				{
-					_model.extensionsUsed.emplace_back("KHR_materials_sheen");
-				}
-
-				if (material.extensions.find("KHR_materials_sheen") == material.extensions.end())
-				{
-					material.extensions["KHR_materials_sheen"] = tinygltf::Value();
-				}
-				tinygltf::Value& sheenExtension = material.extensions["KHR_materials_sheen"];
-				tinygltf::Value sheenTexture;
-				sheenTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
-				sheenExtension.Get<tinygltf::Value::Object>().emplace("sheenColorTexture", sheenTexture);
-
-				break;
-			}
-			case MaterialSurfaceLayer::SheenRoughness:
-			{
-				// Declare use of sheen extension
-				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
-				{
-					_model.extensionsUsed.emplace_back("KHR_materials_sheen");
-				}
-
-				if (material.extensions.find("KHR_materials_sheen") == material.extensions.end())
-				{
-					material.extensions["KHR_materials_sheen"] = tinygltf::Value();
-				}
-
-				tinygltf::Value& sheenExtension = material.extensions["KHR_materials_sheen"];
-				tinygltf::Value sheenTexture;
-				sheenTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
-				sheenExtension.Get<tinygltf::Value::Object>().emplace("sheenRoughnessTexture", sheenTexture);
-
-				break;
-			}
-			case MaterialSurfaceLayer::Specular:
-			{
-				if (material.extensions.find("KHR_materials_specular") == material.extensions.end())
-				{
-					material.extensions["KHR_materials_specular"] = tinygltf::Value();
-				}
-				tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_specular"];
-				tinygltf::Value specularColorTexture;
-				specularColorTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
-				clearCoatExtension.Get<tinygltf::Value::Object>().emplace("specularColorTexture", specularColorTexture);
-
-				break;
-			}
-			default:
-			{
-				OSG_DEBUG << "Missing texture placement for: " << osgDB::getSimpleFileName(tex->getImage(0)->getFileName()) << std::endl;
-			}
-			}
-		}
-
-		materialIndex = _model.materials.size();
-		_model.materials.push_back(material);
-
-		_gltfMaterials.emplace(materialName, materialIndex);
+		_model.extensionsUsed.emplace_back("KHR_materials_specular");
 	}
+
+	tinygltf::Value specularColorFactorValue;
+	for (float component : {specular.x(), specular.y(), specular.z()}) 
+	{
+		specularColorFactorValue.Get<tinygltf::Value::Array>().emplace_back(component);
+	}
+
+	tinygltf::Value specularExtensionValue;
+	specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
+	material.extensions.emplace("KHR_materials_specular", specularExtensionValue);		
+
+	std::set<MaterialSurfaceLayer> usedMaterials;
+	for (auto& tex : texArray)
+	{
+		MaterialSurfaceLayer textureLayer = getTexMaterialLayer(mat, tex);
+
+		// Don't overwrite materials.
+		if (usedMaterials.find(textureLayer) != usedMaterials.end())
+			continue;
+		usedMaterials.emplace(textureLayer);
+
+		int textureIndex = createTexture(tex);
+
+		switch (textureLayer)
+		{
+		case MaterialSurfaceLayer::Albedo:
+		{
+			material.pbrMetallicRoughness.baseColorTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::AmbientOcclusion:
+		{
+			material.occlusionTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::ClearCoat:
+		{
+			// Declare use of clear coat extension
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+			}
+
+			if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end()) 
+			{
+				material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
+			}
+			auto& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
+			tinygltf::Value clearcoatTextureValue;
+			clearcoatTextureValue.Get< tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+			clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatTexture", clearcoatTextureValue);								
+			break;
+		}
+		case MaterialSurfaceLayer::ClearCoatNormal:
+		{
+			// Declare use of clear coat extension
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+			}
+
+			if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
+			}
+			tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
+			tinygltf::Value clearcoatNormalTexture;
+			clearcoatNormalTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+			clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatNormalTexture", clearcoatNormalTexture);
+			break;
+		}
+		case MaterialSurfaceLayer::ClearCoatRoughness:
+		{
+			// Declare use of clear coat extension
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+			}
+
+			if (material.extensions.find("KHR_materials_clearcoat") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_clearcoat"] = tinygltf::Value();
+			}
+			tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_clearcoat"];
+			tinygltf::Value clearcoatRoughnessTexture;
+			clearcoatRoughnessTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+			clearCoatExtension.Get<tinygltf::Value::Object>().emplace("clearcoatRoughnessTexture", clearcoatRoughnessTexture);
+
+			break;
+		}
+		case MaterialSurfaceLayer::Emissive:
+		{
+			material.emissiveTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::Metallic:
+		{
+			material.pbrMetallicRoughness.metallicRoughnessTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::NormalMap:
+		{
+			material.normalTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::Roughness: // Conflicts with metallic. Must study how to solve this
+		{
+			material.pbrMetallicRoughness.metallicRoughnessTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::Sheen:
+		{
+			// Declare use of sheen extension
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_sheen");
+			}
+
+			if (material.extensions.find("KHR_materials_sheen") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_sheen"] = tinygltf::Value();
+			}
+			tinygltf::Value& sheenExtension = material.extensions["KHR_materials_sheen"];
+			tinygltf::Value sheenTexture;
+			sheenTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+			sheenExtension.Get<tinygltf::Value::Object>().emplace("sheenColorTexture", sheenTexture);
+
+			break;
+		}
+		case MaterialSurfaceLayer::SheenRoughness:
+		{
+			// Declare use of sheen extension
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_sheen");
+			}
+
+			if (material.extensions.find("KHR_materials_sheen") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_sheen"] = tinygltf::Value();
+			}
+
+			tinygltf::Value& sheenExtension = material.extensions["KHR_materials_sheen"];
+			tinygltf::Value sheenTexture;
+			sheenTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+			sheenExtension.Get<tinygltf::Value::Object>().emplace("sheenRoughnessTexture", sheenTexture);
+
+			break;
+		}
+		case MaterialSurfaceLayer::Specular:
+		{
+			if (material.extensions.find("KHR_materials_specular") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_specular"] = tinygltf::Value();
+			}
+			tinygltf::Value& clearCoatExtension = material.extensions["KHR_materials_specular"];
+			tinygltf::Value specularColorTexture;
+			specularColorTexture.Get<tinygltf::Value::Object>()["index"] = tinygltf::Value(textureIndex);
+			clearCoatExtension.Get<tinygltf::Value::Object>().emplace("specularColorTexture", specularColorTexture);
+
+			break;
+		}
+		default:
+		{
+			OSG_DEBUG << "Missing texture placement for: " << osgDB::getSimpleFileName(tex->getImage(0)->getFileName()) << std::endl;
+		}
+		}
+	}
+
+	materialIndex = _model.materials.size();
+	_model.materials.push_back(material);
+
+	_gltfMaterials.emplace(materialName, materialIndex);
+	
 
 	return materialIndex;
 }
@@ -1555,7 +1567,17 @@ void OSGtoGLTF::apply(osg::Node& node)
 		if (!rigGeometry)
 			_osgNodeSeqMap[&node] = id;
 		else
+		{
 			_model.scenes[_model.defaultScene].nodes.push_back(id);
+			isRoot = false; // Mark root as false just to prevent unwanted modifications bellow
+		}
+
+		// For geometries without parent, we put them on root
+		if (geometry && !hasMatrixParent(*geometry))
+		{
+			_model.scenes[_model.defaultScene].nodes.push_back(id);
+			isRoot = false; // Mark root as false just to prevent unwanted modifications bellow
+		}
 
 		if (isRoot)
 		{
@@ -1922,5 +1944,23 @@ void OSGtoGLTF::buildAnimationTargets(osg::Group* node)
 		}
 	}
 }
+
+bool OSGtoGLTF::hasTransformMatrix(const osg::Node* object)
+{
+	if (dynamic_cast<const osg::MatrixTransform*>(object))
+		return true;
+
+	if (auto group = dynamic_cast<const osg::Group*>(object))
+	{
+		for (unsigned int i = 0; i < group->getNumChildren(); ++i)
+		{
+			if (hasTransformMatrix(group->getChild(i)))
+				return true;
+		}
+	}
+
+	return false;
+}
+
 
 #pragma endregion
