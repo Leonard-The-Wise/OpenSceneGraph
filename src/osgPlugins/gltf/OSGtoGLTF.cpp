@@ -52,7 +52,7 @@ const osg::ref_ptr<osg::Callback> getRealUpdateCallback(const osg::ref_ptr<osg::
 	return getRealUpdateCallback(callback->getNestedCallback());
 }
 
-osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback)
+static osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callback)
 {
 	const osg::ref_ptr<osgAnimation::UpdateMatrixTransform> umt = osg::dynamic_pointer_cast<osgAnimation::UpdateMatrixTransform>(callback);
 
@@ -99,7 +99,7 @@ osg::Matrix getAnimatedMatrixTransform(const osg::ref_ptr<osg::Callback> callbac
 	return nodeMatrix;
 }
 
-osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node)
+static osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node)
 {
 	osg::Matrix retMatrix;
 	if (dynamic_cast<const osgAnimation::Skeleton*>(&node))
@@ -860,6 +860,13 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 	timesArray->reserve(keyframes->size());
 	keysArray->reserve(keyframes->size());
 
+	// Check wether we have a Stacked Matrix transform for this channel.
+	osg::Matrix stackedTranslate;
+	if (_gltfStackedMatrices.find(targetId) != _gltfStackedMatrices.end())
+	{
+		stackedTranslate = _gltfStackedMatrices.at(targetId);
+	}
+
 	int i = -1; // Keep track of time and try to correct equal times
 	for (osgAnimation::Vec3Keyframe& keyframe : *keyframes) 
 	{
@@ -880,7 +887,7 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 			}
 		}
 		timesArray->push_back(timeValue);
-		keysArray->push_back(keyframe.getValue());
+		keysArray->push_back(keyframe.getValue() * stackedTranslate);
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
@@ -925,6 +932,15 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 	timesArray->reserve(keyframes->size());
 	keysArray->reserve(keyframes->size());
 
+	// Check wether we have a Stacked Matrix transform for this channel.
+	osg::Quat stackedRotation;
+	if (_gltfStackedMatrices.find(targetId) != _gltfStackedMatrices.end())
+	{
+		osg::Vec3f translation, scale;
+		osg::Quat so;
+		_gltfStackedMatrices.at(targetId).decompose(translation, stackedRotation, scale, so);
+	}
+
 	int i = -1; // Keep track of time and try to correct equal times
 	for (osgAnimation::QuatKeyframe& keyframe : *keyframes)
 	{
@@ -942,11 +958,15 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 			}
 		}
 		timesArray->push_back(timeValue);
-		osg::Vec4 quat(keyframe.getValue().x(), keyframe.getValue().y(), keyframe.getValue().z(), keyframe.getValue().w());
+
+		osg::Quat quat(keyframe.getValue().x(), keyframe.getValue().y(), keyframe.getValue().z(), keyframe.getValue().w());
 		if (quat.x() == 0.0f && quat.y() == 0.0f && quat.z() == 0.0 && quat.w() == 0.0f) //fix broken quat
 			quat = osg::Vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		quat.normalize();
-		keysArray->push_back(quat);
+
+		quat *= stackedRotation;
+		quat.asVec4().normalize();
+
+		keysArray->push_back(quat.asVec4());
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
@@ -1180,6 +1200,17 @@ void OSGtoGLTF::addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callb
 
 	std::string updateMatrixName = umt->getName();
 	_gltfAnimationTargets[updateMatrixName] = gltfNodeId;
+	
+	auto& stackedTransforms = umt->getStackedTransforms();
+
+	for (auto& stackedTransform : stackedTransforms)
+	{
+		if (auto matrixElement = osg::dynamic_pointer_cast<osgAnimation::StackedMatrixElement>(stackedTransform))
+		{
+			_gltfStackedMatrices[gltfNodeId] = matrixElement->getMatrix();
+			break;
+		}
+	}
 }
 
 #pragma endregion

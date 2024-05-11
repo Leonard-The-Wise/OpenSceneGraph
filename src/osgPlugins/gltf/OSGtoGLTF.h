@@ -39,6 +39,7 @@ private:
     std::map<std::string, int> _gltfMorphTargets;         // Animated targets for gltf Morph nodes
     std::map<std::string, int> _gltfMaterials;
     std::map<std::string, int> _gltfTextures;
+    std::map<int, osg::Matrix> _gltfStackedMatrices;      // Stacked matrix transform for an Animation Target (node ID)
 
     // Some structures to deal with morph targets
     std::vector<float> _weightTimes;

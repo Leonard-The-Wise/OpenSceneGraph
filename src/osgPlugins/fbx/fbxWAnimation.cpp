@@ -182,7 +182,7 @@ namespace pluginfbx
 		FbxTime fbxTime;
 
 		// Aplicar uma dummy keyframe no começo
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		for (unsigned int i = 0; i < keyframes->size(); ++i)
 		{
@@ -199,7 +199,7 @@ namespace pluginfbx
 		}
 
 		// Aplicar uma dummy keyframe no fim da animação
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		return fbxTime;
 	}
@@ -225,7 +225,7 @@ namespace pluginfbx
 		FbxTime fbxTime;
 
 		// Aplicar uma dummy keyframe no começo
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		// Pegar a rotação original (inicial) do objeto
 		FbxDouble3 lastRotation = animCurveNode->LclRotation.Get();
@@ -284,7 +284,7 @@ namespace pluginfbx
 		}
 
 		// Aplicar uma dummy keyframe no final
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		return fbxTime;
 	}
