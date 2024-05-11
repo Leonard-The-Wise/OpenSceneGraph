@@ -328,9 +328,18 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
 #ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
-    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
-    UniqueID = UniqueID; // Bypass compilation warning
 #endif
+
+    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
+
+    // Try to find a copy of statesets on map
+    if (_statesetMap.find(UniqueID) != _statesetMap.end())
+    {
+        if (dynamic_pointer_cast<Node>(currentObject))
+            dynamic_pointer_cast<Node>(currentObject)->setStateSet(_statesetMap.at(UniqueID));
+
+        return;
+    }
 
     ref_ptr<StateSet> stateset = new StateSet;
 
@@ -434,6 +443,12 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
         dynamic_pointer_cast<Node>(currentObject)->setStateSet(stateset);
     else
         OSG_WARN << "WARNING: Object has stateset but isn't subclass of Node. " << ADD_KEY_NAME << std::endl;
+
+    // Save on map
+    if (UniqueID > 0)
+    {
+        _statesetMap[UniqueID] = stateset;
+    }
 }
 
 
@@ -964,7 +979,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             else
             {
                 rigGeometry->setSourceGeometry(dynamic_pointer_cast<Geometry>(childGeometry));
-                rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
+                //rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
 
                 if (rigGeometry->getName().empty())
                     rigGeometry->setName(childGeometry->getName());
@@ -2232,6 +2247,12 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, cons
         return;
 
     auto& knownMaterial = knownMaterials.at(materialName);
+
+    // Certify that this geometry is valid (contains vertices)
+    osg::ref_ptr<osg::Vec3Array> positions = dynamic_cast<osg::Vec3Array*>(geometry->getVertexArray());
+    osg::Vec3dArray* positionsd = dynamic_cast<osg::Vec3dArray*>(geometry->getVertexArray());
+    if (!positions && !positionsd)
+        return;
 
     // And only process uncreated materials 
     osg::StateSet* meshState = geometry->getOrCreateStateSet();

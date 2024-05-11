@@ -552,8 +552,8 @@ void OSGtoGLTF::BuildSkinWeights(const RiggedMeshStack& rigStack, const BoneIDNa
 		if (!vim)
 			continue;
 
-		osg::ref_ptr<osg::UShortArray> jointIndices = new osg::UShortArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
-		osg::ref_ptr<osg::FloatArray> vertexWeights = new osg::FloatArray(riggedMesh.second->getVertexArray()->getNumElements() * 4);
+		osg::ref_ptr<osg::UShortArray> jointIndices = new osg::UShortArray(riggedMesh.second->getSourceGeometry()->getVertexArray()->getNumElements() * 4);
+		osg::ref_ptr<osg::FloatArray> vertexWeights = new osg::FloatArray(riggedMesh.second->getSourceGeometry()->getVertexArray()->getNumElements() * 4);
 
 		// Build influence map
 		for (const auto& influenceEntry : *vim)
@@ -888,7 +888,7 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 		}
 		timesArray->push_back(timeValue);
 		if (targetPath == "translation")
-		keysArray->push_back(keyframe.getValue() * stackedTranslate);
+			keysArray->push_back(keyframe.getValue() * stackedTranslate);
 		else
 			keysArray->push_back(keyframe.getValue());
 
@@ -1322,11 +1322,11 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 	float shininess(0);
 	float transparency(0);
 
-	// Push material and textures from OSG
-	osg::ref_ptr<osg::StateSet> stateSet = geometry->getStateSet();
-	if (!stateSet)
-		return -1;
+	// Parse rig geometry
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
 
+	// Push material and textures from OSG
+	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getOrCreateStateSet() : geometry->getOrCreateStateSet();
 	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
 	if (!mat)
 		return -1;
@@ -1368,7 +1368,7 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 
 	tinygltf::Value specularExtensionValue;
 	specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
-	material.extensions.emplace("KHR_materials_specular", specularExtensionValue);		
+	material.extensions.emplace("KHR_materials_specular", specularExtensionValue);
 
 	std::set<MaterialSurfaceLayer> usedMaterials;
 	for (auto& tex : texArray)
@@ -1760,7 +1760,8 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geom);
 	if (rigGeometry)
 	{
-		rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
+		//rigGeometry->copyFrom(*rigGeometry->getSourceGeometry());
+		geom = rigGeometry->getSourceGeometry();
 		geom->setName(rigGeometry->getSourceGeometry()->getName());
 	}
 	const osgAnimation::MorphGeometry* rigMorph = rigGeometry ? dynamic_cast<const osgAnimation::MorphGeometry*>(rigGeometry->getSourceGeometry()) : nullptr;

@@ -143,6 +143,7 @@ namespace osgJSONParser
         // Keep track of Materials, Textures and Images
         std::map<std::string, osg::ref_ptr<osg::Texture>> _textureMap;
         std::map<std::string, osg::ref_ptr<osg::Image>> _imageMap;
+        std::map<int, osg::ref_ptr<osg::StateSet>> _statesetMap;
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;

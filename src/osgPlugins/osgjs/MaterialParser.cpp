@@ -364,7 +364,7 @@ void osgJSONParser::MaterialFile2::mergeWithMaterial1(const std::string& fileNam
 
 	if (!materialFile.readMaterialFile(fileName))
 	{
-		OSG_NOTICE << "INFO: Could not read" << fileName << ". Models may miss materials and textures." << std::endl;
+		// OSG_NOTICE << "INFO: Could not read" << fileName << ". Models may miss materials and textures." << std::endl;
 		return;
 	}
 

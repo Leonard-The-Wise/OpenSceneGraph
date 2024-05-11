@@ -181,9 +181,6 @@ namespace pluginfbx
 		// Itere sobre todos os keyframes do canal de translação e adicione-os às curvas FBX.
 		FbxTime fbxTime;
 
-		// Aplicar uma dummy keyframe no começo
-		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
-
 		for (unsigned int i = 0; i < keyframes->size(); ++i)
 		{
 			const osgAnimation::Vec3Keyframe& keyframe = (*keyframes)[i];
@@ -197,9 +194,6 @@ namespace pluginfbx
 			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, keyValue.y(), FbxAnimCurveDef::eInterpolationLinear);
 			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, keyValue.z(), FbxAnimCurveDef::eInterpolationLinear);
 		}
-
-		// Aplicar uma dummy keyframe no fim da animação
-		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		return fbxTime;
 	}
@@ -224,9 +218,6 @@ namespace pluginfbx
 
 		FbxTime fbxTime;
 
-		// Aplicar uma dummy keyframe no começo
-		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
-
 		// Pegar a rotação original (inicial) do objeto
 		FbxDouble3 lastRotation = animCurveNode->LclRotation.Get();
 		FbxAMatrix quatMatrix;
@@ -239,18 +230,6 @@ namespace pluginfbx
 		if (QuaternionDot(firstQuatKey, zeroQuatKey) < 0)
 			keyframes[0].setValue(-firstQuatKey);
 
-		//for (unsigned int i = 1; i < keyframes.size(); ++i) 
-		//{
-		//	Quat current = keyframes[i].getValue();
-		//	Quat previous = keyframes[i - 1].getValue();
-
-		//	if (QuaternionDot(current, previous) < 0) 
-		//	{
-		//		keyframes[i].setValue(-current); // Inverte o sinal do quaternion
-		//	}
-		//}
-		
-		//constexpr double t = 0.5;
 		for (unsigned int i = 0; i < keyframes.size(); ++i)
 		{
 			osgAnimation::QuatKeyframe& keyframe = keyframes[i];
@@ -259,18 +238,6 @@ namespace pluginfbx
 
 			Quat quat = keyframe.getValue();
 			Quat interpolatedQuat = quat;
-
-			//if (i == 0)
-			//{
-			//	interpolatedQuat = Slerp(zeroQuatKey, keyframes[i].getValue(), t);
-			//}
-			//else
-			//{
-			//	Quat quatStart = keyframes[i - 1].getValue();
-			//	Quat quatEnd = keyframes[i].getValue();
-			//								
-			//	interpolatedQuat = Slerp(quatStart, quatEnd, t);
-			//}
 
 			FbxQuaternion q(interpolatedQuat.x(), interpolatedQuat.y(), interpolatedQuat.z(), interpolatedQuat.w());
 			FbxAMatrix mat;
@@ -282,9 +249,6 @@ namespace pluginfbx
 			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, euler[1], FbxAnimCurveDef::eInterpolationLinear);
 			curveZ->KeySet(curveZ->KeyAdd(fbxTime), fbxTime, euler[2], FbxAnimCurveDef::eInterpolationLinear);
 		}
-
-		// Aplicar uma dummy keyframe no final
-		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
 		return fbxTime;
 	}
