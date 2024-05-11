@@ -887,7 +887,10 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 			}
 		}
 		timesArray->push_back(timeValue);
+		if (targetPath == "translation")
 		keysArray->push_back(keyframe.getValue() * stackedTranslate);
+		else
+			keysArray->push_back(keyframe.getValue());
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
@@ -1384,6 +1387,11 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		case MaterialSurfaceLayer::Albedo:
 		{
 			material.pbrMetallicRoughness.baseColorTexture.index = textureIndex;
+			break;
+		}
+		case MaterialSurfaceLayer::Transparency:
+		{
+			material.alphaMode = "BLEND";
 			break;
 		}
 		case MaterialSurfaceLayer::AmbientOcclusion:
