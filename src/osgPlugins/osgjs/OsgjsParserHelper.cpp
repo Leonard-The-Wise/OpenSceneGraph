@@ -917,17 +917,24 @@ osg::ref_ptr<osg::Array> ParserHelper::decompressArray(const osg::ref_ptr<osg::A
 			break;
 		}
 
-		keysInflated2->reserveArray(keysInflated1->getNumElements() + 4);
-		keysInflated2->push_back(o[0]); // "ox"
-		keysInflated2->push_back(o[1]); // "oy"
-		keysInflated2->push_back(o[2]); // "oz"
-		keysInflated2->push_back(o[3]); // "ow"
-		keysInflated2->insert(keysInflated2->begin() + 4, keysInflated1->begin(), keysInflated1->end());
+		if (channel_mode == 8)
+		{
+			keysConverted = recastArray(keysInflated1, DesiredVectorSize::Vec4);
+		}
+		else
+		{
+			keysInflated2->reserveArray(keysInflated1->getNumElements() + 4);
+			keysInflated2->push_back(o[0]); // "ox"
+			keysInflated2->push_back(o[1]); // "oy"
+			keysInflated2->push_back(o[2]); // "oz"
+			keysInflated2->push_back(o[3]); // "ow"
+			keysInflated2->insert(keysInflated2->begin() + 4, keysInflated1->begin(), keysInflated1->end());
 
-		keysConverted = inflateKeysQuat(keysInflated2);
+			keysConverted = inflateKeysQuat(keysInflated2);
 
-		// Recast Array
-		keysConverted = recastArray(keysConverted, DesiredVectorSize::Vec4);
+			// Recast Array
+			keysConverted = recastArray(keysConverted, DesiredVectorSize::Vec4);
+		}
 	}
 
 	return keysConverted;

@@ -979,8 +979,6 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
             else
             {
                 rigGeometry->setSourceGeometry(dynamic_pointer_cast<Geometry>(childGeometry));
-                //rigGeometry->copyFrom(*dynamic_pointer_cast<Geometry>(childGeometry));
-
                 if (rigGeometry->getName().empty())
                     rigGeometry->setName(childGeometry->getName());
             }
@@ -1835,6 +1833,9 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationQuatSlerpChannel(const json& curre
         if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
         {
             const json& key = keyFrames["Key"];
+#ifndef NDEBUG
+            UniqueID = key.contains("UniqueID") ? key["UniqueID"].get<int>() : 0;
+#endif
             keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, magic);
         }
 
