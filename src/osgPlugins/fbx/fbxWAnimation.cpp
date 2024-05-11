@@ -181,13 +181,23 @@ namespace pluginfbx
 		// Itere sobre todos os keyframes do canal de translação e adicione-os às curvas FBX.
 		FbxTime fbxTime;
 
+		// Caso exista uma Stacked Matrix Transform, aplica ao ponto de translação
+		osg::Matrix stackedTranslate;
+		if (_stackedMatrices.find(animCurveNode) != _stackedMatrices.end())
+		{
+			stackedTranslate = _stackedMatrices.at(animCurveNode);
+		}
+
 		for (unsigned int i = 0; i < keyframes->size(); ++i)
 		{
 			const osgAnimation::Vec3Keyframe& keyframe = (*keyframes)[i];
 
 			// Converta o tempo do OSG para o tempo do FBX.
 			fbxTime.SetSecondDouble(keyframe.getTime());
+
 			Vec3 keyValue = keyframe.getValue();
+			if (channelName == "translate")
+				keyValue = keyframe.getValue() * stackedTranslate;
 
 			// Adicione os valores de translação para cada eixo às curvas correspondentes.
 			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, keyValue.x(), FbxAnimCurveDef::eInterpolationLinear);
@@ -218,17 +228,14 @@ namespace pluginfbx
 
 		FbxTime fbxTime;
 
-		// Pegar a rotação original (inicial) do objeto
-		FbxDouble3 lastRotation = animCurveNode->LclRotation.Get();
-		FbxAMatrix quatMatrix;
-		quatMatrix.SetR(lastRotation);
-		FbxQuaternion qLastRotation = quatMatrix.GetQ();
-		Quat zeroQuatKey = Quat(qLastRotation[0], qLastRotation[1], qLastRotation[2], qLastRotation[3]);
-
-		// Prepara os quaternions para interpolação
-		Quat firstQuatKey = keyframes[0].getValue();
-		if (QuaternionDot(firstQuatKey, zeroQuatKey) < 0)
-			keyframes[0].setValue(-firstQuatKey);
+		// Caso exista uma Stacked Matrix Transform, aplica ao ponto de rotação
+		osg::Quat stackedRotate;
+		if (_stackedMatrices.find(animCurveNode) != _stackedMatrices.end())
+		{
+			osg::Vec3 t, s;
+			osg::Quat so;
+			_stackedMatrices.at(animCurveNode).decompose(t, stackedRotate, s, so);
+		}
 
 		for (unsigned int i = 0; i < keyframes.size(); ++i)
 		{
@@ -236,10 +243,9 @@ namespace pluginfbx
 
 			fbxTime.SetSecondDouble(keyframe.getTime());
 
-			Quat quat = keyframe.getValue();
-			Quat interpolatedQuat = quat;
+			Quat quat = keyframe.getValue() * stackedRotate;
 
-			FbxQuaternion q(interpolatedQuat.x(), interpolatedQuat.y(), interpolatedQuat.z(), interpolatedQuat.w());
+			FbxQuaternion q(quat.x(), quat.y(), quat.z(), quat.w());
 			FbxAMatrix mat;
 			mat.SetQ(q);
 			FbxVector4 vec4 = mat.GetR();

@@ -361,6 +361,10 @@ namespace pluginfbx
         std::set<std::string> _discardedAnimationTargetNames; // We discard animation targets with 1 keyframe and mark them so we don't get unecessary warnings about missing target
         std::stack<FbxNode*> _skeletons;
 
+        // Keep track of any StackedMatrix Transform
+        std::map<FbxNode*, osg::Matrix> _stackedMatrices;
+
+
     };
 
 // end namespace pluginfbx

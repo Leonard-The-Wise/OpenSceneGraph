@@ -101,6 +101,7 @@ namespace pluginfbx
 				else if (auto matrixElement = dynamic_pointer_cast<StackedMatrixElement>(stackedTransform))
 				{
 					nodeMatrix = matrixElement->getMatrix();
+					_stackedMatrices[fbxNode] = nodeMatrix;
 					break;
 				}
 			}

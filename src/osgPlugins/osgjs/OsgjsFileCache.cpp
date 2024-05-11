@@ -242,8 +242,8 @@ std::string FileCache::stripAllExtensions(const std::string& filename)
         std::string ext = osgDB::getFileExtension(finalName);
 
         // Only remove known extensions
-        if (ext != "gz" && ext != "bin" && ext != "binz" && ext != "zip" && ext != "bmp" && ext != "tiff" && ext != "tga" && ext != "jpg" && ext != "jpeg"
-            && ext != "png" && ext != "tgz" && ext != "pic" && ext != "pnm" && ext != "dds")
+        if (ext != "png" && ext != "gz" && ext != "bin" && ext != "binz" && ext != "zip" && ext != "bmp" && ext != "tiff" && ext != "tga" && ext != "jpg" && ext != "jpeg"
+            && ext != "gif" && ext != "tgz" && ext != "pic" && ext != "pnm" && ext != "dds")
             break;
 
         finalName = osgDB::getStrippedName(finalName);
