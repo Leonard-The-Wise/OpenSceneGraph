@@ -1205,7 +1205,7 @@ ref_ptr<Object> OsgjsParser::parseOsgTextText(const json& currentJSONNode, const
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    OSG_WARN << "WARNING: Scene contains TEXT and FBX Export don't support it. Skipping..." << std::endl;
+    OSG_WARN << "WARNING: Scene contains TEXT and this plugin don't support it. Skipping..." << std::endl;
 
     ref_ptr<Node> dummy = new Node;
     return dummy;
@@ -1220,7 +1220,7 @@ ref_ptr<Object> OsgjsParser::parseOsgProjection(const json& currentJSONNode, con
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    OSG_WARN << "WARNING: Scene contains PROJECTIONS and FBX Export don't support it. Skipping..." << std::endl;
+    OSG_WARN << "WARNING: Scene contains PROJECTIONS and this plugin don't support it. Skipping..." << std::endl;
 
     ref_ptr<Node> dummy = new Node;
     return dummy;
@@ -1530,6 +1530,63 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationAnimation(const json& currentJSONN
         }
     }
 
+    // Retrieve the first time of series from channels
+    double minAnimationTime = std::numeric_limits<double>::max();
+    for (auto& channel : animation->getChannels())
+    {
+        double timeValue(0);
+        if (auto vec3Channel = dynamic_cast<osgAnimation::Vec3LinearChannel*>(channel.get()))
+        {
+            osgAnimation::Vec3KeyframeContainer* keyframes = vec3Channel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+            timeValue = keyframes->size() > 0 ? (*keyframes)[0].getTime() : 0;
+        }
+        else if (auto quatChannel = dynamic_cast<osgAnimation::QuatSphericalLinearChannel*>(channel.get()))
+        {
+            osgAnimation::QuatKeyframeContainer* keyframes = quatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+            timeValue = keyframes->size() > 0 ? (*keyframes)[0].getTime() : 0;
+        }
+        else if (auto floatChannel = dynamic_cast<osgAnimation::FloatLinearChannel*>(channel.get()))
+        {
+            osgAnimation::FloatKeyframeContainer* keyframes = floatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+            timeValue = keyframes->size() > 0 ? (*keyframes)[0].getTime() : 0;
+        }
+
+        if (timeValue < minAnimationTime)
+            minAnimationTime = timeValue;
+    }
+
+    // Reposition animation timing if necessary.
+    if (minAnimationTime > 0 && minAnimationTime != std::numeric_limits<double>::max())
+    {
+        for (auto& channel : animation->getChannels())
+        {
+            if (auto vec3Channel = dynamic_cast<osgAnimation::Vec3LinearChannel*>(channel.get()))
+            {
+                osgAnimation::Vec3KeyframeContainer* keyframes = vec3Channel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+                for (osgAnimation::Vec3Keyframe& keyframe : *keyframes)
+                {
+                    keyframe.setTime(keyframe.getTime() - minAnimationTime);
+                }
+            }
+            else if (auto quatChannel = dynamic_cast<osgAnimation::QuatSphericalLinearChannel*>(channel.get()))
+            {
+                osgAnimation::QuatKeyframeContainer* keyframes = quatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+                for (osgAnimation::QuatKeyframe& keyframe : *keyframes)
+                {
+                    keyframe.setTime(keyframe.getTime() - minAnimationTime);
+                }
+            }
+            else if (auto floatChannel = dynamic_cast<osgAnimation::FloatLinearChannel*>(channel.get()))
+            {
+                osgAnimation::FloatKeyframeContainer* keyframes = floatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+                for (osgAnimation::FloatKeyframe& keyframe : *keyframes)
+                {
+                    keyframe.setTime(keyframe.getTime() - minAnimationTime);
+                }
+            }
+        }
+    }
+
     lookForChildren(animation, currentJSONNode, UserDataContainerType::UserData, nodeKey);
 
     return animation;
@@ -1682,6 +1739,9 @@ ref_ptr<Object> OsgjsParser::parseOsgAnimationVec3LerpChannel(const json& curren
         if (keyFrames.contains("Key") && keyFrames["Key"].is_object())
         {
             const json& key = keyFrames["Key"];
+#ifndef NDEBUG
+            UniqueID = key.contains("UniqueID") ? key["UniqueID"].get<int>() : 0;
+#endif
             keysArray = ParserHelper::parseJSONArray(key["Array"], key["ItemSize"], _fileCache, magic);
         }
 

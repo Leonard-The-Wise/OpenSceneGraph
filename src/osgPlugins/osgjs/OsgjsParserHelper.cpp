@@ -74,6 +74,8 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 {
 #ifndef NDEBUG
 	std::string CurrentNode = currentJSONNode.dump();
+	int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
+	UniqueID = UniqueID; // Bypass compilation warning
 #endif
 	ref_ptr<Array> returnArray;
 	Array::Type arrayType{};

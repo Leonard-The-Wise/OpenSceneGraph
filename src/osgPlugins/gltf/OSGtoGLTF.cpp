@@ -104,7 +104,7 @@ osg::Matrix getMatrixFromSkeletonToNode(const osg::Node& node)
 	osg::Matrix retMatrix;
 	if (dynamic_cast<const osgAnimation::Skeleton*>(&node))
 	{
-		return retMatrix; // dynamic_cast<const Skeleton*>(&node)->getMatrix();
+		return retMatrix; // dynamic_cast<const osgAnimation::Skeleton*>(&node)->getMatrix();
 	}
 	else if (dynamic_cast<const osg::MatrixTransform*>(&node))
 	{
@@ -845,23 +845,34 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 	}
 
 	osgAnimation::Vec3KeyframeContainer* keyframes = vec3Channel->getOrCreateSampler()->getOrCreateKeyframeContainer();
+#ifndef NDEBUG
+	osg::ref_ptr<osg::FloatArray> oldTimesArray = new osg::FloatArray;
+#endif
 	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
 	osg::ref_ptr<osg::Vec3Array> keysArray = new osg::Vec3Array;
 
 	float timeMin(FLT_MAX);
 	float timeMax(-FLT_MAX);
 
+#ifndef NDEBUG
+	oldTimesArray->reserve(keyframes->size());
+#endif
 	timesArray->reserve(keyframes->size());
 	keysArray->reserve(keyframes->size());
 
-	size_t i = 0; // Keep track of time and try to correct equal times
+	int i = -1; // Keep track of time and try to correct equal times
 	for (osgAnimation::Vec3Keyframe& keyframe : *keyframes) 
 	{
-		double timeValue = keyframe.getTime();
+		i++;
+
+		float timeValue = keyframe.getTime();
+#ifndef NDEBUG
+		oldTimesArray->push_back(timeValue);
+#endif
 		if (i > 0)
 		{
-			double oldTime = (*keyframes)[i - 1].getTime();
-			double delta = timeValue - oldTime;
+			float oldTime = (*keyframes)[i - 1].getTime();
+			float delta = timeValue - oldTime;
 			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
 			{
 				timeValue += std::abs(delta) + 0.001; // 0.1 milissecond at a time
@@ -873,8 +884,11 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
-		i++;
 	}
+
+	// Sanity check
+	if (timesArray->size() == 0)
+		return;
 
 	tinygltf::AnimationSampler sampler;
 	sampler.input = getOrCreateAccessor(timesArray, timesArray->size(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_SCALAR, 0);
@@ -911,14 +925,16 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 	timesArray->reserve(keyframes->size());
 	keysArray->reserve(keyframes->size());
 
-	size_t i = 0; // Keep track of time and try to correct equal times
+	int i = -1; // Keep track of time and try to correct equal times
 	for (osgAnimation::QuatKeyframe& keyframe : *keyframes)
 	{
-		double timeValue = keyframe.getTime();
+		i++;
+
+		float timeValue = keyframe.getTime();
 		if (i > 0)
 		{
-			double oldTime = (*keyframes)[i - 1].getTime();
-			double delta = timeValue - oldTime;
+			float oldTime = (*keyframes)[i - 1].getTime();
+			float delta = timeValue - oldTime;
 			if (delta <= 0.0) // can't have equal time or unordered. Can break animations, but they would be broken anyway...
 			{
 				timeValue += std::abs(delta) + 0.001; // 0.1 milissecond at a time
@@ -934,8 +950,11 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 
 		timeMin = osg::minimum(timeMin, static_cast<float>(timeValue));
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
-		i++;
 	}
+
+	// Sanity check
+	if (timesArray->size() == 0)
+		return;
 
 	// Criar os accessors para os tempos e valores (quaternions)
 	tinygltf::AnimationSampler sampler;
@@ -1024,6 +1043,10 @@ void OSGtoGLTF::flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int t
 		timeMax = osg::maximum(timeMax, static_cast<float>(timeValue));
 		++i;
 	}
+
+	// Sanity check
+	if (timesArray->size() == 0)
+		return;
 
 	// Criar os accessors para os tempos e valores
 	tinygltf::AnimationSampler sampler;
@@ -1817,8 +1840,14 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	if (colorsd)
 		colors = doubleToFloatArray<osg::Vec4Array>(colorsd);
 
-	osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(geom->getTexCoordArray(0));
-	osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(geom->getTexCoordArray(0));
+	osg::Array* basetexcoords;
+	// Get the first texCoord array avaliable
+	for (int i = 0; i < 32; i++)
+		if (basetexcoords = geom->getTexCoordArray(i))
+			break;
+
+	osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(basetexcoords);
+	osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(basetexcoords);
 	if (texCoordsd)
 		texCoords = doubleToFloatArray<osg::Vec2Array>(texCoordsd);
 
