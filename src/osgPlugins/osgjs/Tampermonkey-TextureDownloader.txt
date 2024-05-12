@@ -3,7 +3,7 @@
 // @version      0.9.2
 // @description  Download Sketchfab models and/or textures!
 // @author       Marin - 01/2024 - Download textures with same name for different objects
-// @support      https://discord.gg/JBJRDB5euG
+// @support      ******
 // @match        *://*sketchfab.com/*
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jszip-utils/0.0.2/jszip-utils.min.js
