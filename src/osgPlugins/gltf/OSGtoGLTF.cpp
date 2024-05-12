@@ -1820,7 +1820,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		normals = doubleToFloatArray<osg::Vec3Array>(normalsd);
 
 	// Transform normals for rig (use only rotation and scale)
-	if (rigGeometry)
+	if (rigGeometry && normals)
 	{
 		osg::Vec3 scl, tr;
 		osg::Quat rot, so;
@@ -1832,7 +1832,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 		normals = transformArray(normals, transformMatrix, true);
 	}
-	else
+	else if (normals)
 	{
 		osg::Matrix identity;  // Just to ensure it is normalized
 		normals = transformArray(normals, identity, true);
@@ -1857,7 +1857,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	}
 
 	// Transform tangents for rig (use only rotation and scale)
-	if (rigGeometry)
+	if (rigGeometry && tangents)
 	{
 		osg::Vec3 scl, tr;
 		osg::Quat rot, so;
@@ -1869,7 +1869,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 		tangents = transformArray(tangents, transformMatrix, true);
 	}
-	else
+	else if (tangents)
 	{
 		osg::Matrix identity;
 		tangents = transformArray(tangents, identity, true); // just normalize vector
