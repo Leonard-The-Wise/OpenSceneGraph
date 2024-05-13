@@ -1314,10 +1314,10 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 {
 	int materialIndex(-1);
 
-	osg::Vec4 diffuse(1, 1, 1, 1),
-		ambient(0.2, 0.2, 0.2, 1),
+	osg::Vec4 diffuse(0, 0, 0, 1),
+		ambient(0, 0, 0, 1),
 		specular(0, 0, 0, 1),
-		emission(1, 1, 1, 1);
+		emission(0, 0, 0, 1);
 
 	float shininess(0);
 	float transparency(0);
