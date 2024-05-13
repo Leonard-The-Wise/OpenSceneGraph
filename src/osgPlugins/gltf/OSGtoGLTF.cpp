@@ -1353,7 +1353,10 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 
 	material.pbrMetallicRoughness.baseColorFactor = { diffuse.r(), diffuse.g(), diffuse.b(), diffuse.a() };
 	material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
-	material.doubleSided = true;
+
+	bool backfaceCull(false);
+	std::ignore = mat->getUserValue("backfaceCull", backfaceCull);
+	material.doubleSided = !backfaceCull;
 
 	// Declare use of specular extension
 	if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end()) 

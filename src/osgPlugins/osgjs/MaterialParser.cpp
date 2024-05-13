@@ -316,6 +316,15 @@ bool MaterialFile2::parseViewerInfo(const json& viewerInfoDoc)
 					}
 				}
 
+				if (itemValue.contains("cullFace") && itemValue["cullFace"].is_string())
+				{
+					std::string cullMode = itemValue["cullFace"].get<std::string>();
+					if (cullMode == "BACK")
+						material.BackfaceCull = true;
+					else
+						material.BackfaceCull = false;
+				}
+
 				_materials[materialName] = material;
 			}
 		}

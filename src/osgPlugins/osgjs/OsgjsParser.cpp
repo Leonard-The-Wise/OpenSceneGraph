@@ -2500,17 +2500,37 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
     {
         auto& materialEntry = knownMaterial->second;
 
-        // Get all channels' textures.
+        // Get all channels' textures and replace default colors with custom (external viewer_info.json).
         for (auto& channel : materialEntry.Channels)
         {
             auto& textureInfo = channel.second.Texture;
             std::string channelName = channel.first;
-            if (!channel.second.Enable || textureInfo.Name.empty())
+            if (!channel.second.Enable)
                 continue;
 
-            material->setUserValue(std::string("textureLayer_") + channel.first, osgDB::getSimpleFileName(textureInfo.Name));
-            unfoundTextures.emplace(textureInfo.Name);
+            if (!textureInfo.Name.empty())
+            {
+                material->setUserValue(std::string("textureLayer_") + channel.first, osgDB::getSimpleFileName(textureInfo.Name));
+                unfoundTextures.emplace(textureInfo.Name);
+            }
+
+            if (channel.second.Color.size() == 3)
+            {
+                Vec4 color = Vec4(channel.second.Color[0], channel.second.Color[1], channel.second.Color[2], 1);
+
+                if (channelName == "AOPBR" || channelName == "CavityPBR")
+                    material->setAmbient(Material::FRONT, color);
+                else if (channelName == "AlbedoPBR" || channelName == "DiffusePBR")
+                    material->setDiffuse(Material::FRONT, color);
+                else if (channelName == "SpecularF0" || channelName == "SpecularPBR")
+                    material->setSpecular(Material::FRONT, color);
+                else if (channelName == "EmitColor")
+                    material->setEmission(Material::FRONT, color);
+            }
         }
+
+        // Get culling mode
+        material->setUserValue("backfaceCull", materialEntry.BackfaceCull);
     }
     else
         return;

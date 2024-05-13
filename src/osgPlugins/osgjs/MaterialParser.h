@@ -97,6 +97,7 @@ namespace osgJSONParser
 		std::string Name;
 		int Version;
 		std::unordered_map<std::string, ChannelInfo2> Channels;
+		bool BackfaceCull;
 	};
 
 	class MaterialFile2
