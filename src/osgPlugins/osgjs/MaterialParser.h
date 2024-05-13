@@ -81,8 +81,8 @@ namespace osgJSONParser
 	struct ChannelInfo2 {
 		bool Enable;
 		bool FlipY;
-		double Factor;
-		std::vector<double> Color;
+		float Factor;
+		std::vector<float> Color;
 		TextureInfo2 Texture;
 
 		ChannelInfo2() :
