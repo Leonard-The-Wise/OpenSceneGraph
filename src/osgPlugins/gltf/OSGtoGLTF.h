@@ -41,9 +41,9 @@ private:
     std::map<std::string, int> _gltfTextures;
     std::map<int, osg::Matrix> _gltfStackedMatrices;      // Stacked matrix transform for an Animation Target (node ID)
 
-    // Some structures to deal with morph targets
-    std::vector<float> _weightTimes;
-    std::vector<std::vector<float>> _weightKeys;
+    // Keeps track of morph target times and weights
+    std::map<float, std::map<std::string, float>> _morphTargetTimeWeights;
+    std::vector<std::string> _currentMorphTargets;
 
     enum class MaterialSurfaceLayer {
         None, AmbientOcclusion, Albedo, ClearCoat, ClearCoatNormal, ClearCoatRoughness, DisplacementColor, Emissive, Metallic, NormalMap, 
@@ -133,13 +133,13 @@ private:
 
     bool isMatrixAnimated(const osg::MatrixTransform* node);
 
-    void createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph);
+    void createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph, osg::ref_ptr<const osg::Vec3Array> originalVertices);
 
     void createVec3Sampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::Vec3LinearChannel* vec3Channel);
 
     void createQuatSampler(tinygltf::Animation& gltfAnimation, int targetId, osgAnimation::QuatSphericalLinearChannel* quatChannel);
 
-    void gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel);
+    void gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel, const std::string& morphTarget);
 
     void flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int targetId);
 

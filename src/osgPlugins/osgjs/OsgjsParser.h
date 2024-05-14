@@ -206,7 +206,7 @@ namespace osgJSONParser
 
         void CascadeMaterials(osg::Node* node, const std::string& rootMaterialName);
         void parseExternalMaterials(const osg::ref_ptr<osg::Geometry>& geometry, const std::string& materialNameOverride = "");
-        void postProcessGeometry(const osg::ref_ptr<osg::Geometry>& geometry, const json& currentJSONNode, const osg::ref_ptr<osg::Array>& indices = nullptr);
+        void postProcessGeometry(const osg::ref_ptr<osg::Geometry>& geometry, const json& currentJSONNode, const osg::ref_ptr<osg::Array>& indices = nullptr, bool isMorphGeometry = false);
         void postProcessStateSet(const osg::ref_ptr<osg::StateSet>& stateset, const json* currentJSONNode = nullptr);
 
 

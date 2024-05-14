@@ -664,7 +664,29 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 
 #pragma region Morph Geometry processing
 
-void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph)
+osg::ref_ptr<osg::Vec3Array> calculateDisplacement(const osg::ref_ptr<const osg::Vec3Array>& vertices, 
+	const osg::ref_ptr<const osg::Vec3Array>& originalVertices, const std::string& morphTargetName)
+{
+
+	osg::ref_ptr<osg::Vec3Array> returnArray = new osg::Vec3Array;
+
+	// Sanity check
+	if (vertices->size() != originalVertices->size())
+	{
+		OSG_WARN << "WARNING: Morph target '" << morphTargetName << "' has inconsistent size. Skipping...";
+		return returnArray;
+	}
+
+	for (int i = 0; i < vertices->size(); i++)
+	{
+		returnArray->push_back((*vertices)[i] - (*originalVertices)[i]);
+	}
+
+	return returnArray;
+}
+
+void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh& mesh, int meshNodeId, bool isRigMorph, 
+	osg::ref_ptr<const osg::Vec3Array> originalVertices)
 {
 	const osgAnimation::MorphGeometry* morph = isRigMorph ?
 		dynamic_cast<const osgAnimation::MorphGeometry*>(dynamic_cast<const osgAnimation::RigGeometry*>(geometry)->getSourceGeometry()) :
@@ -710,6 +732,9 @@ void OSGtoGLTF::createMorphTargets(const osg::Geometry* geometry, tinygltf::Mesh
 
 				if (!transformMatrix.isIdentity())
 					vertices = transformArray(vertices, transformMatrix, false);
+
+				// Calculate vertices displacement (cause OSG gives absolute coordinates instead of differences)
+				vertices = calculateDisplacement(vertices, originalVertices, morphTargetName);
 
 				morphVerticesMap.emplace(morphTargetName, vertices);
 			}
@@ -1004,44 +1029,65 @@ void OSGtoGLTF::createQuatSampler(tinygltf::Animation& gltfAnimation, int target
 #endif
 }
 
-void OSGtoGLTF::gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel)
+void OSGtoGLTF::gatherFloatKeys(osgAnimation::FloatLinearChannel* floatChannel, const std::string& morphTarget)
 {
 	osgAnimation::FloatKeyframeContainer* keyframes = floatChannel->getOrCreateSampler()->getOrCreateKeyframeContainer();
 
-	// Begin a new channel
-	if (_weightTimes.size() == 0)
+	// Map keyframe times for a given morph target weights
+	for (const osgAnimation::FloatKeyframe& keyframe : *keyframes)
 	{
-		_weightTimes.reserve(keyframes->size());
-		_weightKeys.resize(keyframes->size());
-		for (const osgAnimation::FloatKeyframe& keyframe : *keyframes)
-			_weightTimes.push_back(keyframe.getTime());
+		float currentTime = keyframe.getTime();
+
+		if (_morphTargetTimeWeights.find(currentTime) != _morphTargetTimeWeights.end())
+		{
+			std::map<std::string, float>& morphWeight = _morphTargetTimeWeights.at(keyframe.getTime());
+			morphWeight[morphTarget] = keyframe.getValue();
+		}
+		else
+		{
+			std::map<std::string, float> newMorphKey;
+			newMorphKey[morphTarget] = keyframe.getValue();
+			_morphTargetTimeWeights[currentTime] = newMorphKey;
+		}
 	}
 
-	// Alternate key placement into vectors.
-	for (unsigned int i = 0; i < keyframes->size(); ++i)
-	{
-		if (i < _weightKeys.size())
-			_weightKeys[i].push_back((*keyframes)[i].getValue());
-	}
+	_currentMorphTargets.push_back(morphTarget);
 
 }
 
 void OSGtoGLTF::flushWeightsKeySampler(tinygltf::Animation& gltfAnimation, int targetId)
 {
-	// Check to see if we haven't already flushed this
-	if (_weightTimes.size() == 0)
+
+	if (_morphTargetTimeWeights.size() == 0)
 		return;
 
-	// Condense keys and times arrays into single vectors.
-	// keysArray should contain at least timesArray * weightTargets elements at the end.
-	osg::ref_ptr<osg::FloatArray> timesArrayTmp = new osg::FloatArray(_weightTimes.begin(), _weightTimes.end());
+	osg::ref_ptr<osg::FloatArray> timesArrayTmp = new osg::FloatArray;
 	osg::ref_ptr<osg::FloatArray> keysArray = new osg::FloatArray;
-	for (auto& weightKeys : _weightKeys)
-		keysArray->insert(keysArray->end(), weightKeys.begin(), weightKeys.end());
 
-	// Clear old arrays so they may be reused
-	_weightTimes.clear();
-	_weightKeys.clear();
+	// Create times and keys array
+	for (auto& timeKey : _morphTargetTimeWeights)
+	{
+		float currentTime = timeKey.first;
+		timesArrayTmp->push_back(currentTime);
+
+		std::map<std::string, float>& currentMorphWeights = timeKey.second;
+
+		for (auto& morphTarget : _currentMorphTargets)
+		{
+			float weight(0.0f);
+
+			//Try to look for the weight in the array. If not found, still place a 0 on keys array
+			if (currentMorphWeights.find(morphTarget) != currentMorphWeights.end())
+			{
+				weight = currentMorphWeights.at(morphTarget);
+			}
+			
+			keysArray->push_back(weight);
+		}
+	}
+
+	_currentMorphTargets.clear();
+	_morphTargetTimeWeights.clear();
 
 	// Proceed with normal sampler creation
 	osg::ref_ptr<osg::FloatArray> timesArray = new osg::FloatArray;
@@ -1147,13 +1193,13 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 
 			if (targetId == oldTargetId)
 			{
-				gatherFloatKeys(floatChannel);
+				gatherFloatKeys(floatChannel, targetName);
 				realTarget = targetId;
 			}
 			else
 			{
 				flushWeightsKeySampler(gltfAnimation, oldTargetId);
-				gatherFloatKeys(floatChannel);
+				gatherFloatKeys(floatChannel, targetName);
 				realTarget = targetId;
 				oldTargetId = targetId;
 			}			
@@ -1965,12 +2011,12 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	// Process morphed geometry
 	if (morph)
 	{
-		createMorphTargets(morph, mesh, meshNodeId, false);
+		createMorphTargets(morph, mesh, meshNodeId, false, positions);
 	}
 
 	// Look for morph geometries inside rig
 	if (rigMorph)
-		createMorphTargets(rigGeometry, mesh, meshNodeId, true); // We always pass the parent geometry as parameter.
+		createMorphTargets(rigGeometry, mesh, meshNodeId, true, positions); // We always pass the parent geometry as parameter.
 
 
 	if (pushedStateSet)

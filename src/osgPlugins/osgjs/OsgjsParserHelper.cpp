@@ -565,92 +565,95 @@ void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, cons
 }
 
 osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Array>& indices, const osg::ref_ptr<osg::Array>& vertices,
-	const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h)
+	const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h, bool isMorphGeometry)
 {
 	// Decast vertices to array.
 	osg::ref_ptr<osg::Array> verticesConverted = ParserHelper::recastArray(vertices, DesiredVectorSize::Array);
 	int elementSize = vertices->getDataSize();
 
 	// Decode Predict
-	switch (indices->getType())
+	if (!isMorphGeometry)
 	{
-	case Array::UIntArrayType:
-		switch (verticesConverted->getType())
+		switch (indices->getType())
 		{
 		case Array::UIntArrayType:
-			verticesConverted = decodePredict<UIntArray, UIntArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+			switch (verticesConverted->getType())
+			{
+			case Array::UIntArrayType:
+				verticesConverted = decodePredict<UIntArray, UIntArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+				break;
+			case Array::UShortArrayType:
+				verticesConverted = decodePredict<UIntArray, UShortArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+				break;
+			case Array::UByteArrayType:
+				verticesConverted = decodePredict<UIntArray, UByteArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
+				break;
+			case Array::IntArrayType:
+				verticesConverted = decodePredict<UIntArray, IntArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
+				break;
+			case Array::ShortArrayType:
+				verticesConverted = decodePredict<UIntArray, ShortArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
+				break;
+			case Array::ByteArrayType:
+				verticesConverted = decodePredict<UIntArray, ByteArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+				break;
+			default:
+				return nullptr;
+			}
 			break;
 		case Array::UShortArrayType:
-			verticesConverted = decodePredict<UIntArray, UShortArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+			switch (verticesConverted->getType())
+			{
+			case Array::UIntArrayType:
+				verticesConverted = decodePredict<UShortArray, UIntArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+				break;
+			case Array::UShortArrayType:
+				verticesConverted = decodePredict<UShortArray, UShortArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+				break;
+			case Array::UByteArrayType:
+				verticesConverted = decodePredict<UShortArray, UByteArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
+				break;
+			case Array::IntArrayType:
+				verticesConverted = decodePredict<UShortArray, IntArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
+				break;
+			case Array::ShortArrayType:
+				verticesConverted = decodePredict<UShortArray, ShortArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
+				break;
+			case Array::ByteArrayType:
+				verticesConverted = decodePredict<UShortArray, ByteArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+				break;
+			default:
+				return nullptr;
+			}
 			break;
 		case Array::UByteArrayType:
-			verticesConverted = decodePredict<UIntArray, UByteArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
-			break;
-		case Array::IntArrayType:
-			verticesConverted = decodePredict<UIntArray, IntArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
-			break;
-		case Array::ShortArrayType:
-			verticesConverted = decodePredict<UIntArray, ShortArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
-			break;
-		case Array::ByteArrayType:
-			verticesConverted = decodePredict<UIntArray, ByteArray>(dynamic_pointer_cast<UIntArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+			switch (verticesConverted->getType())
+			{
+			case Array::UIntArrayType:
+				verticesConverted = decodePredict<UByteArray, UIntArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
+				break;
+			case Array::UShortArrayType:
+				verticesConverted = decodePredict<UByteArray, UShortArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
+				break;
+			case Array::UByteArrayType:
+				verticesConverted = decodePredict<UByteArray, UByteArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
+				break;
+			case Array::IntArrayType:
+				verticesConverted = decodePredict<UByteArray, IntArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
+				break;
+			case Array::ShortArrayType:
+				verticesConverted = decodePredict<UByteArray, ShortArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
+				break;
+			case Array::ByteArrayType:
+				verticesConverted = decodePredict<UByteArray, ByteArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
+				break;
+			default:
+				return nullptr;
+			}
 			break;
 		default:
 			return nullptr;
 		}
-		break;
-	case Array::UShortArrayType:
-		switch (verticesConverted->getType())
-		{
-		case Array::UIntArrayType:
-			verticesConverted = decodePredict<UShortArray, UIntArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
-			break;
-		case Array::UShortArrayType:
-			verticesConverted = decodePredict<UShortArray, UShortArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
-			break;
-		case Array::UByteArrayType:
-			verticesConverted = decodePredict<UShortArray, UByteArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
-			break;
-		case Array::IntArrayType:
-			verticesConverted = decodePredict<UShortArray, IntArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
-			break;
-		case Array::ShortArrayType:
-			verticesConverted = decodePredict<UShortArray, ShortArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
-			break;
-		case Array::ByteArrayType:
-			verticesConverted = decodePredict<UShortArray, ByteArray>(dynamic_pointer_cast<UShortArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
-			break;
-		default:
-			return nullptr;
-		}
-		break;
-	case Array::UByteArrayType:
-		switch (verticesConverted->getType())
-		{
-		case Array::UIntArrayType:
-			verticesConverted = decodePredict<UByteArray, UIntArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UIntArray>(verticesConverted), elementSize);
-			break;
-		case Array::UShortArrayType:
-			verticesConverted = decodePredict<UByteArray, UShortArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UShortArray>(verticesConverted), elementSize);
-			break;
-		case Array::UByteArrayType:
-			verticesConverted = decodePredict<UByteArray, UByteArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<UByteArray>(verticesConverted), elementSize);
-			break;
-		case Array::IntArrayType:
-			verticesConverted = decodePredict<UByteArray, IntArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<IntArray>(verticesConverted), elementSize);
-			break;
-		case Array::ShortArrayType:
-			verticesConverted = decodePredict<UByteArray, ShortArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<ShortArray>(verticesConverted), elementSize);
-			break;
-		case Array::ByteArrayType:
-			verticesConverted = decodePredict<UByteArray, ByteArray>(dynamic_pointer_cast<UByteArray>(indices), dynamic_pointer_cast<ByteArray>(verticesConverted), elementSize);
-			break;
-		default:
-			return nullptr;
-		}
-		break;
-	default:
-		return nullptr;
 	}
 
 	if (!verticesConverted)

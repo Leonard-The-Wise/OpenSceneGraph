@@ -2303,7 +2303,7 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, cons
     }
 }
 
-void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode, const ref_ptr<Array>& indices)
+void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode, const ref_ptr<Array>& indices, bool isMorphGeometry)
 {
 #ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -2375,7 +2375,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
             return;
         }
 
-        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, verticesOriginals, vtx_bbl, vtx_h);
+        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, verticesOriginals, vtx_bbl, vtx_h, isMorphGeometry);
 
         if (!verticesConverted)
         {
@@ -2411,7 +2411,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
                 return;
             }
 
-            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(realIndices, texCoord, uv_bbl, uv_h);
+            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(realIndices, texCoord, uv_bbl, uv_h, false);
 
             if (!texCoordConverted)
             {
@@ -2470,7 +2470,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
             if (!morphGeometry || (morphGeometry->getVertexArray() && morphGeometry->getVertexArray()->getNumElements() == 0))
                 continue;
 
-            postProcessGeometry(morphGeometry, currentJSONNode, realIndices);
+            postProcessGeometry(morphGeometry, currentJSONNode, realIndices, true);
         }
     }
 }
