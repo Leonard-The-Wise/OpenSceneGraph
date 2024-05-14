@@ -1414,27 +1414,27 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 	material.name = materialName;
 
 	material.pbrMetallicRoughness.baseColorFactor = { diffuse.r(), diffuse.g(), diffuse.b(), diffuse.a() };
-	material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
+	// material.emissiveFactor = { emission.r(), emission.g(), emission.b() };
 
 	bool backfaceCull(false);
 	std::ignore = mat->getUserValue("backfaceCull", backfaceCull);
 	material.doubleSided = !backfaceCull;
 
 	// Declare use of specular extension
-	if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end()) 
-	{
-		_model.extensionsUsed.emplace_back("KHR_materials_specular");
-	}
+	//if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end()) 
+	//{
+	//	_model.extensionsUsed.emplace_back("KHR_materials_specular");
+	//}
 
-	tinygltf::Value specularColorFactorValue;
-	for (float component : {specular.x(), specular.y(), specular.z()}) 
-	{
-		specularColorFactorValue.Get<tinygltf::Value::Array>().emplace_back(component);
-	}
+	//tinygltf::Value specularColorFactorValue;
+	//for (float component : {specular.x(), specular.y(), specular.z()}) 
+	//{
+	//	specularColorFactorValue.Get<tinygltf::Value::Array>().emplace_back(component);
+	//}
 
-	tinygltf::Value specularExtensionValue;
-	specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
-	material.extensions.emplace("KHR_materials_specular", specularExtensionValue);
+	//tinygltf::Value specularExtensionValue;
+	//specularExtensionValue.Get<tinygltf::Value::Object>().emplace("specularColorFactor", specularColorFactorValue);
+	//material.extensions.emplace("KHR_materials_specular", specularExtensionValue);
 
 	std::set<MaterialSurfaceLayer> usedMaterials;
 	for (auto& tex : texArray)
@@ -1581,6 +1581,11 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 		}
 		case MaterialSurfaceLayer::Specular:
 		{
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_specular");
+			}
+
 			if (material.extensions.find("KHR_materials_specular") == material.extensions.end())
 			{
 				material.extensions["KHR_materials_specular"] = tinygltf::Value();
