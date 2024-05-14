@@ -2160,7 +2160,7 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
     std::string realOrigFileName;
 
     // Search in dirs
-    if (!_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName))
+    if (!_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName) || fileName.empty())
         return nullptr;
 
     // First try to read original file name. If unsuccessfull, then retry as .png

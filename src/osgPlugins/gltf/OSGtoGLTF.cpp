@@ -664,7 +664,7 @@ bool OSGtoGLTF::isMatrixAnimated(const osg::MatrixTransform* node)
 
 #pragma region Morph Geometry processing
 
-osg::ref_ptr<osg::Vec3Array> calculateDisplacement(const osg::ref_ptr<const osg::Vec3Array>& vertices, 
+static osg::ref_ptr<osg::Vec3Array> calculateDisplacement(const osg::ref_ptr<const osg::Vec3Array>& vertices,
 	const osg::ref_ptr<const osg::Vec3Array>& originalVertices, const std::string& morphTargetName)
 {
 
@@ -1155,16 +1155,21 @@ void OSGtoGLTF::createAnimation(const osg::ref_ptr<osgAnimation::Animation> osgA
 
 		// TODO: Morph
 		// Get target ID from name
-		if (_gltfAnimationTargets.find(targetName) != _gltfAnimationTargets.end()
+		if (_gltfValidAnimationTargets.find(targetName) != _gltfValidAnimationTargets.end()
 			|| _gltfMorphTargets.find(targetName) != _gltfMorphTargets.end())
 		{
-			if (_gltfAnimationTargets.find(targetName) != _gltfAnimationTargets.end())
-				targetId = _gltfAnimationTargets.at(targetName);
+			if (_gltfValidAnimationTargets.find(targetName) != _gltfValidAnimationTargets.end())
+				targetId = _gltfValidAnimationTargets.at(targetName);
 			else
 				targetId = _gltfMorphTargets.at(targetName);
 		}
 		else
 		{
+			// Check to see if missing target was a dummy (empty) node before
+			if (_gltfAllTargets.find(targetName) != _gltfAllTargets.end())
+				continue;
+
+			// Warn user of missing animation target
 			if (missingTargets.find(targetName) == missingTargets.end() && 
 				_discardedAnimationTargetNames.find(targetName) == _discardedAnimationTargetNames.end())
 			{
@@ -1248,7 +1253,7 @@ void OSGtoGLTF::addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callb
 		return;
 
 	std::string updateMatrixName = umt->getName();
-	_gltfAnimationTargets[updateMatrixName] = gltfNodeId;
+	_gltfValidAnimationTargets[updateMatrixName] = gltfNodeId;
 	
 	auto& stackedTransforms = umt->getStackedTransforms();
 
@@ -1260,6 +1265,17 @@ void OSGtoGLTF::addAnimationTarget(int gltfNodeId, const osg::ref_ptr<osg::Callb
 			break;
 		}
 	}
+}
+
+void OSGtoGLTF::addDummyTarget(const osg::ref_ptr<osg::Callback>& nodeCallback)
+{
+	const osg::ref_ptr<osgAnimation::UpdateMatrixTransform> umt = osg::dynamic_pointer_cast<osgAnimation::UpdateMatrixTransform>(nodeCallback);
+
+	if (!umt)
+		return;
+
+	std::string updateMatrixName = umt->getName();
+	_gltfAllTargets.emplace(updateMatrixName);
 }
 
 #pragma endregion
@@ -1710,6 +1726,8 @@ void OSGtoGLTF::apply(osg::Node& node)
 		// See if this is an animation target
 		addAnimationTarget(id, getRealUpdateCallback(node.getUpdateCallback()));
 	}
+
+	addDummyTarget(getRealUpdateCallback(node.getUpdateCallback()));
 }
 
 void OSGtoGLTF::apply(osg::Group& group)
@@ -1839,6 +1857,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	int meshID = _model.meshes.size() - 1;
 	_model.nodes.back().mesh = meshID;
 	int meshNodeId = _model.nodes.size() - 1;
+	mesh.name = geomName;
 
 	if (rigGeometry)
 	{
