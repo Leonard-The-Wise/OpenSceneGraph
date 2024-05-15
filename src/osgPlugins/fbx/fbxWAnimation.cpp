@@ -279,7 +279,7 @@ namespace pluginfbx
 
 			float value = keyframe.getValue();
 
-			curve->KeySet(curve->KeyAdd(fbxTime), fbxTime, value, FbxAnimCurveDef::eInterpolationConstant);
+			curve->KeySet(curve->KeyAdd(fbxTime), fbxTime, value * 100, FbxAnimCurveDef::eInterpolationLinear);
 		}
 		return fbxTime;
 	}
@@ -416,18 +416,18 @@ namespace pluginfbx
 			return;
 
 		// Create Static Pose, add a dummy keyframe for every bone (so some applications won't give warnings about it)
-		FbxAnimStack* fbxAnimStack = FbxAnimStack::Create(_pScene, "Static Pose");
-		_pScene->SetCurrentAnimationStack(fbxAnimStack);
-		FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, "Static Pose");
-		fbxAnimStack->AddMember(fbxAnimLayer);
+		//FbxAnimStack* fbxAnimStack = FbxAnimStack::Create(_pScene, "Static Pose");
+		//_pScene->SetCurrentAnimationStack(fbxAnimStack);
+		//FbxAnimLayer* fbxAnimLayer = FbxAnimLayer::Create(_pScene, "Static Pose");
+		//fbxAnimStack->AddMember(fbxAnimLayer);
 
-		FbxTime fbxTime;
-		fbxTime.SetSecondDouble(0);
+		//FbxTime fbxTime;
+		//fbxTime.SetSecondDouble(0);
 
-		applyDummyKeyFrame(fbxTime, fbxAnimLayer);
+		//applyDummyKeyFrame(fbxTime, fbxAnimLayer);
 
-		fbxAnimStack->LocalStart = fbxTime;
-		fbxAnimStack->LocalStop = fbxTime;
+		//fbxAnimStack->LocalStart = fbxTime;
+		//fbxAnimStack->LocalStop = fbxTime;
 
 		// Read animation takes
 		auto bam = dynamic_pointer_cast<BasicAnimationManager>(callback);
