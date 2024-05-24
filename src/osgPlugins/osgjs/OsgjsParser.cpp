@@ -809,11 +809,11 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
                 newDrawElementNode = &primitiveSet["DrawElementsUInt"];
             }
             else if (primitiveSet.contains("DrawElementsUShort") && primitiveSet["DrawElementsUShort"].is_object()) {
-                newPrimitiveSet = new DrawElementsUShort;
+                newPrimitiveSet = new DrawElementsUInt; // We convert all UShort and UByte to UInt.
                 newDrawElementNode = &primitiveSet["DrawElementsUShort"];
             }
             else if (primitiveSet.contains("DrawElementsUByte") && primitiveSet["DrawElementsUByte"].is_object()) {
-                newPrimitiveSet = new DrawElementsUByte;
+                newPrimitiveSet = new DrawElementsUInt; // We convert all UShort and UByte to UInt.
                 newDrawElementNode = &primitiveSet["DrawElementsUByte"];
             }
             else if (primitiveSet.contains("DrawArrayLengths") && primitiveSet["DrawArrayLengths"].is_object()) {
@@ -864,19 +864,24 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
 
                         if (indices)
                         {
-                            DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(newPrimitiveSet.get());
-                            DrawElementsUShort* des = dynamic_cast<DrawElementsUShort*>(newPrimitiveSet.get());
-                            DrawElementsUByte* deb = dynamic_cast<DrawElementsUByte*>(newPrimitiveSet.get());
-
-                            if (dei)
-                                dei->insert(dei->begin(), dynamic_cast<UIntArray*>(indices.get())->begin(), 
-                                    dynamic_cast<UIntArray*>(indices.get())->end());
-                            else if (des)
-                                des->insert(des->begin(), dynamic_cast<UShortArray*>(indices.get())->begin(),
-                                    dynamic_cast<UShortArray*>(indices.get())->end());
-                            else if (deb)
-                                deb->insert(deb->begin(), dynamic_cast<UByteArray*>(indices.get())->begin(),
-                                    dynamic_cast<UByteArray*>(indices.get())->end());
+                            if (DrawElementsUInt* dei = dynamic_cast<DrawElementsUInt*>(newPrimitiveSet.get()))
+                            {
+                                switch (indices->getType())
+                                {
+                                case Array::UByteArrayType:
+                                    dei->insert(dei->begin(), dynamic_cast<UByteArray*>(indices.get())->begin(),
+                                        dynamic_cast<UByteArray*>(indices.get())->end());
+                                    break;
+                                case Array::UShortArrayType:
+                                    dei->insert(dei->begin(), dynamic_cast<UShortArray*>(indices.get())->begin(),
+                                        dynamic_cast<UShortArray*>(indices.get())->end());
+                                    break;
+                                case Array::UIntArrayType:
+                                    dei->insert(dei->begin(), dynamic_cast<UIntArray*>(indices.get())->begin(),
+                                        dynamic_cast<UIntArray*>(indices.get())->end());
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -2380,7 +2385,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
     if (verticesOriginals && success[0] && success[3])
     {
-        if (!realIndices)
+        if (!realIndices && vertex_mode != 1)
         {
             OSG_DEBUG << "WARNING: Encoded Vertices array contains unsupported DrawPrimitive type." << std::endl;
             return;
@@ -2418,7 +2423,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
         if (success[6] && success[8])
         {
-            if (!realIndices)
+            if (!realIndices && uv_mode != 1)
             {
                 OSG_DEBUG << "WARNING: Encoded TextCoord array contains unsupported DrawPrimitive type." << std::endl;
                 return;

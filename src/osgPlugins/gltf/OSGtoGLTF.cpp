@@ -264,6 +264,17 @@ osg::ref_ptr<T> doubleToFloatArray(const osg::Array* array)
 	return osg::dynamic_pointer_cast<T>(returnArray);
 }
 
+static osg::ref_ptr<osg::Vec4Array> colorsByteToFloat(const osg::ref_ptr<osg::Vec4ubArray>& colors)
+{
+	osg::ref_ptr<osg::Vec4Array> returnArray = new osg::Vec4Array;
+	for (auto& color : *colors)
+	{
+		returnArray->push_back(osg::Vec4(color.r() / 255.0f, color.g() / 255.0f, color.b() / 255.0f, color.a() / 255.0f));
+	}
+
+	return returnArray;
+}
+
 inline static bool isEmptyRig(osgAnimation::RigGeometry* rigGeometry)
 {
 	osg::Geometry* geometry = rigGeometry->getSourceGeometry();
@@ -1949,7 +1960,14 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		tangents = transformArray(tangents, identity, true); // just normalize vector
 	}
 
+	// Get colors
 	osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
+
+	// Check for alternative versions of color arrays
+	osg::Vec4ubArray* colorsb = dynamic_cast<osg::Vec4ubArray*>(geom->getColorArray());
+	if (colorsb)
+		colors = colorsByteToFloat(colorsb);
+
 	osg::Vec4dArray* colorsd = dynamic_cast<osg::Vec4dArray*>(geom->getColorArray());
 	if (colorsd)
 		colors = doubleToFloatArray<osg::Vec4Array>(colorsd);

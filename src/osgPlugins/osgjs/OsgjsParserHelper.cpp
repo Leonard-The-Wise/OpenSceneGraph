@@ -254,6 +254,10 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 			{
 				int k = 0;
 				bool decodeFail = false;
+				std::vector<uint32_t> elementsDecodeCopy;
+
+				// Override returnArray
+				returnArray = new UIntArray;
 
 				switch (drawMode)
 				{
@@ -267,65 +271,24 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 					{
 					case Array::UByteArrayType:
 					{
-						std::vector<uint8_t> elementsDecodeCopy = std::vector<uint8_t>(elementsBytes->begin() + readOffset, elementsBytes->end());
-						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
-						elementsDecodeCopy = decodeDelta<uint8_t>(elementsDecodeCopy, k);
-						elementsDecodeCopy = decodeImplicit<uint8_t>(elementsDecodeCopy, k);
-						if (elementsDecodeCopy.empty())
-						{
-							decodeFail = true;
-							break;
-						}
-						elementsDecodeCopy = decodeWatermark<uint8_t>(elementsDecodeCopy, magic);
-
-						for (auto& element : elementsDecodeCopy)
-							dynamic_cast<UByteArray*>(returnArray.get())->push_back(element);
-
+						const uint8_t* bytesData = reinterpret_cast<const uint8_t*>(elementsBytes->data());
+						for (size_t i = 0; i < totalElements; ++i)
+							elementsDecodeCopy.push_back(bytesData[i]);
 						break;
 					}
 
 					case Array::UShortArrayType:
 					{
 						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes->data());
-						std::vector<uint16_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(shortData[i]);
-
-						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
-						elementsDecodeCopy = decodeDelta<uint16_t>(elementsDecodeCopy, k);
-						elementsDecodeCopy = decodeImplicit<uint16_t>(elementsDecodeCopy, k);
-						if (elementsDecodeCopy.empty())
-						{
-							decodeFail = true;
-							break;
-						}
-						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
-
-						for (auto& element : elementsDecodeCopy)
-							dynamic_cast<UShortArray*>(returnArray.get())->push_back(element);
-
 						break;
 					}
 					case Array::UIntArrayType:
 					{
 						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes->data());
-						std::vector<uint32_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(intData[i]);
-
-						k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
-						elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k); 
-						elementsDecodeCopy = decodeImplicit<uint32_t>(elementsDecodeCopy, k);
-						if (elementsDecodeCopy.empty())
-						{
-							decodeFail = true;
-							break;
-						}
-						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
-
-						for (auto& element : elementsDecodeCopy)
-							dynamic_cast<UIntArray*>(returnArray.get())->push_back(element);
-
 						break;
 					}
 					default:
@@ -333,7 +296,22 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 						OSG_WARN << "WARNING: Unsuported indices array!" << std::endl;
 						return nullptr;
 					}
+
+					if (elementsDecodeCopy.empty())
+					{
+						decodeFail = true;
+						break;
 					}
+					}
+
+					k = IMPLICIT_HEADER_LENGTH + static_cast<int>(elementsDecodeCopy[IMPLICIT_HEADER_MASK_LENGTH]);
+					elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k);
+					elementsDecodeCopy = decodeImplicit<uint32_t>(elementsDecodeCopy, k);
+					elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
+
+					for (auto& element : elementsDecodeCopy)
+						dynamic_cast<UIntArray*>(returnArray.get())->push_back(element);
+
 					break;
 				}
 				case GL_TRIANGLES:
@@ -342,50 +320,39 @@ ref_ptr<Array> ParserHelper::parseJSONArray(const json& currentJSONNode, int ele
 					{
 					case Array::UByteArrayType:
 					{
-						const uint8_t* shortData = reinterpret_cast<const uint8_t*>(elementsBytes->data());
-						std::vector<uint8_t> elementsDecodeCopy;
+						const uint8_t* bytesData = reinterpret_cast<const uint8_t*>(elementsBytes->data());
 						for (size_t i = 0; i < totalElements; ++i)
-							elementsDecodeCopy.push_back(shortData[i]);
-
-						elementsDecodeCopy = decodeDelta<uint8_t>(elementsDecodeCopy, k);
-						elementsDecodeCopy = decodeWatermark<uint8_t>(elementsDecodeCopy, magic);
-
-						for (auto& element : elementsDecodeCopy)
-							dynamic_cast<UByteArray*>(returnArray.get())->push_back(element);
-
+							elementsDecodeCopy.push_back(bytesData[i]);
 						break;
 					}
 					case Array::UShortArrayType:
 					{
 						const uint16_t* shortData = reinterpret_cast<const uint16_t*>(elementsBytes->data());
-						std::vector<uint16_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(shortData[i]);
-
-						elementsDecodeCopy = decodeDelta<uint16_t>(elementsDecodeCopy, k);
-						elementsDecodeCopy = decodeWatermark<uint16_t>(elementsDecodeCopy, magic);
-
-						for (auto& element : elementsDecodeCopy)
-							dynamic_cast<UShortArray*>(returnArray.get())->push_back(element);
-
 						break;
 					}
 					case Array::UIntArrayType:
 					{
 						const uint32_t* intData = reinterpret_cast<const uint32_t*>(elementsBytes->data());
-						std::vector<uint32_t> elementsDecodeCopy;
 						for (size_t i = 0; i < totalElements; ++i)
 							elementsDecodeCopy.push_back(intData[i]);
-
-						elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k);
-						elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
-
-						for (auto& element : elementsDecodeCopy)
-							dynamic_cast<UIntArray*>(returnArray.get())->push_back(element);
-
 						break;
 					}
 					}
+
+					if (elementsDecodeCopy.empty())
+					{
+						decodeFail = true;
+						break;
+					}
+
+					elementsDecodeCopy = decodeDelta<uint32_t>(elementsDecodeCopy, k);
+					elementsDecodeCopy = decodeWatermark<uint32_t>(elementsDecodeCopy, magic);
+
+					for (auto& element : elementsDecodeCopy)
+						dynamic_cast<UIntArray*>(returnArray.get())->push_back(element);
+
 					break;
 				}
 				default:
