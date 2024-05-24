@@ -32,7 +32,7 @@ namespace osgJSONParser
 			const std::map<int, std::string>& boneIndexes);
 
 		static osg::ref_ptr<osg::Array> decodeVertices(const osg::ref_ptr<osg::Array>& indices, const osg::ref_ptr<osg::Array>& vertices,
-			const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h, bool isMorphGeometry);
+			const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h, int vertex_mode = 3);
 
 		static osg::ref_ptr<osg::Array> decompressArray(const osg::ref_ptr<osg::Array>& keys, const osg::UserDataContainer* udc,
 			KeyDecodeMode mode);

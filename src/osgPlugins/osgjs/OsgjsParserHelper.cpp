@@ -565,14 +565,14 @@ void ParserHelper::makeInfluenceMap(osgAnimation::RigGeometry* rigGeometry, cons
 }
 
 osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Array>& indices, const osg::ref_ptr<osg::Array>& vertices,
-	const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h, bool isMorphGeometry)
+	const std::vector<double>& vtx_bbl, const std::vector<double>& vtx_h, int vertex_mode)
 {
 	// Decast vertices to array.
 	osg::ref_ptr<osg::Array> verticesConverted = ParserHelper::recastArray(vertices, DesiredVectorSize::Array);
 	int elementSize = vertices->getDataSize();
 
 	// Decode Predict
-	if (!isMorphGeometry)
+	if (vertex_mode != 1)
 	{
 		switch (indices->getType())
 		{

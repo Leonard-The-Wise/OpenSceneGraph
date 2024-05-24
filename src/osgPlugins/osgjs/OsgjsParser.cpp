@@ -343,6 +343,8 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
 
     ref_ptr<StateSet> stateset = new StateSet;
 
+    stateset->setName(currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "");
+
     if (currentJSONNode.contains("RenderingHint"))
     {
         stateset->setRenderingHint(StateSet::TRANSPARENT_BIN);
@@ -422,7 +424,12 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
                 else if (childState)
                 {
                     if (dynamic_pointer_cast<Material>(childState))
+                    {
+                        if (dynamic_pointer_cast<Material>(childState)->getName().empty())
+                            dynamic_pointer_cast<Material>(childState)->setName(stateset->getName());
+
                         stateset->setAttribute(dynamic_pointer_cast<Material>(childState), StateAttribute::MATERIAL);
+                    }
                     else if (dynamic_pointer_cast<BlendFunc>(childState))
                         stateset->setAttribute(dynamic_pointer_cast<BlendFunc>(childState), StateAttribute::BLENDFUNC);
                     else if (dynamic_pointer_cast<BlendColor>(childState))
@@ -2303,7 +2310,7 @@ void OsgjsParser::parseExternalMaterials(const ref_ptr<Geometry>& geometry, cons
     }
 }
 
-void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode, const ref_ptr<Array>& indices, bool isMorphGeometry)
+void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const json& currentJSONNode, const ref_ptr<Array>& indices)
 {
 #ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
@@ -2328,10 +2335,12 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     std::vector<double> vtx_h(3, 0);
     std::vector<bool> success(12, false);
     double epsilon(0.0), nphi(0.0);
+    int vertex_mode(0);
 
     // Get UV's Shape Attributes
     std::vector<double> uv_bbl(2, 0);
     std::vector<double> uv_h(2, 0);
+    int uv_mode(0);
 
     success[0] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_x", vtx_bbl[0]);
     success[1] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_bbl_y", vtx_bbl[1]);
@@ -2339,6 +2348,8 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
     success[3] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_x", vtx_h[0]);
     success[4] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_y", vtx_h[1]);
     success[5] = ParserHelper::getShapeAttribute(shapeAttrList, "vtx_h_z", vtx_h[2]);
+    std::ignore = ParserHelper::getShapeAttribute(shapeAttrList, "vertex_mode", vertex_mode);
+
 
     ref_ptr<Array> realIndices;
 
@@ -2375,7 +2386,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
             return;
         }
 
-        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, verticesOriginals, vtx_bbl, vtx_h, isMorphGeometry);
+        ref_ptr<Array> verticesConverted = ParserHelper::decodeVertices(realIndices, verticesOriginals, vtx_bbl, vtx_h, vertex_mode);
 
         if (!verticesConverted)
         {
@@ -2392,16 +2403,18 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
         if (!texCoord)
             continue;
 
-        std::stringstream uvbblx, uvbbly, uvhx, uvhy;
+        std::stringstream uvbblx, uvbbly, uvhx, uvhy, uvmode;
         uvbblx << "uv_" << i << "_bbl_x";
         uvbbly << "uv_" << i << "_bbl_y";
         uvhx << "uv_" << i << "_h_x";
         uvhy << "uv_" << i << "_h_y";
+        uvmode << "uv_" << i << "_mode";
 
         success[6] = ParserHelper::getShapeAttribute(shapeAttrList, uvbblx.str(), uv_bbl[0]);
         success[7] = ParserHelper::getShapeAttribute(shapeAttrList, uvbbly.str(), uv_bbl[1]);
         success[8] = ParserHelper::getShapeAttribute(shapeAttrList, uvhx.str(), uv_h[0]);
         success[9] = ParserHelper::getShapeAttribute(shapeAttrList, uvhy.str(), uv_h[1]);
+        std::ignore = ParserHelper::getShapeAttribute(shapeAttrList, uvmode.str(), uv_mode);
 
         if (success[6] && success[8])
         {
@@ -2411,7 +2424,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
                 return;
             }
 
-            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(realIndices, texCoord, uv_bbl, uv_h, false);
+            ref_ptr<Array> texCoordConverted = ParserHelper::decodeVertices(realIndices, texCoord, uv_bbl, uv_h, uv_mode);
 
             if (!texCoordConverted)
             {
@@ -2470,7 +2483,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
             if (!morphGeometry || (morphGeometry->getVertexArray() && morphGeometry->getVertexArray()->getNumElements() == 0))
                 continue;
 
-            postProcessGeometry(morphGeometry, currentJSONNode, realIndices, true);
+            postProcessGeometry(morphGeometry, currentJSONNode, realIndices);
         }
     }
 }

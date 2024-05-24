@@ -822,8 +822,8 @@ int main( int argc, char **argv )
         }
 
         // optimize the scene graph, remove redundant nodes and state etc.
-        osgUtil::Optimizer optimizer;
-        optimizer.optimize(root.get());
+        // osgUtil::Optimizer optimizer;
+        // optimizer.optimize(root.get());
 
         if( do_convert )
             root = oc.convert( root.get() );
