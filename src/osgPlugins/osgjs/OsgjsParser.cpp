@@ -1024,7 +1024,7 @@ ref_ptr<Object> OsgjsParser::parseOsgGeometry(const json& currentJSONNode, const
         rigGeometry->setUseDisplayList(false);
     }
 
-    // 7) Get external materials (from materialInfo.txt)
+    // 7) Get external materials (from viewer_info.json)
     parseExternalMaterials(newGeometry);
 
     // 8) Vertices post-processing
