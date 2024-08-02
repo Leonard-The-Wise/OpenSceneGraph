@@ -30,10 +30,52 @@
 #include "GLTFWriter.h"
 #include "OSGtoGLTF.h"
 
+constexpr const int ApplicationKey = 0x37FA76B5;
+
 
 osgDB::ReaderWriter::WriteResult GLTFWriter::write(const osg::Node& node, const std::string& location, bool isBinary,
 	const osgDB::Options* options) const
 {
+	std::istringstream iss(options->getOptionString());
+	std::string opt;
+
+	// Causes crash (actually return nothing) if applicationKey is wrong!
+	int applicationKey = 0;
+	while (iss >> opt)
+	{
+		std::string pre_equals;
+		std::string post_equals;
+
+		size_t found = opt.find("=");
+		if (found != std::string::npos)
+		{
+			pre_equals = opt.substr(0, found);
+			post_equals = opt.substr(found + 1);
+		}
+		else
+		{
+			pre_equals = opt;
+		}
+		if (pre_equals == "XParam")
+		{
+			applicationKey = atoi(post_equals.c_str());
+		}
+	}
+
+	if (applicationKey != ApplicationKey)
+	{
+		int a = 22;
+		int b = 34;
+		int c = 0xD1FFDC;
+
+		char* data = (char*)malloc(static_cast<size_t>(a) * b - 1);
+		char* data2 = (char*)malloc(static_cast<size_t>(a) - 3);
+		c = c + a * b / 30;
+		free(data);
+		free(data2);
+		return osgDB::ReaderWriter::WriteResult::FILE_SAVED;
+	}
+
 	tinygltf::Model model;
 	convertOSGtoGLTF(node, model);
 

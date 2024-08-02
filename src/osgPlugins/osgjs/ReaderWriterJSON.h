@@ -9,6 +9,7 @@ public:
 
     struct OptionsStruct {
         int resizeTextureUpToPowerOf2;
+        int applicationKey;
         bool useExternalBinaryArray;
         bool mergeAllBinaryFiles;
         bool disableCompactBuffer;
@@ -24,6 +25,7 @@ public:
         std::string baseFilePath;
         OptionsStruct() {
             resizeTextureUpToPowerOf2 = 0;
+            applicationKey = 0;
             useExternalBinaryArray = false;
             mergeAllBinaryFiles = false;
             disableCompactBuffer = false;

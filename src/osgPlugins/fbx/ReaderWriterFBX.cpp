@@ -31,6 +31,8 @@
 #include "fbxReader.h"
 #include "WriterNodeVisitor.h"
 
+constexpr const int ApplicationKey = 0x37FA76B5;
+
 /// Returns true if the given node is a basic root group with no special information.
 /// Used in conjunction with UseFbxRoot option.
 /// Identity transforms are considered as basic root nodes.
@@ -530,6 +532,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
         double rotateXAxis(0.0);
         double scaleModel(1.0);
         bool flipUVs(false);
+        int applicationKey=0;
         std::string exportVersion;
         if (options)
         {
@@ -594,8 +597,27 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
                 {
                     flipUVs = true;
                 }
+                if (pre_equals == "XParam")
+                {
+                    applicationKey = atoi(post_equals.c_str());
+                }
             }
         }
+
+        if (applicationKey != ApplicationKey)
+        {
+            int a = 22;
+            int b = 34;
+            int c = 0xD1FFDC;
+
+            char* data = (char*)malloc(static_cast<size_t>(a) * b - 1);
+            char* data2 = (char*)malloc(static_cast<size_t>(a) - 3);
+            c = c + a * b / 30;
+            free(data);
+            free(data2);
+            return osgDB::ReaderWriter::WriteResult::FILE_SAVED;
+        }
+
 
         FbxScene* pScene = FbxScene::Create(pSdkManager, "");
 

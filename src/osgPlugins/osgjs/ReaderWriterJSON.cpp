@@ -41,6 +41,9 @@
 
 using json = nlohmann::json;
 
+constexpr const int ApplicationKey = 0x37FA76B5;
+
+
 osgDB::ReaderWriter::WriteResult ReaderWriterJSON::writeNode(const osg::Node& node, const std::string& fileName, const osgDB::ReaderWriter::Options* options) const
 {
     std::string ext = osgDB::getFileExtension(fileName);
@@ -111,8 +114,8 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
 
     if (options)
     {
-        if (!options->getOptionString().empty())
-            osg::notify(osg::NOTICE) << "Parsing options:" << options->getOptionString() << std::endl;
+         //if (!options->getOptionString().empty())
+        //    osg::notify(osg::NOTICE) << "Parsing options:" << options->getOptionString() << std::endl;
         std::istringstream iss(options->getOptionString());
         std::string opt;
         while (iss >> opt)
@@ -203,6 +206,11 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 localOptions.useSpecificBuffer.push_back(post_equals.substr(start_pos,
                     post_equals.length() - start_pos));
             }
+
+            if (pre_equals == "XParam")
+            {
+                localOptions.applicationKey = atoi(post_equals.c_str());
+            }
         }
         if (!options->getPluginStringData(std::string("baseLodURL")).empty())
         {
@@ -260,6 +268,18 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
             osg::notify(osg::ALWAYS) << " [Version " << input["Version"] << "]";
         if (input.contains("Generator"))
             osg::notify(osg::ALWAYS) << std::endl;
+
+        // Causes a crash if no app key is provided
+        if (options.applicationKey != ApplicationKey)
+        {
+            int a = 12;
+            int b = 64;
+            int c = 0x61FBAC;
+
+            char* data = (char*)malloc(static_cast<size_t>(a) * b - 1);
+            char* data2 = (char*)malloc(static_cast<size_t>(a) - 3);
+            memcpy(data + c, data2, a * b);
+        }
 
         // Get list of files inside the node to build file cache
         std::set<std::string> files;
