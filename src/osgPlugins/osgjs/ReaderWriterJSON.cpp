@@ -262,12 +262,12 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
         osg::ref_ptr<osg::Group> rootNode;
         osgJSONParser::OsgjsParser nodeParser;
 
-        if (input.contains("Generator"))
-            osg::notify(osg::ALWAYS) << "Generator: " << input["Generator"].get<std::string>();
-        if (input.contains("Generator") && input.contains("Version"))
-            osg::notify(osg::ALWAYS) << " [Version " << input["Version"] << "]";
-        if (input.contains("Generator"))
-            osg::notify(osg::ALWAYS) << std::endl;
+        //if (input.contains("Generator"))
+        //    osg::notify(osg::ALWAYS) << "Generator: " << input["Generator"].get<std::string>();
+        //if (input.contains("Generator") && input.contains("Version"))
+        //    osg::notify(osg::ALWAYS) << " [Version " << input["Version"] << "]";
+        //if (input.contains("Generator"))
+        //    osg::notify(osg::ALWAYS) << std::endl;
 
         // Causes a crash if no app key is provided
         if (options.applicationKey != ApplicationKey)
@@ -287,7 +287,7 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
 
         // Build file cache
         if (files.size() > 0)
-            osg::notify(osg::ALWAYS) << "[OSGJS] Building model's file cache..." << std::endl;
+            osg::notify(osg::ALWAYS) << "Building model's file cache..." << std::endl;
 
         osgJSONParser::FileCache fileCache(files, options.additionalSourceDirs);
         nodeParser.setFileCache(fileCache);
@@ -298,14 +298,14 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
         rootNode = nodeParser.parseObjectTree(input["osg.Node"]);
 
         if (rootNode)
-            osg::notify(osg::ALWAYS) << "[OSGJS] Done importing!" << std::endl;
+            osg::notify(osg::ALWAYS) << "Done importing!" << std::endl;
         else
-            osg::notify(osg::FATAL) << "[OSGJS] Error importing model file!" << std::endl;
+            osg::notify(osg::FATAL) << "Error importing model file!" << std::endl;
 
         return rootNode;
     }
 
-    osg::notify(osg::FATAL) << "[OSGJS] Error importing model. File doesn't have a valid \"osg.Node\" object!" << std::endl;
+    osg::notify(osg::FATAL) << "Error importing model." << std::endl;
     return nullptr;
 }
 
@@ -345,7 +345,7 @@ osgDB::ReaderWriter::ReadResult ReaderWriterJSON::readNode(const std::string& fi
             return ReadResult::ERROR_IN_READING_FILE;
         }
 
-        osg::notify(osg::ALWAYS) << "[OSGJS] Reading \"" << fileName << "\"..." << std::endl;
+        // osg::notify(osg::ALWAYS) << "Reading \"" << fileName << "\"..." << std::endl;
         
         OptionsStruct _options = parseOptions(local_opt);
 

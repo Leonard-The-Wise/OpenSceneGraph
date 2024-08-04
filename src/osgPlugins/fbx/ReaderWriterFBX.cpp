@@ -635,7 +635,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
             options, osgDB::getFilePath(node.getName().empty() ? filename : node.getName()), 
             ignoreBones, ignoreAnimations, ignoreWeights, rotateXAxis, scaleModel, flipUVs);
 
-        OSG_NOTICE << "[FBX] Exporting Scene..." << std::endl;
+        OSG_NOTICE << "Exporting Scene..." << std::endl;
 
         if (useFbxRoot && isBasicRootNode(node))
         {
@@ -746,7 +746,7 @@ osgDB::ReaderWriter::WriteResult ReaderWriterFBX::writeNode(
             OSG_WARN << "Can't set FBX export version to '" << exportVersion << "'. Using default. Available export versions are:" << versionsStr.str() << std::endl;
         }
 
-        OSG_NOTICE << "[FBX] Writting output .fbx file..." << std::endl;
+        OSG_NOTICE << "Writting output .fbx file..." << std::endl;
         if (!lExporter->Export(pScene))
         {
 #if FBXSDK_VERSION_MAJOR < 2014

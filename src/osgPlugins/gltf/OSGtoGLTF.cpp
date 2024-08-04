@@ -1866,7 +1866,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		return;
 	}
 
-	OSG_NOTICE << "[glTF] Building Mesh: " << geomName << " [" << positions->getNumElements() << " vertices]" << std::endl;
+	OSG_NOTICE << "Building Mesh: " << geomName << " [" << positions->getNumElements() << " vertices]" << std::endl;
 
 	_model.meshes.push_back(tinygltf::Mesh());
 	tinygltf::Mesh& mesh = _model.meshes.back();
