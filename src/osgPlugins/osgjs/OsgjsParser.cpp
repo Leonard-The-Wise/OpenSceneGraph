@@ -2145,7 +2145,7 @@ void OsgjsParser::createTextureMap(const std::map<std::string, TextureInfo2>& te
 
             if (realFileName != (textureDir + fileNameChanged) && std::rename(realFileName.c_str(), (textureDir + fileNameChanged).c_str()) == 0)
             {
-                OSG_NOTICE << "INFO: Texture " << osgDB::getSimpleFileName(realFileName) << " renamed to " << fileNameChanged << std::endl;
+                // OSG_NOTICE << "INFO: Texture " << osgDB::getSimpleFileName(realFileName) << " renamed to " << fileNameChanged << std::endl;
                 realFileName = fileNameChanged;
                 _meshMaterials2.renameTexture(textureName.first, osgDB::getSimpleFileName(realFileName));
             }
