@@ -1,6 +1,15 @@
 
 #include "pch.h"
 
+#include <unordered_map>
+
+#include "tiny_gltf.h"
+
+#include "Stringify.h"
+#include "json.hpp"
+
+#include "MaterialParser.h"
+
 //! Visitor that builds a GLTF data model from an OSG scene graph.
 class OSGtoGLTF : public osg::NodeVisitor
 {
@@ -157,6 +166,14 @@ private:
     int createTexture(const osg::Texture* texture);
 
     int getCurrentMaterial(osg::Geometry* geometry);
+
+    int createTextureV2(const osgJSONParser::TextureInfo2& texInfo);
+
+    int getCurrentMaterialV2(osg::Geometry* geometry);
+
+    int getMaterialPBR(const osgJSONParser::MaterialInfo2& materialInfo);
+
+    int getMaterialClassic(const osgJSONParser::MaterialInfo2& materialInfo);
 
 public:
     OSGtoGLTF(tinygltf::Model& model) :

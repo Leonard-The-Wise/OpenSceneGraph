@@ -1,5 +1,7 @@
 #include "pch.h"
 
+#include <unordered_map>
+
 #include <osg/Node>
 #include <osg/Geometry>
 #include <osg/Material>
@@ -27,10 +29,19 @@
 #include "tiny_gltf.h"
 
 #include "Stringify.h"
+#include "json.hpp"
+
+#include "MaterialParser.h"
+
+using namespace osgJSONParser;
+
 #include "OSGtoGLTF.h"
+
 
 // Avoid spamming missing targets
 static std::set<std::string> missingTargets;
+static MaterialFile2 meshMaterials;
+static bool meshMaterialsParsed = false;
 
 #pragma region Utility functions
 
@@ -363,6 +374,53 @@ bool hasMatrixParent(const osg::Node& object)
 		return false;
 
 	return hasMatrixParent(*object.getParent(0));
+}
+
+void buildMaterials()
+{
+	std::string viewerInfoFile = std::string("viewer_info.json");
+	std::string textureInfoFile = std::string("texture_info.json");
+	std::ignore = meshMaterials.readMaterialFile(viewerInfoFile, textureInfoFile);
+}
+
+osg::Texture::FilterMode getFilterModeFromString(const std::string& filterMode)
+{
+	if (filterMode == "LINEAR") return osg::Texture::FilterMode::LINEAR;
+	if (filterMode == "LINEAR_MIPMAP_LINEAR") return osg::Texture::FilterMode::LINEAR_MIPMAP_LINEAR;
+	if (filterMode == "LINEAR_MIPMAP_NEAREST") return osg::Texture::FilterMode::LINEAR_MIPMAP_NEAREST;
+	if (filterMode == "NEAREST") return osg::Texture::FilterMode::NEAREST;
+	if (filterMode == "NEAREST_MIPMAP_LINEAR") return osg::Texture::FilterMode::NEAREST_MIPMAP_LINEAR;
+	if (filterMode == "NEAREST_MIPMAP_NEAREST") return osg::Texture::FilterMode::NEAREST_MIPMAP_NEAREST;
+
+	return osg::Texture::FilterMode::LINEAR;
+}
+
+osg::Texture::WrapMode getWrapModeFromString(const std::string& wrapMode)
+{
+	if (wrapMode == "CLAMP_TO_EDGE") return osg::Texture::WrapMode::CLAMP_TO_EDGE;
+	if (wrapMode == "CLAMP_TO_BORDER") return osg::Texture::WrapMode::CLAMP_TO_BORDER;
+	if (wrapMode == "REPEAT") return osg::Texture::WrapMode::REPEAT;
+	if (wrapMode == "MIRROR") return osg::Texture::WrapMode::MIRROR;
+
+	return osg::Texture::WrapMode::REPEAT;
+}
+
+std::string stripAllExtensions(const std::string& filename)
+{
+	std::string finalName = filename;
+	while (!osgDB::getFileExtension(finalName).empty())
+	{
+		std::string ext = osgDB::getFileExtension(finalName);
+
+		// Only remove known extensions
+		if (ext != "png" && ext != "gz" && ext != "bin" && ext != "binz" && ext != "zip" && ext != "bmp" && ext != "tiff" && ext != "tga" && ext != "jpg" && ext != "jpeg"
+			&& ext != "gif" && ext != "tgz" && ext != "pic" && ext != "pnm" && ext != "dds")
+			break;
+
+		finalName = osgDB::getStrippedName(finalName);
+	}
+
+	return finalName;
 }
 
 
@@ -1624,6 +1682,329 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 	return materialIndex;
 }
 
+int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo)
+{
+	std::string fileName = stripAllExtensions(texInfo.Name) + ".png";
+	if (_gltfTextures.find(fileName) != _gltfTextures.end())
+		return _gltfTextures[fileName];
+
+	tinygltf::Image gltfImage;
+	gltfImage.uri = "textures/" + fileName;
+	int imageIndex = _model.images.size();
+	_model.images.push_back(gltfImage);
+
+	tinygltf::Sampler sampler;
+	sampler.magFilter = getFilterModeFromString(texInfo.MagFilter);
+	sampler.minFilter = getFilterModeFromString(texInfo.MinFilter);
+	sampler.wrapS = getWrapModeFromString(texInfo.WrapS);
+	sampler.wrapT = getWrapModeFromString(texInfo.WrapT);
+	int samplerIndex = _model.samplers.size();
+	_model.samplers.push_back(sampler);
+
+	tinygltf::Texture gltfTexture;
+	gltfTexture.sampler = samplerIndex;
+	gltfTexture.source = imageIndex;
+
+	int textureIndex = _model.textures.size();
+	_model.textures.push_back(gltfTexture);
+
+	_gltfTextures.emplace(fileName, textureIndex);
+
+	return textureIndex;
+}
+
+
+int OSGtoGLTF::getCurrentMaterialV2(osg::Geometry* geometry)
+{
+	// Parse rig geometry
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
+
+	// Push material and textures from OSG
+	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getOrCreateStateSet() : geometry->getOrCreateStateSet();
+	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
+	if (!mat)
+		return -1;
+
+	std::string materialName = mat->getName();
+	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
+		return _gltfMaterials[materialName];
+
+	// Parse materials file
+	if (!meshMaterialsParsed)
+	{
+		buildMaterials();
+	}
+
+	// Get current material
+	auto& knownMaterials = meshMaterials.getMaterials();
+	if (knownMaterials.find(materialName) == knownMaterials.end())
+		return -1;
+
+	auto& knownMaterial = knownMaterials.at(materialName);
+
+	if (knownMaterial.UsePBR)
+	{
+		return getMaterialPBR(knownMaterial);
+	}
+	else
+	{
+		return getMaterialClassic(knownMaterial);
+	}
+
+	return -1;
+
+}
+
+int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
+{
+	tinygltf::Material material;
+	material.name = materialInfo.Name;
+
+	material.doubleSided = !materialInfo.BackfaceCull;
+
+	// Decide which color / factor to use.
+	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
+	ChannelInfo2 activeColor;
+	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable)
+		activeColor = materialInfo.Channels.at("AlbedoPBR");
+	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable)
+		activeColor = materialInfo.Channels.at("DiffusePBR");
+	else if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable)
+		activeColor = materialInfo.Channels.at("DiffuseColor");
+
+	if (activeColor.Enable)
+	{
+		if (activeColor.Color.size() == 3)
+			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
+		else
+			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Factor, activeColor.Factor, activeColor.Factor, activeColor.Factor };
+	}
+
+	// Decide which texture to use.
+	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
+	ChannelInfo2 activeTexture;
+	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable &&
+		materialInfo.Channels.at("AlbedoPBR").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("AlbedoPBR");
+	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable &&
+		materialInfo.Channels.at("DiffusePBR").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("DiffusePBR");
+	else if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
+		materialInfo.Channels.at("DiffuseColor").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("DiffuseColor");
+
+	if (activeTexture.Enable)
+		material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture);
+
+	// Calculate Opacity
+	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end() && materialInfo.Channels.at("Opacity").Enable)
+	{
+		const ChannelInfo2& opacity = materialInfo.Channels.at("Opacity");
+		if (material.pbrMetallicRoughness.baseColorFactor.size() == 4)
+			material.pbrMetallicRoughness.baseColorFactor[3] = opacity.Factor;
+		else if (material.pbrMetallicRoughness.baseColorFactor.size() == 0 && opacity.Color.size() == 3)
+			material.pbrMetallicRoughness.baseColorFactor = { opacity.Color[0], opacity.Color[1], opacity.Color[2], opacity.Factor };
+		else
+			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
+
+		if (opacity.Type == "alphaBlend" || opacity.Type == "refraction")
+			material.alphaMode = "BLEND";
+		else if (opacity.Type == "dithering")
+			material.alphaMode = "MASK";
+		else
+			material.alphaMode = "OPAQUE";
+
+		// Calculate refraction
+		if (opacity.Type == "refraction")
+		{
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_ior");
+			}
+
+			if (material.extensions.find("KHR_materials_ior") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_ior"] = tinygltf::Value();
+			}
+			tinygltf::Value& iorExtension = material.extensions["KHR_materials_ior"];
+			iorExtension.Get<tinygltf::Value::Object>().emplace("ior", opacity.IOR);
+
+		}
+	}
+
+	// Ambient Occlusion
+	ChannelInfo2 aoPBR;
+	if (materialInfo.Channels.find("AOPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AOPBR").Enable)
+		aoPBR = materialInfo.Channels.at("AOPBR");
+	if (aoPBR.Enable && aoPBR.Texture.Name != "")
+		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
+
+	// Emissive texture
+	ChannelInfo2 emissive;
+	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
+		emissive = materialInfo.Channels.at("EmitColor");
+	if (emissive.Enable && emissive.Texture.Name != "")
+		material.emissiveTexture.index = createTextureV2(emissive.Texture);
+
+	// Metallic factor
+	ChannelInfo2 metallic;
+	if (materialInfo.Channels.find("MetalnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("MetalnessPBR").Enable)
+		metallic = materialInfo.Channels.at("MetalnessPBR");
+	if (metallic.Enable)
+	{
+		material.pbrMetallicRoughness.metallicFactor = metallic.Factor;
+
+		if (metallic.Texture.Name != "")
+			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
+	}
+
+	// Roughness factor
+	ChannelInfo2 roughness;
+	if (materialInfo.Channels.find("RoughnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("RoughnessPBR").Enable)
+		roughness = materialInfo.Channels.at("RoughnessPBR");
+	if (roughness.Enable)
+	{
+		material.pbrMetallicRoughness.roughnessFactor = roughness.Factor;
+
+		// TODO -> To solve conflict with metallness, must combine textures
+		if (roughness.Texture.Name != "")
+			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+	}
+
+	// Normal map texture
+	ChannelInfo2 normal;
+	if (materialInfo.Channels.find("NormalMap") != materialInfo.Channels.end() && materialInfo.Channels.at("NormalMap").Enable)
+		normal = materialInfo.Channels.at("NormalMap");
+	if (normal.Enable && normal.Texture.Name != "")
+		material.normalTexture.index = createTextureV2(normal.Texture);
+
+
+	// Emplace material on collection
+	int materialIndex = _model.materials.size();
+	_model.materials.push_back(material);
+
+	_gltfMaterials.emplace(materialInfo.Name, materialIndex);
+
+	return materialIndex;
+}
+
+int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
+{
+	tinygltf::Material material;
+	material.name = materialInfo.Name;
+
+	material.doubleSided = !materialInfo.BackfaceCull;
+
+	// Decide which color / factor to use.
+	// Priority: DiffuseColor, DiffusePBR, AlbedoPBR
+	ChannelInfo2 activeColor;
+	if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable)
+		activeColor = materialInfo.Channels.at("DiffuseColor");
+	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable)
+		activeColor = materialInfo.Channels.at("DiffusePBR");
+	else if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable)
+		activeColor = materialInfo.Channels.at("AlbedoPBR");
+
+	if (activeColor.Enable)
+	{
+		if (activeColor.Color.size() == 3)
+			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
+		else
+			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Factor, activeColor.Factor, activeColor.Factor, activeColor.Factor };
+	}
+
+	// Decide which texture to use.
+	// Priority: DiffuseColor, DiffusePBR, AlbedoPBR
+	ChannelInfo2 activeTexture;
+	if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
+		materialInfo.Channels.at("DiffuseColor").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("DiffuseColor");
+	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable &&
+		materialInfo.Channels.at("DiffusePBR").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("DiffusePBR");
+	else if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable &&
+			materialInfo.Channels.at("AlbedoPBR").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("AlbedoPBR");
+
+	if (activeTexture.Enable)
+		material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture);
+
+	// Calculate Opacity
+	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end() && materialInfo.Channels.at("Opacity").Enable)
+	{
+		const ChannelInfo2& opacity = materialInfo.Channels.at("Opacity");
+		if (material.pbrMetallicRoughness.baseColorFactor.size() == 4)
+			material.pbrMetallicRoughness.baseColorFactor[3] = opacity.Factor;
+		else if (material.pbrMetallicRoughness.baseColorFactor.size() == 0 && opacity.Color.size() == 3)
+			material.pbrMetallicRoughness.baseColorFactor = { opacity.Color[0], opacity.Color[1], opacity.Color[2], opacity.Factor };
+		else
+			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
+
+		if (opacity.Type == "alphaBlend")
+			material.alphaMode = "BLEND";
+		else if (opacity.Type == "dithering")
+			material.alphaMode = "MASK";
+		else
+			material.alphaMode = "OPAQUE";
+	}
+
+	// Ambient Occlusion
+	ChannelInfo2 aoPBR;
+	if (materialInfo.Channels.find("AOPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AOPBR").Enable)
+		aoPBR = materialInfo.Channels.at("AOPBR");
+	if (aoPBR.Enable && aoPBR.Texture.Name != "")
+		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
+
+	// Emissive texture
+	ChannelInfo2 emissive;
+	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
+		emissive = materialInfo.Channels.at("EmitColor");
+	if (emissive.Enable && emissive.Texture.Name != "")
+		material.emissiveTexture.index = createTextureV2(emissive.Texture);
+
+	// Metallic factor
+	ChannelInfo2 metallic;
+	if (materialInfo.Channels.find("MetalnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("MetalnessPBR").Enable)
+		metallic = materialInfo.Channels.at("MetalnessPBR");
+	if (metallic.Enable)
+	{
+		material.pbrMetallicRoughness.metallicFactor = metallic.Factor;
+
+		if (metallic.Texture.Name != "")
+			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
+	}
+
+	// Roughness factor
+	ChannelInfo2 roughness;
+	if (materialInfo.Channels.find("RoughnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("RoughnessPBR").Enable)
+		roughness = materialInfo.Channels.at("RoughnessPBR");
+	if (roughness.Enable)
+	{
+		material.pbrMetallicRoughness.roughnessFactor = roughness.Factor;
+
+		// TODO -> To solve conflict with metallness, must combine textures
+		if (roughness.Texture.Name != "")
+			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+	}
+
+	// Normal map texture
+	ChannelInfo2 normal;
+	if (materialInfo.Channels.find("NormalMap") != materialInfo.Channels.end() && materialInfo.Channels.at("NormalMap").Enable)
+		normal = materialInfo.Channels.at("NormalMap");
+	if (normal.Enable && normal.Texture.Name != "")
+		material.normalTexture.index = createTextureV2(normal.Texture);
+
+
+	// Emplace material on collection
+	int materialIndex = _model.materials.size();
+	_model.materials.push_back(material);
+
+	_gltfMaterials.emplace(materialInfo.Name, materialIndex);
+
+	return materialIndex;
+}
+
+
 #pragma endregion
 
 
@@ -2000,7 +2381,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	if (texCoords)
 		texCoords = flipUVs(texCoords);
 
-	int currentMaterial = getCurrentMaterial(geom);
+	int currentMaterial = getCurrentMaterialV2(geom);
 	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
 	{
 		osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);

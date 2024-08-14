@@ -862,7 +862,9 @@ int main( int argc, char **argv )
         osgDB::ReaderWriter::WriteResult result = osgDB::Registry::instance()->writeNode(*root,fileNameOut,osgDB::Registry::instance()->getOptions());
         if (result.success())
         {
-            osg::notify(osg::NOTICE)<<"Data written to '"<<fileNameOut<<"'."<< std::endl;
+            //osg::notify(osg::NOTICE)<<"Data written to '"<<fileNameOut<<"'."<< std::endl;
+            osg::notify(osg::NOTICE) << "Conversion successful!" << std::endl;
+
         }
         else if  (result.message().empty())
         {
