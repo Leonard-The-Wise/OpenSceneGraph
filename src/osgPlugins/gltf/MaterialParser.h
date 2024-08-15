@@ -48,7 +48,7 @@ namespace osgJSONParser
 	{
 	public:
 
-		typedef std::map<std::string, MaterialInfo2> Materials;
+		typedef std::unordered_map<std::string, MaterialInfo2> Materials;
 
 		MaterialFile2():
 			knownChannelNames{ 

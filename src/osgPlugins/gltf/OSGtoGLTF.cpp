@@ -26,6 +26,10 @@
 #include <osgAnimation/StackedMatrixElement>
 #include <osgAnimation/StackedScaleElement>
 
+#include <osg/Image>
+#include <osgDB/ReadFile>
+#include <osgDB/WriteFile>
+
 #include "tiny_gltf.h"
 
 #include "Stringify.h"
@@ -37,6 +41,8 @@ using namespace osgJSONParser;
 
 #include "OSGtoGLTF.h"
 
+#include "stb_image.h"
+#include "stb_image_write.h"
 
 // Avoid spamming missing targets
 static std::set<std::string> missingTargets;
@@ -421,6 +427,93 @@ std::string stripAllExtensions(const std::string& filename)
 	}
 
 	return finalName;
+}
+
+std::string combineTextures(const std::string& rgbFile, const std::string& redChannelFile) 
+{
+	std::string outputFileName = stripAllExtensions(rgbFile) + ".a-combined.png";
+
+	if (osgDB::fileExists("textures\\" + outputFileName))
+		return outputFileName;
+
+	int width, height, channels;
+	unsigned char* rgbData = stbi_load(std::string("textures\\" + stripAllExtensions(rgbFile) + ".png").c_str(), &width, &height, &channels, 3);
+	if (!rgbData) {
+		OSG_WARN << "Error loading RGB texture " << rgbFile << " to combine!" << std::endl;
+		return rgbFile;
+	}
+
+	int rWidth, rHeight, rChannels;
+	unsigned char* redData = stbi_load(std::string("textures\\" + stripAllExtensions(redChannelFile) + ".png").c_str(), &rWidth, &rHeight, &rChannels, 1);
+	if (!redData || rWidth != width || rHeight != height) {
+		OSG_WARN << "Error loading R channel texture " << redChannelFile << " to combine or incompatible channels!" << std::endl;
+		stbi_image_free(rgbData);
+		return rgbFile;
+	}
+
+	unsigned char* combinedData = new unsigned char[width * height * 4];
+
+	for (int i = 0; i < width * height; ++i) {
+		combinedData[i * 4] = rgbData[i * 3];         // R
+		combinedData[i * 4 + 1] = rgbData[i * 3 + 1]; // G
+		combinedData[i * 4 + 2] = rgbData[i * 3 + 2]; // B
+		combinedData[i * 4 + 3] = redData[i];         // A (usando o canal R da segunda textura)
+	}
+
+	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 4, combinedData, width * 4);
+
+	stbi_image_free(rgbData);
+	stbi_image_free(redData);
+	delete[] combinedData;
+
+	OSG_NOTICE << "Created new texture " << outputFileName << " to combine both Opacity and Albedo/Diffuse colors in one image as required by GLTF 2.0 standard." << std::endl;
+	OSG_NOTICE << "You may manually remove " << rgbFile << " and " << redChannelFile << " later if you want." << std::endl;
+
+	return outputFileName;
+}
+
+std::string combineMetallicRoughnessTextures(const std::string& roughnessFile, const std::string& metallicFile) 
+{
+	std::string outputFileName = stripAllExtensions(roughnessFile) + ".m-combined.png";
+
+	if (osgDB::fileExists("textures\\" + outputFileName))
+		return outputFileName;
+
+	int width, height, channels;
+	unsigned char* roughnessData = stbi_load(std::string("textures\\" + stripAllExtensions(roughnessFile) + ".png").c_str(), &width, &height, &channels, 1);
+	if (!roughnessData) {
+		OSG_WARN << "Error loading roughness texture " << roughnessFile << "!" << std::endl;
+		return roughnessFile;
+	}
+
+	int mWidth, mHeight, mChannels;
+	unsigned char* metallicData = stbi_load(std::string("textures\\" + stripAllExtensions(metallicFile) + ".png").c_str(), &mWidth, &mHeight, &mChannels, 1);
+	if (!metallicData || mWidth != width || mHeight != height) {
+		OSG_WARN << "Error loading metallic texture or incompatible size! [" << metallicFile << "]" << std::endl;
+		stbi_image_free(roughnessData);
+		return roughnessFile;
+	}
+
+	unsigned char* combinedData = new unsigned char[width * height * 3];
+
+	for (int i = 0; i < width * height; ++i) {
+		combinedData[i * 3] = 0;                    // R (deixado em 0)
+		combinedData[i * 3 + 1] = roughnessData[i]; // G (usando o canal R da textura de roughness)
+		combinedData[i * 3 + 2] = metallicData[i];  // B (usando o canal R da textura de metallic)
+	}
+
+	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 3, combinedData, width * 3);
+
+	stbi_image_free(roughnessData);
+	stbi_image_free(metallicData);
+	delete[] combinedData;
+
+	OSG_NOTICE << "Created new texture " << outputFileName << " to combine both Roughness (G) and Metallic (B) colors in one image as required by GLTF 2.0 standard." << std::endl;
+	OSG_NOTICE << "You may manually remove " << roughnessFile << " and " << metallicFile << " later if you want." << std::endl;
+	// std::remove(std::string("textures\\" + stripAllExtensions(roughnessFile) + ".png").c_str());
+	// std::remove(std::string("textures\\" + stripAllExtensions(metallicFile) + ".png").c_str());
+
+	return outputFileName;
 }
 
 
@@ -1682,9 +1775,12 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 	return materialIndex;
 }
 
-int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo)
+int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo, const std::string& textureNameOverride)
 {
 	std::string fileName = stripAllExtensions(texInfo.Name) + ".png";
+	if (textureNameOverride != "")
+		fileName = stripAllExtensions(textureNameOverride) + ".png";
+
 	if (_gltfTextures.find(fileName) != _gltfTextures.end())
 		return _gltfTextures[fileName];
 
@@ -1716,27 +1812,30 @@ int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo)
 
 int OSGtoGLTF::getCurrentMaterialV2(osg::Geometry* geometry)
 {
-	// Parse rig geometry
-	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
-
-	// Push material and textures from OSG
-	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getOrCreateStateSet() : geometry->getOrCreateStateSet();
-	const osg::Material* mat = dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL));
-	if (!mat)
-		return -1;
-
-	std::string materialName = mat->getName();
-	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
-		return _gltfMaterials[materialName];
-
 	// Parse materials file
 	if (!meshMaterialsParsed)
 	{
 		buildMaterials();
 	}
 
-	// Get current material
+	// Parse rig geometry
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
+
+	// Push material and textures from OSG. If not found, try the default one (first in load order).
+	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getStateSet() : geometry->getStateSet();
+	const osg::Material* mat = stateSet ? dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL)) : NULL;
 	auto& knownMaterials = meshMaterials.getMaterials();
+	if (!mat && knownMaterials.size() == 0)
+	{
+		return -1;
+	}
+
+	std::string stateSetName = stateSet ? stateSet->getName() : "";
+	std::string materialName = mat ? mat->getName() : !stateSetName.empty() ? stateSetName : knownMaterials.begin()->second.Name;
+	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
+		return _gltfMaterials[materialName];
+
+	// Get current material
 	if (knownMaterials.find(materialName) == knownMaterials.end())
 		return -1;
 
@@ -1783,6 +1882,7 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 	// Decide which texture to use.
 	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
 	ChannelInfo2 activeTexture;
+	std::string activeTextureName;
 	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable &&
 		materialInfo.Channels.at("AlbedoPBR").Texture.Name != "")
 		activeTexture = materialInfo.Channels.at("AlbedoPBR");
@@ -1794,7 +1894,7 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 		activeTexture = materialInfo.Channels.at("DiffuseColor");
 
 	if (activeTexture.Enable)
-		material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture);
+		activeTextureName = activeTexture.Texture.Name;
 
 	// Calculate Opacity
 	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end() && materialInfo.Channels.at("Opacity").Enable)
@@ -1807,16 +1907,24 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 		else
 			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
 
-		if (opacity.Type == "alphaBlend" || opacity.Type == "refraction")
-			material.alphaMode = "BLEND";
-		else if (opacity.Type == "dithering")
+//		if (opacity.Texture.Name != "")
+		{
+			if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0)
+				material.alphaMode = "BLEND";
+			else if (opacity.Type == "dithering" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
+				material.alphaMode = "MASK";
+			else
+				material.alphaMode = "OPAQUE";
+		}
+
+		if (opacity.Type == "additive" && opacity.Factor == 0.0)
 			material.alphaMode = "MASK";
-		else
-			material.alphaMode = "OPAQUE";
 
 		// Calculate refraction
-		if (opacity.Type == "refraction")
+		if (opacity.Type == "refraction" && opacity.Texture.Name != "")
 		{
+			material.alphaMode = "BLEND";
+
 			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
 			{
 				_model.extensionsUsed.emplace_back("KHR_materials_ior");
@@ -1828,9 +1936,19 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 			}
 			tinygltf::Value& iorExtension = material.extensions["KHR_materials_ior"];
 			iorExtension.Get<tinygltf::Value::Object>().emplace("ior", opacity.IOR);
-
 		}
+
+		// Calculate and combine textures for blending if names are different.
+		if (opacity.Texture.Name != "" && opacity.Texture.Name != activeTexture.Texture.Name)
+		{
+			activeTextureName = combineTextures(activeTexture.Texture.Name, opacity.Texture.Name);
+		}
+
 	}
+
+	// Create standalone or Opacity combined texture for AlbedoPBR/Diffuse/DiffuseColor
+	material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture, activeTextureName);
+
 
 	// Ambient Occlusion
 	ChannelInfo2 aoPBR;
@@ -1839,36 +1957,57 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 	if (aoPBR.Enable && aoPBR.Texture.Name != "")
 		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
 
-	// Emissive texture
+	// Emissive color and texture
 	ChannelInfo2 emissive;
 	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
 		emissive = materialInfo.Channels.at("EmitColor");
+
 	if (emissive.Enable && emissive.Texture.Name != "")
-		material.emissiveTexture.index = createTextureV2(emissive.Texture);
+	{
+		if (emissive.Color.size() == 3)
+			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
+		else
+			material.emissiveFactor = { emissive.Factor, emissive.Factor, emissive.Factor };
+
+		if (emissive.Texture.Name != "")
+			material.emissiveTexture.index = createTextureV2(emissive.Texture);
+	}
 
 	// Metallic factor
 	ChannelInfo2 metallic;
+	std::string metallicTexture;
 	if (materialInfo.Channels.find("MetalnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("MetalnessPBR").Enable)
 		metallic = materialInfo.Channels.at("MetalnessPBR");
 	if (metallic.Enable)
 	{
 		material.pbrMetallicRoughness.metallicFactor = metallic.Factor;
-
 		if (metallic.Texture.Name != "")
-			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
+			metallicTexture = metallic.Texture.Name;
 	}
 
 	// Roughness factor
 	ChannelInfo2 roughness;
+	std::string roughnessTexture;
 	if (materialInfo.Channels.find("RoughnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("RoughnessPBR").Enable)
 		roughness = materialInfo.Channels.at("RoughnessPBR");
 	if (roughness.Enable)
 	{
 		material.pbrMetallicRoughness.roughnessFactor = roughness.Factor;
-
-		// TODO -> To solve conflict with metallness, must combine textures
 		if (roughness.Texture.Name != "")
-			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+			roughnessTexture = roughness.Texture.Name;
+	}
+
+	// Solve conflict between metallic and roughness - must combine if both are set with different images
+	if (metallicTexture != "" && roughnessTexture == "")
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
+	else if (metallicTexture == "" && roughnessTexture != "")
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+	else if (metallicTexture != "" && roughnessTexture != "" && metallicTexture == roughnessTexture)
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+	else if (metallicTexture != "" && roughnessTexture != "" && metallicTexture != roughnessTexture)
+	{
+		std::string combinedTexture = combineMetallicRoughnessTextures(roughnessTexture, metallicTexture);
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture, combinedTexture);
 	}
 
 	// Normal map texture
@@ -1916,6 +2055,7 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	// Decide which texture to use.
 	// Priority: DiffuseColor, DiffusePBR, AlbedoPBR
 	ChannelInfo2 activeTexture;
+	std::string activeTextureName;
 	if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
 		materialInfo.Channels.at("DiffuseColor").Texture.Name != "")
 		activeTexture = materialInfo.Channels.at("DiffuseColor");
@@ -1927,7 +2067,7 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 		activeTexture = materialInfo.Channels.at("AlbedoPBR");
 
 	if (activeTexture.Enable)
-		material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture);
+		activeTextureName = activeTexture.Texture.Name;
 
 	// Calculate Opacity
 	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end() && materialInfo.Channels.at("Opacity").Enable)
@@ -1940,13 +2080,45 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 		else
 			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
 
-		if (opacity.Type == "alphaBlend")
+		if (opacity.Texture.Name != "")
+		{
+			if (opacity.Type == "alphaBlend" && (opacity.Factor < 1.0 || opacity.Texture.Name != activeTexture.Texture.Name))
+				material.alphaMode = "BLEND";
+			else if (opacity.Type == "dithering")
+				material.alphaMode = "MASK";
+			else
+				material.alphaMode = "OPAQUE";
+		}
+
+		// Calculate refraction
+		if (opacity.Type == "refraction")
+		{
 			material.alphaMode = "BLEND";
-		else if (opacity.Type == "dithering")
-			material.alphaMode = "MASK";
-		else
-			material.alphaMode = "OPAQUE";
+
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_ior");
+			}
+
+			if (material.extensions.find("KHR_materials_ior") == material.extensions.end())
+			{
+				material.extensions["KHR_materials_ior"] = tinygltf::Value();
+			}
+			tinygltf::Value& iorExtension = material.extensions["KHR_materials_ior"];
+			iorExtension.Get<tinygltf::Value::Object>().emplace("ior", opacity.IOR);
+		}
+
+		// Calculate and combine textures for blending if names are different.
+		if (opacity.Texture.Name != "" && opacity.Texture.Name != activeTexture.Texture.Name)
+		{
+			activeTextureName = combineTextures(activeTexture.Texture.Name, opacity.Texture.Name);
+		}
+
 	}
+
+	// Create standalone or Opacity combined texture for AlbedoPBR/Diffuse/DiffuseColor
+	material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture, activeTextureName);
+
 
 	// Ambient Occlusion
 	ChannelInfo2 aoPBR;
@@ -1955,15 +2127,25 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	if (aoPBR.Enable && aoPBR.Texture.Name != "")
 		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
 
-	// Emissive texture
+	// Emissive color and texture
 	ChannelInfo2 emissive;
 	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
 		emissive = materialInfo.Channels.at("EmitColor");
+
 	if (emissive.Enable && emissive.Texture.Name != "")
-		material.emissiveTexture.index = createTextureV2(emissive.Texture);
+	{
+		if (emissive.Color.size() == 3)
+			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
+		else
+			material.emissiveFactor = { emissive.Factor, emissive.Factor, emissive.Factor };
+
+		if (emissive.Texture.Name != "")
+			material.emissiveTexture.index = createTextureV2(emissive.Texture);
+	}
 
 	// Metallic factor
 	ChannelInfo2 metallic;
+	std::string metallicTexture;
 	if (materialInfo.Channels.find("MetalnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("MetalnessPBR").Enable)
 		metallic = materialInfo.Channels.at("MetalnessPBR");
 	if (metallic.Enable)
@@ -1971,20 +2153,33 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 		material.pbrMetallicRoughness.metallicFactor = metallic.Factor;
 
 		if (metallic.Texture.Name != "")
-			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
+			metallicTexture = metallic.Texture.Name;
 	}
 
 	// Roughness factor
 	ChannelInfo2 roughness;
+	std::string roughnessTexture;
 	if (materialInfo.Channels.find("RoughnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("RoughnessPBR").Enable)
 		roughness = materialInfo.Channels.at("RoughnessPBR");
 	if (roughness.Enable)
 	{
 		material.pbrMetallicRoughness.roughnessFactor = roughness.Factor;
 
-		// TODO -> To solve conflict with metallness, must combine textures
 		if (roughness.Texture.Name != "")
-			material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+			roughnessTexture = roughness.Texture.Name;
+	}
+
+	// Solve conflict between metallic and roughness - must combine if both are set with different images
+	if (metallicTexture != "" && roughnessTexture == "")
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
+	else if (metallicTexture == "" && roughnessTexture != "")
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+	else if (metallicTexture != "" && roughnessTexture != "" && metallicTexture == roughnessTexture)
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
+	else if (metallicTexture != "" && roughnessTexture != "" && metallicTexture != roughnessTexture)
+	{
+		std::string combinedTexture = combineMetallicRoughnessTextures(roughnessTexture, metallicTexture);
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture, combinedTexture);
 	}
 
 	// Normal map texture

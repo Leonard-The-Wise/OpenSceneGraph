@@ -14,6 +14,25 @@ const std::string MATERIALLINE = R"(^\t(?'TextureLayerName'[\w\s]*?)(\s*+(\((?'F
 using namespace osgJSONParser;
 using namespace nlohmann;
 
+static std::string stripAllExtensions(const std::string& filename)
+{
+	std::string finalName = filename;
+	while (!osgDB::getFileExtension(finalName).empty())
+	{
+		std::string ext = osgDB::getFileExtension(finalName);
+
+		// Only remove known extensions
+		if (ext != "png" && ext != "gz" && ext != "bin" && ext != "binz" && ext != "zip" && ext != "bmp" && ext != "tiff" && ext != "tga" && ext != "jpg" && ext != "jpeg"
+			&& ext != "gif" && ext != "tgz" && ext != "pic" && ext != "pnm" && ext != "dds")
+			break;
+
+		finalName = osgDB::getStrippedName(finalName);
+	}
+
+	return finalName;
+}
+
+
 TextureInfo2 parseTexture(const json& textureInfoDoc)
 {
 	TextureInfo2 returnTexture;
@@ -209,12 +228,25 @@ bool MaterialFile2::parseTextureInfo(const json& textureInfoDoc)
 		return false;
 
 	// Recover texture names
+	std::set<std::string> knownNames;
+
 	for (auto& texture : textureInfoDoc["results"])
 	{
 		if (texture.is_object())
 		{
-			std::string textureName = texture["name"];
+			std::string textureName = stripAllExtensions(texture["name"]) + ".png";
 			std::string textureUID = texture["uid"];
+
+			// Look for texture name in known names and replace name if found
+			std::string tmpTexName = textureName;
+			int i = 1;
+			while (knownNames.find(tmpTexName) != knownNames.end())
+			{
+				tmpTexName = stripAllExtensions(textureName) + "." + std::to_string(i) + ".png";
+				++i;
+			}
+			textureName = tmpTexName;
+			knownNames.emplace(textureName);
 
 			for (auto& material : _materials)
 			{

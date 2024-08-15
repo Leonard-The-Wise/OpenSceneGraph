@@ -167,7 +167,7 @@ private:
 
     int getCurrentMaterial(osg::Geometry* geometry);
 
-    int createTextureV2(const osgJSONParser::TextureInfo2& texInfo);
+    int createTextureV2(const osgJSONParser::TextureInfo2& texInfo, const std::string& textureNameOverride = "");
 
     int getCurrentMaterialV2(osg::Geometry* geometry);
 

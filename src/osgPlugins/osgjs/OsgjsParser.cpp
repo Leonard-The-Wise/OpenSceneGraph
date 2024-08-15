@@ -272,7 +272,7 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
 
         udc->setName(name);
 
-        if (currentJSONNode["Values"].is_array())
+        if (currentJSONNode.contains("Values") && currentJSONNode["Values"].is_array())
         {
             for (auto& data : currentJSONNode["Values"])
             {
@@ -294,7 +294,7 @@ void OsgjsParser::parseUserDataContainer(ref_ptr<Object> currentObject, const js
         ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = new osgSim::ShapeAttributeList;
         shapeAttrList->setName(name);
 
-        if (currentJSONNode["Values"].is_array())
+        if (currentJSONNode.contains("Values") && currentJSONNode["Values"].is_array())
         {
             for (auto& data : currentJSONNode["Values"])
             {

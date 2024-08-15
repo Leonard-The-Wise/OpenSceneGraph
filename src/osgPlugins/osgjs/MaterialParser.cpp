@@ -3,6 +3,7 @@
 #include "json.hpp"
 
 #include "OsgjsParserHelper.h"
+#include "OsgjsFileCache.h"
 #include "MaterialParser.h"
 
 #include "jpcre2.hpp"
@@ -342,12 +343,25 @@ bool MaterialFile2::parseTextureInfo(const json& textureInfoDoc)
 		return false;
 
 	// Recover texture names
+	std::set<std::string> knownNames;
+
 	for (auto& texture : textureInfoDoc["results"])
 	{
 		if (texture.is_object())
 		{
-			std::string textureName = texture["name"];
+			std::string textureName = FileCache::stripAllExtensions(texture["name"]) + ".png";
 			std::string textureUID = texture["uid"];
+
+			// Look for texture name in known names and replace name if found
+			std::string tmpTexName = textureName;
+			int i = 1;
+			while (knownNames.find(tmpTexName) != knownNames.end())
+			{
+				tmpTexName = FileCache::stripAllExtensions(textureName) + "." + std::to_string(i) + ".png";
+				++i;
+			}
+			textureName = tmpTexName;
+			knownNames.emplace(textureName);
 
 			for (auto& material : _materials)
 			{
