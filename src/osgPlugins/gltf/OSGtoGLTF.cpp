@@ -1907,35 +1907,30 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 		else
 			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
 
-//		if (opacity.Texture.Name != "")
-		{
-			if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0)
-				material.alphaMode = "BLEND";
-			else if (opacity.Type == "dithering" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
-				material.alphaMode = "MASK";
-			else
-				material.alphaMode = "OPAQUE";
-		}
+		if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0)
+			material.alphaMode = "BLEND";
+		else if (opacity.Type == "dithering" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
+			material.alphaMode = "MASK";
+		else
+			material.alphaMode = "OPAQUE";
 
 		if (opacity.Type == "additive" && opacity.Factor == 0.0)
 			material.alphaMode = "MASK";
 
 		// Calculate refraction
-		if (opacity.Type == "refraction" && opacity.Texture.Name != "")
+		if (opacity.Type == "refraction")
 		{
-			material.alphaMode = "BLEND";
+			// if (opacity.Texture.Name != "")
+				material.alphaMode = "BLEND";
 
 			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
 			{
 				_model.extensionsUsed.emplace_back("KHR_materials_ior");
 			}
 
-			if (material.extensions.find("KHR_materials_ior") == material.extensions.end())
-			{
-				material.extensions["KHR_materials_ior"] = tinygltf::Value();
-			}
-			tinygltf::Value& iorExtension = material.extensions["KHR_materials_ior"];
-			iorExtension.Get<tinygltf::Value::Object>().emplace("ior", opacity.IOR);
+			tinygltf::Value::Object iorExtension;
+			iorExtension["ior"] = tinygltf::Value(opacity.IOR);
+			material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
 		}
 
 		// Calculate and combine textures for blending if names are different.
@@ -1962,12 +1957,21 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
 		emissive = materialInfo.Channels.at("EmitColor");
 
-	if (emissive.Enable && emissive.Texture.Name != "")
+	if (emissive.Enable)
 	{
 		if (emissive.Color.size() == 3)
 			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
-		else
-			material.emissiveFactor = { emissive.Factor, emissive.Factor, emissive.Factor };
+		else if (emissive.Texture.Name != "")
+			material.emissiveFactor = { 1.0, 1.0, 1.0 };
+
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_emissive_strength") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_emissive_strength");
+		}
+
+		tinygltf::Value::Object iorExtension;
+		iorExtension["emissiveStrength"] = tinygltf::Value(emissive.Factor);
+		material.extensions["KHR_materials_emissive_strength"] = tinygltf::Value(iorExtension);
 
 		if (emissive.Texture.Name != "")
 			material.emissiveTexture.index = createTextureV2(emissive.Texture);
@@ -2017,6 +2021,26 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 	if (normal.Enable && normal.Texture.Name != "")
 		material.normalTexture.index = createTextureV2(normal.Texture);
 
+	// Specular texture
+	ChannelInfo2 specularColor;
+	if (materialInfo.Channels.find("SpecularColor") != materialInfo.Channels.end() && materialInfo.Channels.at("SpecularColor").Enable)
+		specularColor = materialInfo.Channels.at("SpecularColor");
+	if (specularColor.Enable && specularColor.Texture.Name != "")
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_specular");
+		}
+
+		tinygltf::Value::Object specularExtension;
+		tinygltf::Value::Object specularTexture;
+
+		specularExtension["specularFactor"] = tinygltf::Value(specularColor.Factor);
+		specularTexture["index"] = tinygltf::Value(createTextureV2(specularColor.Texture));
+		specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
+
+		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
+	}
 
 	// Emplace material on collection
 	int materialIndex = _model.materials.size();
@@ -2080,19 +2104,20 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 		else
 			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
 
-		if (opacity.Texture.Name != "")
-		{
-			if (opacity.Type == "alphaBlend" && (opacity.Factor < 1.0 || opacity.Texture.Name != activeTexture.Texture.Name))
-				material.alphaMode = "BLEND";
-			else if (opacity.Type == "dithering")
-				material.alphaMode = "MASK";
-			else
-				material.alphaMode = "OPAQUE";
-		}
+		if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0)
+			material.alphaMode = "BLEND";
+		else if (opacity.Type == "dithering" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
+			material.alphaMode = "MASK";
+		else
+			material.alphaMode = "OPAQUE";
+
+		if (opacity.Type == "additive" && opacity.Factor == 0.0)
+			material.alphaMode = "MASK";
 
 		// Calculate refraction
 		if (opacity.Type == "refraction")
 		{
+			// if (opacity.Texture.Name != "")
 			material.alphaMode = "BLEND";
 
 			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
@@ -2100,12 +2125,9 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 				_model.extensionsUsed.emplace_back("KHR_materials_ior");
 			}
 
-			if (material.extensions.find("KHR_materials_ior") == material.extensions.end())
-			{
-				material.extensions["KHR_materials_ior"] = tinygltf::Value();
-			}
-			tinygltf::Value& iorExtension = material.extensions["KHR_materials_ior"];
-			iorExtension.Get<tinygltf::Value::Object>().emplace("ior", opacity.IOR);
+			tinygltf::Value::Object iorExtension;
+			iorExtension["ior"] = tinygltf::Value(opacity.IOR);
+			material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
 		}
 
 		// Calculate and combine textures for blending if names are different.
@@ -2132,12 +2154,21 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
 		emissive = materialInfo.Channels.at("EmitColor");
 
-	if (emissive.Enable && emissive.Texture.Name != "")
+	if (emissive.Enable)
 	{
 		if (emissive.Color.size() == 3)
 			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
-		else
-			material.emissiveFactor = { emissive.Factor, emissive.Factor, emissive.Factor };
+		else if (emissive.Texture.Name != "")
+			material.emissiveFactor = { 1.0, 1.0, 1.0 };
+
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_emissive_strength") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_emissive_strength");
+		}
+
+		tinygltf::Value::Object iorExtension;
+		iorExtension["emissiveStrength"] = tinygltf::Value(emissive.Factor);
+		material.extensions["KHR_materials_emissive_strength"] = tinygltf::Value(iorExtension);
 
 		if (emissive.Texture.Name != "")
 			material.emissiveTexture.index = createTextureV2(emissive.Texture);
@@ -2151,7 +2182,6 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	if (metallic.Enable)
 	{
 		material.pbrMetallicRoughness.metallicFactor = metallic.Factor;
-
 		if (metallic.Texture.Name != "")
 			metallicTexture = metallic.Texture.Name;
 	}
@@ -2164,7 +2194,6 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	if (roughness.Enable)
 	{
 		material.pbrMetallicRoughness.roughnessFactor = roughness.Factor;
-
 		if (roughness.Texture.Name != "")
 			roughnessTexture = roughness.Texture.Name;
 	}
@@ -2189,6 +2218,27 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	if (normal.Enable && normal.Texture.Name != "")
 		material.normalTexture.index = createTextureV2(normal.Texture);
 
+
+	// Specular texture
+	ChannelInfo2 specularColor;
+	if (materialInfo.Channels.find("SpecularColor") != materialInfo.Channels.end() && materialInfo.Channels.at("SpecularColor").Enable)
+		specularColor = materialInfo.Channels.at("SpecularColor");
+	if (specularColor.Enable && specularColor.Texture.Name != "")
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_specular");
+		}
+
+		tinygltf::Value::Object specularExtension;
+		tinygltf::Value::Object specularTexture;
+
+		specularExtension["specularFactor"] = tinygltf::Value(specularColor.Factor);
+		specularTexture["index"] = tinygltf::Value(createTextureV2(specularColor.Texture));
+		specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
+
+		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
+	}
 
 	// Emplace material on collection
 	int materialIndex = _model.materials.size();
