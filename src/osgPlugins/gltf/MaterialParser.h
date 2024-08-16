@@ -23,15 +23,18 @@ namespace osgJSONParser
 		bool FlipY;
 		float Factor;
 		float IOR;
+		float Thickness;
 		std::string Type;
 		std::vector<float> Color;
+		std::vector<float> Tint;
 		TextureInfo2 Texture;
 
 		ChannelInfo2() :
 			Enable(false),
 			FlipY(false),
-			Factor(0),
-			IOR(0)
+			Factor(0.0),
+			IOR(0.0),
+			Thickness(0.0)
 		{};
 	};
 

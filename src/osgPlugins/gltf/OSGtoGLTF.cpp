@@ -1822,6 +1822,7 @@ int OSGtoGLTF::getCurrentMaterialV2(osg::Geometry* geometry)
 	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
 
 	// Push material and textures from OSG. If not found, try the default one (first in load order).
+	std::string geometryName = geometry->getName();
 	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getStateSet() : geometry->getStateSet();
 	const osg::Material* mat = stateSet ? dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL)) : NULL;
 	auto& knownMaterials = meshMaterials.getMaterials();
@@ -1841,20 +1842,11 @@ int OSGtoGLTF::getCurrentMaterialV2(osg::Geometry* geometry)
 
 	auto& knownMaterial = knownMaterials.at(materialName);
 
-	if (knownMaterial.UsePBR)
-	{
-		return getMaterialPBR(knownMaterial);
-	}
-	else
-	{
-		return getMaterialClassic(knownMaterial);
-	}
-
-	return -1;
+	return createGltfMaterialV2(knownMaterial);
 
 }
 
-int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
+int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 {
 	tinygltf::Material material;
 	material.name = materialInfo.Name;
@@ -1864,6 +1856,9 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 	// Decide which color / factor to use.
 	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
 	ChannelInfo2 activeColor;
+	ChannelInfo2 activeTexture;
+	bool materialHaveTextures = false;
+
 	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable)
 		activeColor = materialInfo.Channels.at("AlbedoPBR");
 	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable)
@@ -1881,7 +1876,6 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 
 	// Decide which texture to use.
 	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
-	ChannelInfo2 activeTexture;
 	std::string activeTextureName;
 	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable &&
 		materialInfo.Channels.at("AlbedoPBR").Texture.Name != "")
@@ -1894,12 +1888,53 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 		activeTexture = materialInfo.Channels.at("DiffuseColor");
 
 	if (activeTexture.Enable)
+	{
 		activeTextureName = activeTexture.Texture.Name;
+		materialHaveTextures = true;
+	}
+
+	// Clear Coat extension - activate with opacity
+	ChannelInfo2 clearCoat;
+	if (materialInfo.Channels.find("ClearCoat") != materialInfo.Channels.end())
+		clearCoat = materialInfo.Channels.at("ClearCoat");
+
+	ChannelInfo2 opacity;
+	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end())
+		opacity = materialInfo.Channels.at("Opacity");
+
+	ChannelInfo2 specularColor;
+	if (materialInfo.Channels.find("SpecularColor") != materialInfo.Channels.end())
+		specularColor = materialInfo.Channels.at("SpecularColor");
+
+	ChannelInfo2 specularF0;
+	if (materialInfo.Channels.find("SpecularF0") != materialInfo.Channels.end())
+		specularF0 = materialInfo.Channels.at("SpecularF0");
+
+	// Clear coat present. Computes if we don't have opacity with refraction.
+	if (clearCoat.Enable && !(opacity.Enable && opacity.Type == "refraction"))
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+		}
+
+		tinygltf::Value::Object clearcoatExtension;
+		clearcoatExtension["clearcoatFactor"] = tinygltf::Value(clearCoat.Factor);
+		if (clearCoat.Texture.Name != "")
+		{
+			tinygltf::Value::Object clearcoatTexture;
+			clearcoatTexture["index"] = tinygltf::Value(createTextureV2(clearCoat.Texture));
+			clearcoatExtension["clearcoatTexture"] = tinygltf::Value(clearcoatTexture);
+			materialHaveTextures = true;
+		}
+
+		material.extensions["KHR_materials_clearcoat"] = tinygltf::Value(clearcoatExtension);
+	}
+
 
 	// Calculate Opacity
-	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end() && materialInfo.Channels.at("Opacity").Enable)
+	if (opacity.Enable)
 	{
-		const ChannelInfo2& opacity = materialInfo.Channels.at("Opacity");
 		if (material.pbrMetallicRoughness.baseColorFactor.size() == 4)
 			material.pbrMetallicRoughness.baseColorFactor[3] = opacity.Factor;
 		else if (material.pbrMetallicRoughness.baseColorFactor.size() == 0 && opacity.Color.size() == 3)
@@ -1917,10 +1952,17 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 		if (opacity.Type == "additive" && opacity.Factor == 0.0)
 			material.alphaMode = "MASK";
 
+		// Try to fix Z-Order sorting problem with alphaBlend transparency where factors of opacity is = 1.0
+		// Not ideal but I guess there is no other solution.
+		if (opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
+		{
+			material.alphaMode = "OPAQUE";
+		}
+
 		// Calculate refraction
 		if (opacity.Type == "refraction")
 		{
-			// if (opacity.Texture.Name != "")
+			if (opacity.Texture.Name != "")
 				material.alphaMode = "BLEND";
 
 			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
@@ -1931,230 +1973,59 @@ int OSGtoGLTF::getMaterialPBR(const MaterialInfo2& materialInfo)
 			tinygltf::Value::Object iorExtension;
 			iorExtension["ior"] = tinygltf::Value(opacity.IOR);
 			material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
-		}
 
-		// Calculate and combine textures for blending if names are different.
-		if (opacity.Texture.Name != "" && opacity.Texture.Name != activeTexture.Texture.Name)
-		{
-			activeTextureName = combineTextures(activeTexture.Texture.Name, opacity.Texture.Name);
-		}
-
-	}
-
-	// Create standalone or Opacity combined texture for AlbedoPBR/Diffuse/DiffuseColor
-	material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture, activeTextureName);
-
-
-	// Ambient Occlusion
-	ChannelInfo2 aoPBR;
-	if (materialInfo.Channels.find("AOPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AOPBR").Enable)
-		aoPBR = materialInfo.Channels.at("AOPBR");
-	if (aoPBR.Enable && aoPBR.Texture.Name != "")
-		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
-
-	// Emissive color and texture
-	ChannelInfo2 emissive;
-	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
-		emissive = materialInfo.Channels.at("EmitColor");
-
-	if (emissive.Enable)
-	{
-		if (emissive.Color.size() == 3)
-			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
-		else if (emissive.Texture.Name != "")
-			material.emissiveFactor = { 1.0, 1.0, 1.0 };
-
-		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_emissive_strength") == _model.extensionsUsed.end())
-		{
-			_model.extensionsUsed.emplace_back("KHR_materials_emissive_strength");
-		}
-
-		tinygltf::Value::Object iorExtension;
-		iorExtension["emissiveStrength"] = tinygltf::Value(emissive.Factor);
-		material.extensions["KHR_materials_emissive_strength"] = tinygltf::Value(iorExtension);
-
-		if (emissive.Texture.Name != "")
-			material.emissiveTexture.index = createTextureV2(emissive.Texture);
-	}
-
-	// Metallic factor
-	ChannelInfo2 metallic;
-	std::string metallicTexture;
-	if (materialInfo.Channels.find("MetalnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("MetalnessPBR").Enable)
-		metallic = materialInfo.Channels.at("MetalnessPBR");
-	if (metallic.Enable)
-	{
-		material.pbrMetallicRoughness.metallicFactor = metallic.Factor;
-		if (metallic.Texture.Name != "")
-			metallicTexture = metallic.Texture.Name;
-	}
-
-	// Roughness factor
-	ChannelInfo2 roughness;
-	std::string roughnessTexture;
-	if (materialInfo.Channels.find("RoughnessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("RoughnessPBR").Enable)
-		roughness = materialInfo.Channels.at("RoughnessPBR");
-	if (roughness.Enable)
-	{
-		material.pbrMetallicRoughness.roughnessFactor = roughness.Factor;
-		if (roughness.Texture.Name != "")
-			roughnessTexture = roughness.Texture.Name;
-	}
-
-	// Solve conflict between metallic and roughness - must combine if both are set with different images
-	if (metallicTexture != "" && roughnessTexture == "")
-		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture);
-	else if (metallicTexture == "" && roughnessTexture != "")
-		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
-	else if (metallicTexture != "" && roughnessTexture != "" && metallicTexture == roughnessTexture)
-		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
-	else if (metallicTexture != "" && roughnessTexture != "" && metallicTexture != roughnessTexture)
-	{
-		std::string combinedTexture = combineMetallicRoughnessTextures(roughnessTexture, metallicTexture);
-		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture, combinedTexture);
-	}
-
-	// Normal map texture
-	ChannelInfo2 normal;
-	if (materialInfo.Channels.find("NormalMap") != materialInfo.Channels.end() && materialInfo.Channels.at("NormalMap").Enable)
-		normal = materialInfo.Channels.at("NormalMap");
-	if (normal.Enable && normal.Texture.Name != "")
-		material.normalTexture.index = createTextureV2(normal.Texture);
-
-	// Specular texture
-	ChannelInfo2 specularColor;
-	if (materialInfo.Channels.find("SpecularColor") != materialInfo.Channels.end() && materialInfo.Channels.at("SpecularColor").Enable)
-		specularColor = materialInfo.Channels.at("SpecularColor");
-	if (specularColor.Enable && specularColor.Texture.Name != "")
-	{
-		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
-		{
-			_model.extensionsUsed.emplace_back("KHR_materials_specular");
-		}
-
-		tinygltf::Value::Object specularExtension;
-		tinygltf::Value::Object specularTexture;
-
-		specularExtension["specularFactor"] = tinygltf::Value(specularColor.Factor);
-		specularTexture["index"] = tinygltf::Value(createTextureV2(specularColor.Texture));
-		specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
-
-		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
-	}
-
-	// Emplace material on collection
-	int materialIndex = _model.materials.size();
-	_model.materials.push_back(material);
-
-	_gltfMaterials.emplace(materialInfo.Name, materialIndex);
-
-	return materialIndex;
-}
-
-int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
-{
-	tinygltf::Material material;
-	material.name = materialInfo.Name;
-
-	material.doubleSided = !materialInfo.BackfaceCull;
-
-	// Decide which color / factor to use.
-	// Priority: DiffuseColor, DiffusePBR, AlbedoPBR
-	ChannelInfo2 activeColor;
-	if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable)
-		activeColor = materialInfo.Channels.at("DiffuseColor");
-	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable)
-		activeColor = materialInfo.Channels.at("DiffusePBR");
-	else if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable)
-		activeColor = materialInfo.Channels.at("AlbedoPBR");
-
-	if (activeColor.Enable)
-	{
-		if (activeColor.Color.size() == 3)
-			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
-		else
-			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Factor, activeColor.Factor, activeColor.Factor, activeColor.Factor };
-	}
-
-	// Decide which texture to use.
-	// Priority: DiffuseColor, DiffusePBR, AlbedoPBR
-	ChannelInfo2 activeTexture;
-	std::string activeTextureName;
-	if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
-		materialInfo.Channels.at("DiffuseColor").Texture.Name != "")
-		activeTexture = materialInfo.Channels.at("DiffuseColor");
-	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable &&
-		materialInfo.Channels.at("DiffusePBR").Texture.Name != "")
-		activeTexture = materialInfo.Channels.at("DiffusePBR");
-	else if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable &&
-			materialInfo.Channels.at("AlbedoPBR").Texture.Name != "")
-		activeTexture = materialInfo.Channels.at("AlbedoPBR");
-
-	if (activeTexture.Enable)
-		activeTextureName = activeTexture.Texture.Name;
-
-	// Calculate Opacity
-	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end() && materialInfo.Channels.at("Opacity").Enable)
-	{
-		const ChannelInfo2& opacity = materialInfo.Channels.at("Opacity");
-		if (material.pbrMetallicRoughness.baseColorFactor.size() == 4)
-			material.pbrMetallicRoughness.baseColorFactor[3] = opacity.Factor;
-		else if (material.pbrMetallicRoughness.baseColorFactor.size() == 0 && opacity.Color.size() == 3)
-			material.pbrMetallicRoughness.baseColorFactor = { opacity.Color[0], opacity.Color[1], opacity.Color[2], opacity.Factor };
-		else
-			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
-
-		if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0)
-			material.alphaMode = "BLEND";
-		else if (opacity.Type == "dithering" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
-			material.alphaMode = "MASK";
-		else
-			material.alphaMode = "OPAQUE";
-
-		if (opacity.Type == "additive" && opacity.Factor == 0.0)
-			material.alphaMode = "MASK";
-
-		// Calculate refraction
-		if (opacity.Type == "refraction")
-		{
-			// if (opacity.Texture.Name != "")
-			material.alphaMode = "BLEND";
-
-			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_transmission") == _model.extensionsUsed.end())
 			{
-				_model.extensionsUsed.emplace_back("KHR_materials_ior");
+				_model.extensionsUsed.emplace_back("KHR_materials_transmission");
 			}
 
-			tinygltf::Value::Object iorExtension;
-			iorExtension["ior"] = tinygltf::Value(opacity.IOR);
-			material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
+			tinygltf::Value::Object transmissionExtension;
+			transmissionExtension["transmissionFactor"] = tinygltf::Value(1.0 - opacity.Factor);
+			material.extensions["KHR_materials_transmission"] = tinygltf::Value(transmissionExtension);
+
+			if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+			{
+				_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+			}
+
+			tinygltf::Value::Object clearcoatExtension;
+			clearcoatExtension["clearcoatFactor"] = tinygltf::Value(1.0);
+			material.extensions["KHR_materials_clearcoat"] = tinygltf::Value(clearcoatExtension);
 		}
 
 		// Calculate and combine textures for blending if names are different.
 		if (opacity.Texture.Name != "" && opacity.Texture.Name != activeTexture.Texture.Name)
 		{
-			activeTextureName = combineTextures(activeTexture.Texture.Name, opacity.Texture.Name);
+			materialHaveTextures = true;
+
+			if (activeTexture.Texture.Name == "")
+				activeTexture.Texture.Name = opacity.Texture.Name;
+			else
+				activeTextureName = combineTextures(activeTexture.Texture.Name, opacity.Texture.Name);
 		}
 
 	}
 
 	// Create standalone or Opacity combined texture for AlbedoPBR/Diffuse/DiffuseColor
-	material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture, activeTextureName);
-
+	if (activeTextureName != "")
+		material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture, activeTextureName);
 
 	// Ambient Occlusion
 	ChannelInfo2 aoPBR;
 	if (materialInfo.Channels.find("AOPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AOPBR").Enable)
 		aoPBR = materialInfo.Channels.at("AOPBR");
 	if (aoPBR.Enable && aoPBR.Texture.Name != "")
+	{
 		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
+		material.occlusionTexture.strength = aoPBR.Factor;
+	}
 
 	// Emissive color and texture
 	ChannelInfo2 emissive;
 	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
 		emissive = materialInfo.Channels.at("EmitColor");
 
-	if (emissive.Enable)
+	if (emissive.Enable && emissive.Factor > 0.0)
 	{
 		if (emissive.Color.size() == 3)
 			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
@@ -2171,7 +2042,10 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 		material.extensions["KHR_materials_emissive_strength"] = tinygltf::Value(iorExtension);
 
 		if (emissive.Texture.Name != "")
+		{
 			material.emissiveTexture.index = createTextureV2(emissive.Texture);
+			materialHaveTextures = true;
+		}
 	}
 
 	// Metallic factor
@@ -2218,12 +2092,8 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	if (normal.Enable && normal.Texture.Name != "")
 		material.normalTexture.index = createTextureV2(normal.Texture);
 
-
 	// Specular texture
-	ChannelInfo2 specularColor;
-	if (materialInfo.Channels.find("SpecularColor") != materialInfo.Channels.end() && materialInfo.Channels.at("SpecularColor").Enable)
-		specularColor = materialInfo.Channels.at("SpecularColor");
-	if (specularColor.Enable && specularColor.Texture.Name != "")
+	if (specularColor.Enable)
 	{
 		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
 		{
@@ -2231,11 +2101,22 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 		}
 
 		tinygltf::Value::Object specularExtension;
-		tinygltf::Value::Object specularTexture;
-
+		if (specularColor.Color.size() == 3)
+			specularExtension.emplace("specularColorFactor", tinygltf::Value::Array(specularColor.Color.begin(), specularColor.Color.end()));
 		specularExtension["specularFactor"] = tinygltf::Value(specularColor.Factor);
-		specularTexture["index"] = tinygltf::Value(createTextureV2(specularColor.Texture));
-		specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
+
+		if (specularColor.Texture.Name != "")
+		{
+			tinygltf::Value::Object specularTexture;
+			specularTexture["index"] = tinygltf::Value(createTextureV2(specularColor.Texture));
+			specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
+			materialHaveTextures = true;
+		}
+
+		if (specularF0.Enable)
+		{
+			specularExtension["specularFactor"] = tinygltf::Value(specularF0.Factor);
+		}
 
 		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
 	}
@@ -2245,6 +2126,9 @@ int OSGtoGLTF::getMaterialClassic(const MaterialInfo2& materialInfo)
 	_model.materials.push_back(material);
 
 	_gltfMaterials.emplace(materialInfo.Name, materialIndex);
+
+	if (materialHaveTextures)
+		_materialsWithTextures.emplace(materialIndex);
 
 	return materialIndex;
 }
@@ -2627,6 +2511,8 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		texCoords = flipUVs(texCoords);
 
 	int currentMaterial = getCurrentMaterialV2(geom);
+	bool materialHaveTextures = _materialsWithTextures.find(currentMaterial) != _materialsWithTextures.end();
+
 	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)
 	{
 		osg::PrimitiveSet* pset = geom->getPrimitiveSet(i);
@@ -2668,7 +2554,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			if (tangents)
 				getOrCreateGeometryAccessor(tangents, nullptr, primitive, "TANGENT");
 
-			if (colors)
+			if (colors && !materialHaveTextures)
 				getOrCreateGeometryAccessor(colors, nullptr, primitive, "COLOR_0");
 
 			if (texCoords)

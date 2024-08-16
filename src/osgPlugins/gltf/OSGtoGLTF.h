@@ -50,6 +50,7 @@ private:
     std::map<std::string, int> _gltfMaterials;
     std::map<std::string, int> _gltfTextures;
     std::map<int, osg::Matrix> _gltfStackedMatrices;      // Stacked matrix transform for an Animation Target (node ID)
+    std::set<int> _materialsWithTextures;                   // Save if current material has an assigned texture to it
 
     // Keeps track of morph target times and weights
     std::map<float, std::map<std::string, float>> _morphTargetTimeWeights;
@@ -171,9 +172,7 @@ private:
 
     int getCurrentMaterialV2(osg::Geometry* geometry);
 
-    int getMaterialPBR(const osgJSONParser::MaterialInfo2& materialInfo);
-
-    int getMaterialClassic(const osgJSONParser::MaterialInfo2& materialInfo);
+    int createGltfMaterialV2(const osgJSONParser::MaterialInfo2& materialInfo);
 
 public:
     OSGtoGLTF(tinygltf::Model& model) :

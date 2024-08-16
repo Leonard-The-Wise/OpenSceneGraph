@@ -78,6 +78,11 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 		returnInfo.Factor = channelValue["factor"].get<double>();
 	}
 
+	if (channelValue.contains("thickness"))
+	{
+		returnInfo.Thickness = channelValue["thickness"].get<double>();
+	}
+
 	if (channelValue.contains("type"))
 	{
 		returnInfo.Type = channelValue["type"].get<std::string>();
@@ -91,6 +96,16 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 			returnInfo.Color[i] = channelValue["color"][i].get<double>();
 		}
 	}
+
+	if (channelValue.contains("tint") && channelValue["tint"].is_array())
+	{
+		returnInfo.Tint.resize(3);
+		for (int i = 0; i < 3 && i < channelValue["tint"].size(); ++i)
+		{
+			returnInfo.Tint[i] = channelValue["tint"][i].get<double>();
+		}
+	}
+
 
 	if (channelValue.contains("ior"))
 	{
