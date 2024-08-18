@@ -88,6 +88,16 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 		returnInfo.Type = channelValue["type"].get<std::string>();
 	}
 
+	if (channelValue.contains("thinLayer"))
+	{
+		returnInfo.ThinLayer = channelValue["thinLayer"].get<bool>();
+	}
+
+	if (channelValue.contains("roughnessFactor"))
+	{
+		returnInfo.RoughnessFactor = channelValue["roughnessFactor"].get<double>();
+	}
+
 	if (channelValue.contains("color") && channelValue["color"].is_array())
 	{
 		returnInfo.Color.resize(3);

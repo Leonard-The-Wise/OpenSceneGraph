@@ -1949,15 +1949,43 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		else
 			material.alphaMode = "OPAQUE";
 
-		if (opacity.Type == "additive" && opacity.Factor == 0.0)
-			material.alphaMode = "MASK";
-
 		// Try to fix Z-Order sorting problem with alphaBlend transparency where factors of opacity is = 1.0
 		// Not ideal but I guess there is no other solution.
 		if (opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
 		{
 			material.alphaMode = "OPAQUE";
 		}
+
+		if (opacity.Type == "additive")
+		{
+			if (opacity.Factor == 0.0)
+				material.alphaMode = "MASK";
+			else
+				material.alphaMode = "BLEND";
+
+			if (opacity.ThinLayer)
+			{
+				material.alphaMode = "BLEND";
+
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
+				{
+					_model.extensionsUsed.emplace_back("KHR_materials_ior");
+				}
+				tinygltf::Value::Object iorExtension;
+				iorExtension["ior"] = tinygltf::Value(opacity.IOR);
+				material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
+
+				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
+				{
+					_model.extensionsUsed.emplace_back("KHR_materials_clearcoat");
+				}
+				tinygltf::Value::Object clearcoatExtension;
+				clearcoatExtension["clearcoatFactor"] = tinygltf::Value(1.0 - opacity.Factor);
+				// clearcoatExtension["clearcoatRoughnessFactor"] = tinygltf::Value(opacity.RoughnessFactor);
+				material.extensions["KHR_materials_clearcoat"] = tinygltf::Value(clearcoatExtension);
+			}
+		}
+
 
 		// Calculate refraction
 		if (opacity.Type == "refraction")
@@ -2522,10 +2550,10 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 		if (currentMaterial >= 0)
 		{
-			if (texCoords.valid()) 
-			{
+			//if (!materialHaveTextures || materialHaveTextures && texCoords.valid())
+			//{
 				primitive.material = currentMaterial;
-			}
+			//}
 		}
 
 		primitive.mode = pset->getMode();

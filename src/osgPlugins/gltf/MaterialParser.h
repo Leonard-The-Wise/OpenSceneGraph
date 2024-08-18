@@ -24,6 +24,8 @@ namespace osgJSONParser
 		float Factor;
 		float IOR;
 		float Thickness;
+		bool ThinLayer;
+		float RoughnessFactor;
 		std::string Type;
 		std::vector<float> Color;
 		std::vector<float> Tint;
@@ -34,7 +36,9 @@ namespace osgJSONParser
 			FlipY(false),
 			Factor(0.0),
 			IOR(0.0),
-			Thickness(0.0)
+			Thickness(0.0),
+			ThinLayer(false),
+			RoughnessFactor(0.0)
 		{};
 	};
 
