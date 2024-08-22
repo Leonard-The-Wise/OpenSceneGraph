@@ -19,6 +19,7 @@ public:
         bool rebuildMaterials;
         bool ignoreGzExtension;
         bool ignoreAnimations;
+        bool ignoreTextureLoad;
         std::vector<std::string> useSpecificBuffer;
         std::set<std::string> additionalSourceDirs;
         std::string baseLodURL;
@@ -35,6 +36,7 @@ public:
             rebuildMaterials = false;
             ignoreGzExtension = true;
             ignoreAnimations = false;
+            ignoreTextureLoad = false;
         }
     };
 

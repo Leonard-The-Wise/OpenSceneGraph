@@ -95,9 +95,18 @@ namespace osgJSONParser
 	struct MaterialInfo2 {
 		std::string ID;
 		std::string Name;
+		int StateSetID;
 		int Version;
 		std::unordered_map<std::string, ChannelInfo2> Channels;
 		bool BackfaceCull;
+		bool UsePBR;
+
+		MaterialInfo2() :
+			StateSetID(0),
+			Version(0),
+			BackfaceCull(false),
+			UsePBR(false)
+		{};
 	};
 
 	class MaterialFile2
@@ -150,6 +159,14 @@ namespace osgJSONParser
 			return _textureMap;
 		}
 
+		const std::string getTextureNameByUID(const std::string& UID)
+		{
+			if (_textureUIDNames.find(UID) != _textureUIDNames.end())
+				return _textureUIDNames.at(UID);
+			else
+				return "";
+		}
+
 		void renameTexture(const std::string& originalFile, const std::string& modifiedFile);
 
 	private:
@@ -158,6 +175,7 @@ namespace osgJSONParser
 		Materials _materials;
 		MaterialFile _materialFile1;
 		std::map<std::string, TextureInfo2> _textureMap;
+		std::map<std::string, std::string> _textureUIDNames;
 
 		void makeTextureMap();
 

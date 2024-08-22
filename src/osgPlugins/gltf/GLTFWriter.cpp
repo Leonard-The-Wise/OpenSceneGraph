@@ -41,6 +41,9 @@ osgDB::ReaderWriter::WriteResult GLTFWriter::write(const osg::Node& node, const 
 
 	// Causes crash (actually return nothing) if applicationKey is wrong!
 	int applicationKey = 0;
+
+	bool realWriteBinary = isBinary;
+	std::string realLocation = location;
 	while (iss >> opt)
 	{
 		std::string pre_equals;
@@ -56,9 +59,17 @@ osgDB::ReaderWriter::WriteResult GLTFWriter::write(const osg::Node& node, const 
 		{
 			pre_equals = opt;
 		}
+
 		if (pre_equals == "XParam")
 		{
 			applicationKey = atoi(post_equals.c_str());
+		}
+
+		if (pre_equals == "BinaryGltf")
+		{
+			realWriteBinary = true;
+			std::string fileDir = osgDB::getFilePath(location);
+			realLocation = (fileDir == "" ? "" : fileDir + "\\") + osgDB::getNameLessExtension(location) + ".glb";
 		}
 	}
 
@@ -83,11 +94,11 @@ osgDB::ReaderWriter::WriteResult GLTFWriter::write(const osg::Node& node, const 
 
 	writer.WriteGltfSceneToFile(
 		&model,
-		location,
-		true,           // embedImages
-		true,           // embedBuffers
-		true,           // prettyPrint
-		isBinary);      // writeBinary
+		realLocation,
+		true,                  // embedImages
+		true,                  // embedBuffers
+		true,                  // prettyPrint
+		realWriteBinary);      // writeBinary
 
 	return osgDB::ReaderWriter::WriteResult::FILE_SAVED;
 }

@@ -36,6 +36,8 @@
 #include "OsgjsParser.h"
 #include "OsgjsParserHelper.h"
 
+#include "jpcre2.hpp"
+
 
 using json = nlohmann::json;
 
@@ -97,6 +99,24 @@ void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSO
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
+    //// Lookup current node horizontally, searching for JSON Objects to process and attach to newObject
+    //if (currentJSONNode.contains("Children") && currentJSONNode["Children"].is_array())
+    //{
+    //    for (const auto& child : currentJSONNode["Children"])
+    //    {
+    //        if (!parseObject(object, child, nodeKey))
+    //            OSG_WARN << "WARNING: object " << object->getName() + " had not parseable children. ->" << std::endl << ADD_KEY_NAME << std::endl;
+    //    }
+    //}
+
+    // Get User Data Containers for object
+    if (currentJSONNode.contains("UserDataContainer"))
+        parseUserDataContainer(object, currentJSONNode["UserDataContainer"], containerType, nodeKey);
+
+    // Get object state set
+    if (currentJSONNode.contains("StateSet"))
+        parseStateSet(object, currentJSONNode["StateSet"]["osg.StateSet"], "osg.StateSet");
+
     // Lookup current node horizontally, searching for JSON Objects to process and attach to newObject
     if (currentJSONNode.contains("Children") && currentJSONNode["Children"].is_array())
     {
@@ -106,14 +126,6 @@ void OsgjsParser::lookForChildren(ref_ptr<Object> object, const json& currentJSO
                 OSG_WARN << "WARNING: object " << object->getName() + " had not parseable children. ->" << std::endl << ADD_KEY_NAME << std::endl;
         }
     }
-
-    // Get User Data Containers for object
-    if (currentJSONNode.contains("UserDataContainer"))
-        parseUserDataContainer(object, currentJSONNode["UserDataContainer"], containerType, nodeKey);
-
-    // Get object state set
-    if (currentJSONNode.contains("StateSet"))
-        parseStateSet(object, currentJSONNode["StateSet"]["osg.StateSet"], "osg.StateSet");
 
     // Get UpdateCallbacks for animations
     if (currentJSONNode.contains("UpdateCallbacks") && currentJSONNode["UpdateCallbacks"].is_array())
@@ -386,9 +398,9 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
                         {
                             stateset->setTextureAttribute(i, dynamic_pointer_cast<Texture>(childTexture), StateAttribute::TEXTURE);
                         }
-                        ++i;
                     }
                 }
+                ++i;
             }
         }
     }
@@ -442,6 +454,8 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
         }
     }
 
+    lookForChildren(stateset, currentJSONNode, UserDataContainerType::ShapeAttributes, nodeKey);
+
     // Custom step: try to get textures from MaterialInfo and set on User Values of materials
     postProcessStateSet(stateset, &currentJSONNode);
 
@@ -455,6 +469,17 @@ void OsgjsParser::parseStateSet(ref_ptr<Object> currentObject, const json& curre
     if (UniqueID > 0)
     {
         _statesetMap[UniqueID] = stateset;
+        stateset->setUserValue("UniqueID", UniqueID);
+        
+        ref_ptr<osgSim::ShapeAttributeList> shapeAttrList = dynamic_cast<osgSim::ShapeAttributeList*>(stateset->getUserData());
+        if (shapeAttrList)
+        {
+            int stateSetID = 0;
+            if (ParserHelper::getShapeAttribute(shapeAttrList, "UniqueID", stateSetID))
+            {
+                stateset->setUserValue("stateSetID", stateSetID);
+            }
+        }
     }
 }
 
@@ -1106,49 +1131,86 @@ ref_ptr<Object> OsgjsParser::parseOsgTexture(const json& currentJSONNode, const 
 {
 #ifndef NDEBUG
     std::string debugCurrentJSONNode = currentJSONNode.dump();
-    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
-    UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
+    int UniqueID = currentJSONNode.contains("UniqueID") ? currentJSONNode["UniqueID"].get<int>() : 0;
     std::string name = currentJSONNode.contains("Name") ? currentJSONNode["Name"] : "";
 
+    // Try to find a copy of textures on map
+    if (_textureUIDMap.find(UniqueID) != _textureUIDMap.end())
+    {
+        return _textureUIDMap[UniqueID];
+    }
 
     if (!name.empty())
     {
-        // Try original file name, then changed to .png
         if (_textureMap.find(name) != _textureMap.end())
             return _textureMap[name];
     }
 
-    std::string fileName = currentJSONNode.contains("File") ? osgDB::getSimpleFileName(currentJSONNode["File"].get<std::string>()) : "";
-    ref_ptr<Image> image = getOrCreateImage(fileName);
-
-    if (!image)
-        return nullptr;
-
     ref_ptr<Texture2D> newTexture = new Texture2D;
-    newTexture->setName(name);
-    newTexture->setImage(image);
 
-    if (currentJSONNode.contains("MagFilter"))
+    if (!_ignoreTextureLoad)
     {
-        newTexture->setFilter(Texture::MAG_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MagFilter"].get<std::string>()));
-    }
-    if (currentJSONNode.contains("MinFilter"))
-    {
-        newTexture->setFilter(Texture::MIN_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MinFilter"].get<std::string>()));
-    }
-    if (currentJSONNode.contains("WrapS"))
-    {
-        newTexture->setWrap(Texture::WRAP_S, ParserHelper::getWrapModeFromString(currentJSONNode["WrapS"].get<std::string>()));
-    }
-    if (currentJSONNode.contains("WrapT"))
-    {
-        newTexture->setWrap(Texture::WRAP_T, ParserHelper::getWrapModeFromString(currentJSONNode["WrapT"].get<std::string>()));
+        std::string fileName = currentJSONNode.contains("File") ? osgDB::getSimpleFileName(currentJSONNode["File"].get<std::string>()) : "";
+        ref_ptr<Image> image = getOrCreateImage(fileName);
+
+        if (!image && !fileName.empty())
+        {
+            typedef jpcre2::select<char> pcre2;
+            const std::string TEXTUREFILE = R"(^textures\/(?'UID'[a-f|0-9]+)\/[a-f|0-9]+\.[a-z]+$)";
+            const jpcre2::select<char>::Regex commentRegEx(TEXTUREFILE, PCRE2_MULTILINE, jpcre2::JIT_COMPILE);
+
+            pcre2::VecNas captureGroup;
+
+            pcre2::RegexMatch regexMatch;
+            regexMatch.addModifier("gm");
+            regexMatch.setNamedSubstringVector(&captureGroup);
+
+            regexMatch.setRegexObject(&commentRegEx);
+            regexMatch.setSubject(currentJSONNode["File"].get<std::string>());
+
+            size_t count = regexMatch.match();
+
+            if (count == 0)
+                return nullptr;
+
+            std::string UID = captureGroup[0]["UID"];
+            fileName = _meshMaterials2.getTextureNameByUID(UID);
+            if (fileName.empty())
+                return nullptr;
+
+            image = getOrCreateImage(fileName);
+            if (!image)
+                return nullptr;
+        }
+
+        newTexture->setName(name);
+        newTexture->setImage(image);
+
+        if (currentJSONNode.contains("MagFilter"))
+        {
+            newTexture->setFilter(Texture::MAG_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MagFilter"].get<std::string>()));
+        }
+        if (currentJSONNode.contains("MinFilter"))
+        {
+            newTexture->setFilter(Texture::MIN_FILTER, ParserHelper::getFilterModeFromString(currentJSONNode["MinFilter"].get<std::string>()));
+        }
+        if (currentJSONNode.contains("WrapS"))
+        {
+            newTexture->setWrap(Texture::WRAP_S, ParserHelper::getWrapModeFromString(currentJSONNode["WrapS"].get<std::string>()));
+        }
+        if (currentJSONNode.contains("WrapT"))
+        {
+            newTexture->setWrap(Texture::WRAP_T, ParserHelper::getWrapModeFromString(currentJSONNode["WrapT"].get<std::string>()));
+        }
     }
 
     if (!name.empty())
         _textureMap[name] = newTexture;
+
+    if (UniqueID != 0)
+        _textureUIDMap[UniqueID] = newTexture;
 
     return newTexture;
 }
@@ -1230,9 +1292,11 @@ ref_ptr<Object> OsgjsParser::parseOsgTextText(const json& currentJSONNode, const
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    OSG_WARN << "WARNING: Scene contains TEXT and this plugin don't support it. Skipping..." << std::endl;
+    // OSG_WARN << "WARNING: Scene contains TEXT and this format don't support it. Skipping..." << std::endl;
 
     ref_ptr<Node> dummy = new Node;
+    lookForChildren(dummy, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return dummy;
 }
 
@@ -1245,9 +1309,11 @@ ref_ptr<Object> OsgjsParser::parseOsgProjection(const json& currentJSONNode, con
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    OSG_WARN << "WARNING: Scene contains PROJECTIONS and this plugin don't support it. Skipping..." << std::endl;
+    // OSG_WARN << "WARNING: Scene contains PROJECTIONS and this plugin don't support it. Skipping..." << std::endl;
 
     ref_ptr<Node> dummy = new Node;
+    lookForChildren(dummy, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return dummy;
 }
 
@@ -1260,9 +1326,11 @@ ref_ptr<Object> OsgjsParser::parseOsgLight(const json& currentJSONNode, const st
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    OSG_WARN << "WARNING: Scene contains LIGHTS and this plugin don't export lights. Skipping..." << std::endl;
+    // OSG_WARN << "WARNING: Scene contains LIGHTS and this plugin don't export lights. Skipping..." << std::endl;
 
     ref_ptr<Node> dummy = new Node;
+    lookForChildren(dummy, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return dummy;
 }
 
@@ -1275,9 +1343,11 @@ ref_ptr<Object> OsgjsParser::parseOsgLightSource(const json& currentJSONNode, co
     UniqueID = UniqueID; // Bypass compilation warning
 #endif
 
-    OSG_WARN << "WARNING: Scene contains LIGHT SOURCE and this plugin don't export light sources. Skipping..." << std::endl;
+    // OSG_WARN << "WARNING: Scene contains LIGHT SOURCE and this format don't export light sources. Skipping..." << std::endl;
 
     ref_ptr<Node> dummy = new Node;
+    lookForChildren(dummy, currentJSONNode, UserDataContainerType::UserData, nodeKey);
+
     return dummy;
 }
 
@@ -2122,6 +2192,9 @@ std::string OsgjsParser::getModelName() const
 
 void OsgjsParser::createTextureMap(const std::map<std::string, TextureInfo2>& textureMap)
 {
+    if (_ignoreTextureLoad)
+        return;
+
     for (auto& textureName : textureMap)
     {
         std::string filename = textureName.first;
@@ -2172,7 +2245,7 @@ ref_ptr<Image> OsgjsParser::getOrCreateImage(const std::string& fileName)
     std::string realOrigFileName;
 
     // Search in dirs
-    if (!_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName) || fileName.empty())
+    if (fileName.empty() || !_fileCache.fileExistsInDirs(fileNameOrig, realOrigFileName))
         return nullptr;
 
     // First try to read original file name. If unsuccessfull, then retry as .png
@@ -2403,7 +2476,7 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
         geometry->setVertexArray(verticesConverted);
     }
     
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < geometry->getTexCoordArrayList().size(); i++)
     {
         ref_ptr<Array> texCoord = geometry->getTexCoordArray(i);
         if (!texCoord)
@@ -2440,8 +2513,6 @@ void OsgjsParser::postProcessGeometry(const ref_ptr<Geometry>& geometry, const j
 
             geometry->setTexCoordArray(i, texCoordConverted);
         }
-
-        i++;
     }
 
     success[10] = ParserHelper::getShapeAttribute(shapeAttrList, "epsilon", epsilon);
@@ -2534,49 +2605,49 @@ void OsgjsParser::postProcessStateSet(const ref_ptr<StateSet>& stateset, const j
         // Get culling mode
         material->setUserValue("backfaceCull", materialEntry.BackfaceCull);
     }
-    else
-        return;
+    //else
+    //    return;
 
     // First, search for pre-created textures on StateSet
-    for (unsigned int i = 0; i < stateset->getNumTextureAttributeLists(); i++)
-    {
-        const Texture* tex = dynamic_cast<const Texture*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
-        if (tex)
-        {
-            // Remove found textures from unfound set
-            const Image* texImage = tex->getImage(0);
-            std::string imageName = texImage->getFileName();
-            unfoundTextures.erase(imageName);
-        }
-    }
-    
+    //for (unsigned int i = 0; i < stateset->getNumTextureAttributeLists(); i++)
+    //{
+    //    const Texture* tex = dynamic_cast<const Texture*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
+    //    if (tex)
+    //    {
+    //        // Remove found textures from unfound set
+    //        const Image* texImage = tex->getImage(0);
+    //        std::string imageName = texImage->getFileName();
+    //        unfoundTextures.erase(imageName);
+    //    }
+    //}
+    //
     // Next, create all missing textures with default parameters
-    int j = stateset->getNumTextureAttributeLists();
-    for (auto& unfoundTexture : unfoundTextures)
-    {
-        if (_textureMap.find(unfoundTexture) != _textureMap.end())
-        {
-            stateset->setTextureAttribute(j++, _textureMap[unfoundTexture], StateAttribute::TEXTURE);
-            continue;
-        }
+    //int j = stateset->getNumTextureAttributeLists();
+    //for (auto& unfoundTexture : unfoundTextures)
+    //{
+    //    if (_textureMap.find(unfoundTexture) != _textureMap.end())
+    //    {
+    //        stateset->setTextureAttribute(j++, _textureMap[unfoundTexture], StateAttribute::TEXTURE);
+    //        continue;
+    //    }
 
-        ref_ptr<Image> image = getOrCreateImage(unfoundTexture);
+    //    ref_ptr<Image> image = getOrCreateImage(unfoundTexture);
 
-        if (!image)
-            continue;
+    //    if (!image)
+    //        continue;
 
-        ref_ptr<Texture2D> texture = new Texture2D;
+    //    ref_ptr<Texture2D> texture = new Texture2D;
 
-        texture->setName(unfoundTexture);
-        texture->setImage(image);
-        texture->setFilter(Texture::MAG_FILTER, Texture::LINEAR);
-        texture->setFilter(Texture::MIN_FILTER, Texture::LINEAR);
-        texture->setWrap(Texture::WRAP_S, Texture::REPEAT);
-        texture->setWrap(Texture::WRAP_T, Texture::REPEAT);
+    //    texture->setName(unfoundTexture);
+    //    texture->setImage(image);
+    //    texture->setFilter(Texture::MAG_FILTER, Texture::LINEAR);
+    //    texture->setFilter(Texture::MIN_FILTER, Texture::LINEAR);
+    //    texture->setWrap(Texture::WRAP_S, Texture::REPEAT);
+    //    texture->setWrap(Texture::WRAP_T, Texture::REPEAT);
 
-        stateset->setTextureAttribute(j++, texture, StateAttribute::TEXTURE);
-        _textureMap[unfoundTexture] = texture;
-    }
+    //    stateset->setTextureAttribute(j++, texture, StateAttribute::TEXTURE);
+    //    _textureMap[unfoundTexture] = texture;
+    //}
 }
 
 

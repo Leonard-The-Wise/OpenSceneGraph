@@ -300,6 +300,9 @@ bool MaterialFile2::parseViewerInfo(const json& viewerInfoDoc)
 				if (itemValue.contains("id"))
 					material.ID = itemValue["id"].get<std::string>();
 
+				if (itemValue.contains("stateSetID"))
+					material.StateSetID = itemValue["stateSetID"].get<int>();
+
 				if (itemValue.contains("channels") && itemValue["channels"].is_object())
 				{
 					for (auto& channel : itemValue["channels"].items())
@@ -374,7 +377,11 @@ bool MaterialFile2::parseTextureInfo(const json& textureInfoDoc)
 						channelInfo.Texture.Name = textureName;
 					}
 				}
+
+				_textureUIDNames[textureUID] = textureName;
 			}
+
+
 		}
 	}
 

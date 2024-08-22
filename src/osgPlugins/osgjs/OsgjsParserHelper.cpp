@@ -539,6 +539,11 @@ osg::ref_ptr<osg::Array> ParserHelper::decodeVertices(const osg::ref_ptr<osg::Ar
 	int elementSize = vertices->getDataSize();
 
 	// Decode Predict
+	if (vertex_mode == 0 && vtx_bbl[0] == 0.0 && vtx_bbl[1] == 0)
+	{
+		return recastArray(verticesConverted, static_cast<DesiredVectorSize>(elementSize));
+	}
+
 	if (vertex_mode != 1)
 	{
 		switch (indices->getType())

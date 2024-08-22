@@ -26,6 +26,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define TINYGLTF_NO_EXTERNAL_IMAGE
 #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+#define TINYGLTF_USE_CPP14
 
 #include "tiny_gltf.h"
 using namespace tinygltf;

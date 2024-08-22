@@ -181,6 +181,11 @@ ReaderWriterJSON::OptionsStruct ReaderWriterJSON::parseOptions(const osgDB::Read
                 localOptions.ignoreAnimations = true;
             }
 
+            if (pre_equals == "NoTextureLoad")
+            {
+                localOptions.ignoreTextureLoad = true;
+            }
+
             if (pre_equals == "AdditionalSourceDir")
             {
                 std::string path = post_equals;
@@ -293,6 +298,7 @@ osg::ref_ptr<osg::Node> ReaderWriterJSON::parseOsgjs(const json& input, const Op
         nodeParser.setFileCache(fileCache);
         nodeParser.setFileBasePath(options.baseFilePath);
 
+        nodeParser.setIgnoreTextures(options.ignoreTextureLoad);
         nodeParser.setIgnoreAnimations(options.ignoreAnimations);
 
         rootNode = nodeParser.parseObjectTree(input["osg.Node"]);

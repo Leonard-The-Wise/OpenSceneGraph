@@ -26,8 +26,11 @@ namespace osgJSONParser
 		float Thickness;
 		bool ThinLayer;
 		float RoughnessFactor;
+		float Direction;
+		float Rotation;
 		std::string Type;
 		std::vector<float> Color;
+		std::vector<float> ColorFactor;
 		std::vector<float> Tint;
 		TextureInfo2 Texture;
 
@@ -35,20 +38,30 @@ namespace osgJSONParser
 			Enable(false),
 			FlipY(false),
 			Factor(0.0),
-			IOR(0.0),
+			IOR(-1.0),
 			Thickness(0.0),
 			ThinLayer(false),
-			RoughnessFactor(0.0)
+			RoughnessFactor(0.0),
+			Direction(0.0),
+			Rotation(0.0)
 		{};
 	};
 
 	struct MaterialInfo2 {
 		std::string ID;
 		std::string Name;
+		int StateSetID;
 		int Version;
 		std::unordered_map<std::string, ChannelInfo2> Channels;
 		bool BackfaceCull;
 		bool UsePBR;
+
+		MaterialInfo2() :
+			StateSetID(0),
+			Version(0),
+			BackfaceCull(false),
+			UsePBR(false)
+		{};
 	};
 
 	class MaterialFile2
@@ -101,6 +114,11 @@ namespace osgJSONParser
 			return _textureMap;
 		}
 
+		inline const std::map<int, std::string> getMaterialStateSetIDs()
+		{
+			return _stateSetIDMaterial;
+		}
+
 		void renameTexture(const std::string& originalFile, const std::string& modifiedFile);
 
 	private:
@@ -108,6 +126,7 @@ namespace osgJSONParser
 		const std::set<std::string> knownChannelNames;
 		Materials _materials;
 		std::map<std::string, TextureInfo2> _textureMap;
+		std::map<int, std::string> _stateSetIDMaterial;
 
 		void makeTextureMap();
 

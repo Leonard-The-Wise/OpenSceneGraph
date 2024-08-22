@@ -124,6 +124,11 @@ namespace osgJSONParser
             _ignoreAnimations = ignore;
         }
 
+        inline void setIgnoreTextures(bool ignore)
+        {
+            _ignoreTextureLoad = ignore;
+        }
+
 		osg::ref_ptr<osg::Group> parseObjectTree(const json& firstOsgNodeJSON);
 
 	private:
@@ -132,6 +137,7 @@ namespace osgJSONParser
         bool _firstMatrix = true;
         bool _firstDecodedTexture = true;
         bool _ignoreAnimations = false;
+        bool _ignoreTextureLoad = false;
 
         std::string _filesBasePath;
 
@@ -144,6 +150,7 @@ namespace osgJSONParser
         std::map<std::string, osg::ref_ptr<osg::Texture>> _textureMap;
         std::map<std::string, osg::ref_ptr<osg::Image>> _imageMap;
         std::map<int, osg::ref_ptr<osg::StateSet>> _statesetMap;
+        std::map<int, osg::ref_ptr<osg::Texture>> _textureUIDMap;
 
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Object>(const json&, const std::string& nodeKey)>> processObjects;
         const std::unordered_map<std::string, std::function<osg::ref_ptr<osg::Callback>(const json&, const std::string& nodeKey)>> processCallbacks;

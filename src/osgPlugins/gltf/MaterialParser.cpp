@@ -78,6 +78,16 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 		returnInfo.Factor = channelValue["factor"].get<double>();
 	}
 
+	if (channelValue.contains("direction"))
+	{
+		returnInfo.Direction = channelValue["direction"].get<double>();
+	}
+
+	if (channelValue.contains("rotation"))
+	{
+		returnInfo.Rotation = channelValue["rotation"].get<double>();
+	}
+
 	if (channelValue.contains("thickness"))
 	{
 		returnInfo.Thickness = channelValue["thickness"].get<double>();
@@ -116,6 +126,14 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 		}
 	}
 
+	if (channelValue.contains("colorFactor") && channelValue["colorFactor"].is_array())
+	{
+		returnInfo.ColorFactor.resize(3);
+		for (int i = 0; i < 3 && i < channelValue["colorFactor"].size(); ++i)
+		{
+			returnInfo.ColorFactor[i] = channelValue["colorFactor"][i].get<double>();
+		}
+	}
 
 	if (channelValue.contains("ior"))
 	{
@@ -210,6 +228,9 @@ bool MaterialFile2::parseViewerInfo(const json& viewerInfoDoc)
 				if (itemValue.contains("id"))
 					material.ID = itemValue["id"].get<std::string>();
 
+				if (itemValue.contains("stateSetID"))
+					material.StateSetID = itemValue["stateSetID"].get<int>();
+
 				if (itemValue.contains("channels") && itemValue["channels"].is_object())
 				{
 					for (auto& channel : itemValue["channels"].items())
@@ -237,6 +258,7 @@ bool MaterialFile2::parseViewerInfo(const json& viewerInfoDoc)
 				}
 
 				_materials[materialName] = material;
+				_stateSetIDMaterial[material.StateSetID] = materialName;
 			}
 		}
 	}
