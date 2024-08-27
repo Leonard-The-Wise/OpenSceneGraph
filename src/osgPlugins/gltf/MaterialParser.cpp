@@ -135,6 +135,15 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 		}
 	}
 
+	if (channelValue.contains("refractionColor") && channelValue["refractionColor"].is_array())
+	{
+		returnInfo.RefractionColor.resize(3);
+		for (int i = 0; i < 3 && i < channelValue["refractionColor"].size(); ++i)
+		{
+			returnInfo.RefractionColor[i] = channelValue["refractionColor"][i].get<double>();
+		}
+	}
+
 	if (channelValue.contains("ior"))
 	{
 		returnInfo.IOR = channelValue["ior"].get<double>();

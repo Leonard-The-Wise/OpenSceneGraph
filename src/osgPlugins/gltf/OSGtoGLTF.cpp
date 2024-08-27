@@ -342,7 +342,7 @@ static bool isEmptyNode(osg::Node* node)
 	return true;
 }
 
-unsigned getBytesInDataType(GLenum dataType)
+static unsigned getBytesInDataType(GLenum dataType)
 {
 	return
 		dataType == TINYGLTF_PARAMETER_TYPE_BYTE || dataType == TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE ? 1 :
@@ -351,18 +351,18 @@ unsigned getBytesInDataType(GLenum dataType)
 		0;
 }
 
-unsigned getBytesPerElement(const osg::Array* data)
+static unsigned getBytesPerElement(const osg::Array* data)
 {
 	return data->getDataSize() * getBytesInDataType(data->getDataType());
 }
 
-unsigned getBytesPerElement(const osg::DrawElements* data)
-{
-	return
-		dynamic_cast<const osg::DrawElementsUByte*>(data) ? 1 :
-		dynamic_cast<const osg::DrawElementsUShort*>(data) ? 2 :
-		4;
-}
+//static unsigned getBytesPerElement(const osg::DrawElements* data)
+//{
+//	return
+//		dynamic_cast<const osg::DrawElementsUByte*>(data) ? 1 :
+//		dynamic_cast<const osg::DrawElementsUShort*>(data) ? 2 :
+//		4;
+//}
 
 static std::string getLastNamePart(const std::string& input)
 {
@@ -373,7 +373,7 @@ static std::string getLastNamePart(const std::string& input)
 	return input;
 }
 
-bool hasMatrixParent(const osg::Node& object)
+static bool hasMatrixParent(const osg::Node& object)
 {
 	if (dynamic_cast<const osg::MatrixTransform*>(&object))
 		return true;
@@ -384,14 +384,14 @@ bool hasMatrixParent(const osg::Node& object)
 	return hasMatrixParent(*object.getParent(0));
 }
 
-void buildMaterials()
+static void buildMaterials()
 {
 	std::string viewerInfoFile = std::string("viewer_info.json");
 	std::string textureInfoFile = std::string("texture_info.json");
 	std::ignore = meshMaterials.readMaterialFile(viewerInfoFile, textureInfoFile);
 }
 
-osg::Texture::FilterMode getFilterModeFromString(const std::string& filterMode)
+static osg::Texture::FilterMode getFilterModeFromString(const std::string& filterMode)
 {
 	if (filterMode == "LINEAR") return osg::Texture::FilterMode::LINEAR;
 	if (filterMode == "LINEAR_MIPMAP_LINEAR") return osg::Texture::FilterMode::LINEAR_MIPMAP_LINEAR;
@@ -403,7 +403,7 @@ osg::Texture::FilterMode getFilterModeFromString(const std::string& filterMode)
 	return osg::Texture::FilterMode::LINEAR;
 }
 
-osg::Texture::WrapMode getWrapModeFromString(const std::string& wrapMode)
+static osg::Texture::WrapMode getWrapModeFromString(const std::string& wrapMode)
 {
 	if (wrapMode == "CLAMP_TO_EDGE") return osg::Texture::WrapMode::CLAMP_TO_EDGE;
 	if (wrapMode == "CLAMP_TO_BORDER") return osg::Texture::WrapMode::CLAMP_TO_BORDER;
@@ -413,7 +413,7 @@ osg::Texture::WrapMode getWrapModeFromString(const std::string& wrapMode)
 	return osg::Texture::WrapMode::REPEAT;
 }
 
-bool getShapeAttributeI(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, int& value)
+static bool getShapeAttributeI(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, int& value)
 {
 	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
 	{
@@ -426,7 +426,7 @@ bool getShapeAttributeI(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAtt
 	return false;
 }
 
-bool getShapeAttributeD(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, double& value)
+static bool getShapeAttributeD(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, double& value)
 {
 	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
 	{
@@ -444,7 +444,7 @@ bool getShapeAttributeD(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAtt
 	return false;
 }
 
-bool getShapeAttributeStr(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, std::string& value)
+static bool getShapeAttributeStr(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeAttrList, const std::string& name, std::string& value)
 {
 	for (const osgSim::ShapeAttribute& attr : *shapeAttrList)
 	{
@@ -458,7 +458,7 @@ bool getShapeAttributeStr(const osg::ref_ptr<osgSim::ShapeAttributeList>& shapeA
 }
 
 
-bool isValidArrayString(const std::string& str) {
+static bool isValidArrayString(const std::string& str) {
 	if (str.empty() || str.front() != '[' || str.back() != ']') {
 		return false;
 	}
@@ -472,7 +472,7 @@ bool isValidArrayString(const std::string& str) {
 	return true;
 }
 
-std::vector<double> parseStringToDoubleArray(const std::string& str) {
+static std::vector<double> parseStringToDoubleArray(const std::string& str) {
 	std::vector<double> result;
 
 	if (!isValidArrayString(str)) {
@@ -493,7 +493,7 @@ std::vector<double> parseStringToDoubleArray(const std::string& str) {
 	return result;
 }
 
-std::string stripAllExtensions(const std::string& filename)
+static std::string stripAllExtensions(const std::string& filename)
 {
 	std::string finalName = filename;
 	while (!osgDB::getFileExtension(finalName).empty())
@@ -515,7 +515,7 @@ enum class ZeroTexture {
 	R, G, B, A
 };
 
-std::string makeZeroTexture(const std::string& redChannelFile, ZeroTexture textureType, double factor = 0.0)
+static std::string makeZeroTexture(const std::string& redChannelFile, ZeroTexture textureType, double factor = 0.0)
 {
 	std::string outputFileName = stripAllExtensions(redChannelFile) + ".combined.png";
 
@@ -595,8 +595,39 @@ std::string makeZeroTexture(const std::string& redChannelFile, ZeroTexture textu
 	return outputFileName;
 }
 
+std::string invertTexture(const std::string& redChannelFile)
+{
+	std::string outputFileName = stripAllExtensions(redChannelFile) + ".i.png";
 
-std::string combineTextures(const std::string& rgbFile, const std::string& redChannelFile) 
+	if (osgDB::fileExists("textures\\" + outputFileName))
+		return outputFileName;
+
+	int rWidth, rHeight, rChannels;
+	unsigned char* redData = stbi_load(std::string("textures\\" + stripAllExtensions(redChannelFile) + ".png").c_str(), &rWidth, &rHeight, &rChannels, 1);
+	if (!redData) {
+		OSG_WARN << "Error loading R channel texture " << redChannelFile << " to invert!" << std::endl;
+		return redChannelFile;
+	}
+
+	unsigned char* combinedData = new unsigned char[rWidth * rHeight];
+
+	for (int i = 0; i < rWidth * rHeight; ++i)
+	{
+		combinedData[i] = 255 - redData[i];	// R
+	}
+
+	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), rWidth, rHeight, rChannels, combinedData, rWidth);
+
+	stbi_image_free(redData);
+	delete[] combinedData;
+
+	OSG_NOTICE << "Created new texture " << outputFileName << " to invert channel of " << redChannelFile << "." << std::endl;
+	OSG_NOTICE << "You may manually remove " << redChannelFile << " later if you want." << std::endl;
+
+	return outputFileName;
+}
+
+static std::string combineTextures(const std::string& rgbFile, const std::string& redChannelFile)
 {
 	std::string outputFileName = stripAllExtensions(rgbFile) + ".a-combined.png";
 
@@ -605,14 +636,16 @@ std::string combineTextures(const std::string& rgbFile, const std::string& redCh
 
 	int width, height, channels;
 	unsigned char* rgbData = stbi_load(std::string("textures\\" + stripAllExtensions(rgbFile) + ".png").c_str(), &width, &height, &channels, 3);
-	if (!rgbData) {
+	if (!rgbData) 
+	{
 		OSG_WARN << "Error loading RGB texture " << rgbFile << " to combine!" << std::endl;
 		return rgbFile;
 	}
 
 	int rWidth, rHeight, rChannels;
 	unsigned char* redData = stbi_load(std::string("textures\\" + stripAllExtensions(redChannelFile) + ".png").c_str(), &rWidth, &rHeight, &rChannels, 1);
-	if (!redData || rWidth != width || rHeight != height) {
+	if (!redData || rWidth != width || rHeight != height || rChannels > 1) 
+	{
 		OSG_WARN << "Error loading R channel texture " << redChannelFile << " to combine or incompatible channels!" << std::endl;
 		stbi_image_free(rgbData);
 		return rgbFile;
@@ -639,7 +672,7 @@ std::string combineTextures(const std::string& rgbFile, const std::string& redCh
 	return outputFileName;
 }
 
-std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, const std::string& metallicFile) 
+static std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, const std::string& metallicFile)
 {
 	std::string outputFileName = stripAllExtensions(roughnessFile) + ".m-combined.png";
 
@@ -648,14 +681,15 @@ std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, c
 
 	int width, height, channels;
 	unsigned char* roughnessData = stbi_load(std::string("textures\\" + stripAllExtensions(roughnessFile) + ".png").c_str(), &width, &height, &channels, 1);
-	if (!roughnessData) {
+	if (!roughnessData || channels > 1)
+	{
 		OSG_WARN << "Error loading roughness texture " << roughnessFile << "!" << std::endl;
 		return roughnessFile;
 	}
 
 	int mWidth, mHeight, mChannels;
 	unsigned char* metallicData = stbi_load(std::string("textures\\" + stripAllExtensions(metallicFile) + ".png").c_str(), &mWidth, &mHeight, &mChannels, 1);
-	if (!metallicData || mWidth != width || mHeight != height) {
+	if (!metallicData || mWidth != width || mHeight != height || mChannels > 1) {
 		OSG_WARN << "Error loading metallic texture or incompatible size! [" << metallicFile << "]" << std::endl;
 		stbi_image_free(roughnessData);
 		return roughnessFile;
@@ -1948,14 +1982,22 @@ int OSGtoGLTF::getCurrentMaterial(osg::Geometry* geometry)
 	return materialIndex;
 }
 
+int OSGtoGLTF::getNewMaterialTexCoord(int materialIndex, int originalTexCoord)
+{
+	int texCoord = 0;
+	if (_texcoordsMap.find(originalTexCoord) != _texcoordsMap.end())
+		texCoord = _texcoordsMap[originalTexCoord];
+
+	_materialTexCoords[materialIndex].emplace(texCoord);
+
+	return texCoord;
+}
+
 int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo, const std::string& textureNameOverride)
 {
 	std::string fileName = stripAllExtensions(texInfo.Name) + ".png";
 	if (textureNameOverride != "")
 		fileName = stripAllExtensions(textureNameOverride) + ".png";
-
-	if (!osgDB::fileExists("textures\\" + fileName))
-		return -1;
 
 	fileName = "textures/" + fileName;
 
@@ -2044,7 +2086,7 @@ int OSGtoGLTF::getCurrentMaterialV2(osg::Geometry* geometry)
 			return -1;
 	}
 
-	auto& knownMaterial = knownMaterials.at(materialName);
+	MaterialInfo2 knownMaterial = knownMaterials.at(materialName);
 
 	return createGltfMaterialV2(knownMaterial);
 }
@@ -2281,46 +2323,85 @@ int OSGtoGLTF::createGltfMaterialFromStateset(osg::ref_ptr<osg::StateSet> stateS
 	return materialIndex;
 }
 
-int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
+int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 {
 	tinygltf::Material material;
 	material.name = materialInfo.Name;
+	int materialIndex = _model.materials.size();
 
 	material.doubleSided = !materialInfo.BackfaceCull;
 
+ /*
+		enforceWorkflow: function() {
+                var e = this.getChannels()
+                  , t = e.MetalnessPBR.getEnable();
+                e.AlbedoPBR.setEnable(t),
+                e.SpecularF0.setEnable(t),
+                e.DiffusePBR.setEnable(!t),
+                e.SpecularPBR.setEnable(!t);
+                var i = e.RoughnessPBR.getEnable();
+                e.GlossinessPBR.setEnable(!i),
+                e.BumpMap.getEnable() && e.NormalMap.getEnable() && e.BumpMap.setEnable(!1)
+ */
+
+	bool metalnessPBR = false;
+	bool roughnessPBR = false;
+	if (materialInfo.Channels.find("MetalnessPBR") != materialInfo.Channels.end())
+		metalnessPBR = materialInfo.Channels.at("MetalnessPBR").Enable;
+	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end())
+		materialInfo.Channels.at("AlbedoPBR").Enable = metalnessPBR;
+	if (materialInfo.Channels.find("SpecularF0") != materialInfo.Channels.end())
+		materialInfo.Channels.at("SpecularF0").Enable = metalnessPBR;
+	if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end())
+		materialInfo.Channels.at("DiffusePBR").Enable = !metalnessPBR;
+	if (materialInfo.Channels.find("SpecularPBR") != materialInfo.Channels.end())
+		materialInfo.Channels.at("SpecularPBR").Enable = !metalnessPBR;
+
+	if (materialInfo.Channels.find("RoughnessPBR") != materialInfo.Channels.end())
+		roughnessPBR = materialInfo.Channels.at("RoughnessPBR").Enable;
+	if (materialInfo.Channels.find("GlossinessPBR") != materialInfo.Channels.end())
+		materialInfo.Channels.at("GlossinessPBR").Enable = !roughnessPBR;
+
+	if ((materialInfo.Channels.find("BumpMap") != materialInfo.Channels.end() && materialInfo.Channels.at("BumpMap").Enable)
+		&& (materialInfo.Channels.find("NormalMap") != materialInfo.Channels.end() && materialInfo.Channels.at("NormalMap").Enable))
+		materialInfo.Channels.at("BumpMap").Enable = false;
+
 	// Decide which color / factor to use.
-	// Priority: AlbedoPBR, DiffuseColor, DiffusePBR
+	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
 	ChannelInfo2 activeColor;
 	ChannelInfo2 activeTexture;
+
 	bool materialHaveTextures = false;
 
-	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable)
+	// Get active color
+
+	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable && 
+		materialInfo.Channels.at("AlbedoPBR").Color.size() == 3)
 		activeColor = materialInfo.Channels.at("AlbedoPBR");
-	else if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable)
+	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable &&
+		materialInfo.Channels.at("DiffusePBR").Color.size() == 3)
+		activeColor = materialInfo.Channels.at("DiffusePBR"); 
+	else if (materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
+		materialInfo.Channels.at("DiffuseColor").Color.size() == 3)
 		activeColor = materialInfo.Channels.at("DiffuseColor");
-	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable)
-		activeColor = materialInfo.Channels.at("DiffusePBR");
 
 	if (activeColor.Enable)
 	{
-		if (activeColor.Color.size() == 3)
-			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
-		else
-			material.pbrMetallicRoughness.baseColorFactor = { activeColor.Factor, activeColor.Factor, activeColor.Factor, activeColor.Factor };
+		material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
 	}
 
 	// Decide which texture to use.
-	// Priority: AlbedoPBR, DiffuseColor, DiffusePBR
+	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
 	std::string activeTextureName;
 	if (materialInfo.Channels.find("AlbedoPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("AlbedoPBR").Enable &&
 		materialInfo.Channels.at("AlbedoPBR").Texture.Name != "")
 		activeTexture = materialInfo.Channels.at("AlbedoPBR");
+	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable &&
+		materialInfo.Channels.at("DiffusePBR").Texture.Name != "")
+		activeTexture = materialInfo.Channels.at("DiffusePBR"); 
 	else if (!materialInfo.UsePBR && materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
 		materialInfo.Channels.at("DiffuseColor").Texture.Name != "")
 		activeTexture = materialInfo.Channels.at("DiffuseColor");
-	else if (materialInfo.Channels.find("DiffusePBR") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffusePBR").Enable &&
-		materialInfo.Channels.at("DiffusePBR").Texture.Name != "")
-		activeTexture = materialInfo.Channels.at("DiffusePBR");
 
 	if (activeTexture.Enable)
 	{
@@ -2342,6 +2423,20 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	else
 		material.pbrMetallicRoughness.roughnessFactor = 0.6;  // Default values from OSGJS
 
+	// Glossiness (inverse from roughness)
+	ChannelInfo2 glossiness;
+	if (materialInfo.Channels.find("GlossinessPBR") != materialInfo.Channels.end() && materialInfo.Channels.at("GlossinessPBR").Enable)
+		glossiness = materialInfo.Channels.at("GlossinessPBR");
+	if (glossiness.Enable)
+	{
+		material.pbrMetallicRoughness.roughnessFactor = glossiness.Factor; // 1 - glossiness.Factor;
+		//Save on roughness cause it might need to reuse later
+		if (glossiness.Texture.Name != "")
+			roughnessTexture = glossiness.Texture.Name;
+			// roughnessTexture = invertTexture(glossiness.Texture.Name);
+		roughness = glossiness;
+	}
+
 	// Metallic factor
 	ChannelInfo2 metallic;
 	std::string metallicTexture;
@@ -2362,24 +2457,24 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	{
 		std::string combinedTexture = makeZeroTexture(roughnessTexture, ZeroTexture::G, metallic.Factor);
 		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture, combinedTexture);
-		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = roughness.Texture.TexCoordUnit;
+		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = getNewMaterialTexCoord(materialIndex, roughness.Texture.TexCoordUnit);
 	}
 	else if (roughnessTexture == "" && metallicTexture != "")
 	{
 		std::string combinedTexture = makeZeroTexture(metallicTexture, ZeroTexture::B, roughness.Factor);
 		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(metallic.Texture, combinedTexture);
-		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = metallic.Texture.TexCoordUnit;
+		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = getNewMaterialTexCoord(materialIndex, metallic.Texture.TexCoordUnit);
 	}
 	else if (roughnessTexture != "" && metallicTexture != "" && roughnessTexture == metallicTexture)
 	{
 		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture);
-		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = roughness.Texture.TexCoordUnit;
+		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = getNewMaterialTexCoord(materialIndex, roughness.Texture.TexCoordUnit);
 	}
 	else if (roughnessTexture != "" && metallicTexture != "" && roughnessTexture != metallicTexture)
 	{
 		std::string combinedTexture = combineRoughnessMetallicTextures(roughnessTexture, metallicTexture);
 		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureV2(roughness.Texture, combinedTexture);
-		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = roughness.Texture.TexCoordUnit;
+		material.pbrMetallicRoughness.metallicRoughnessTexture.texCoord = getNewMaterialTexCoord(materialIndex, roughness.Texture.TexCoordUnit);
 	}
 
 
@@ -2387,6 +2482,14 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	ChannelInfo2 clearCoat;
 	if (materialInfo.Channels.find("ClearCoat") != materialInfo.Channels.end())
 		clearCoat = materialInfo.Channels.at("ClearCoat");
+
+	ChannelInfo2 clearCoatRoughness;
+	if (materialInfo.Channels.find("ClearCoatRoughness") != materialInfo.Channels.end())
+		clearCoatRoughness = materialInfo.Channels.at("ClearCoatRoughness");
+
+	ChannelInfo2 clearCoatNormal;
+	if (materialInfo.Channels.find("ClearCoatNormalMap") != materialInfo.Channels.end())
+		clearCoatNormal = materialInfo.Channels.at("ClearCoatNormalMap");
 
 	ChannelInfo2 opacity;
 	if (materialInfo.Channels.find("Opacity") != materialInfo.Channels.end())
@@ -2414,7 +2517,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 
 
 	// Clear coat present. Computes if we don't have opacity with refraction.
-	if (clearCoat.Enable && !(opacity.Enable && opacity.Type == "refraction"))
+	if ((clearCoat.Enable) && !(opacity.Enable && opacity.Type == "refraction"))
 	{
 		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_clearcoat") == _model.extensionsUsed.end())
 		{
@@ -2427,14 +2530,10 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		{
 			tinygltf::Value::Object clearcoatTexture;
 			clearcoatTexture["index"] = tinygltf::Value(createTextureV2(clearCoat.Texture));
-			clearcoatTexture["texCoord"] = tinygltf::Value(clearCoat.Texture.TexCoordUnit);
+			clearcoatTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, clearCoat.Texture.TexCoordUnit));
 			clearcoatExtension["clearcoatTexture"] = tinygltf::Value(clearcoatTexture);
 			materialHaveTextures = true;
 		}
-
-		ChannelInfo2 clearCoatRoughness;
-		if (materialInfo.Channels.find("ClearCoatRoughness") != materialInfo.Channels.end())
-			clearCoatRoughness = materialInfo.Channels.at("ClearCoatRoughness");
 
 		if (clearCoatRoughness.Enable)
 		{
@@ -2443,21 +2542,17 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 			{
 				tinygltf::Value::Object clearcoatRoughnessTexture;
 				clearcoatRoughnessTexture["index"] = tinygltf::Value(createTextureV2(clearCoatRoughness.Texture));
-				clearcoatRoughnessTexture["texCoord"] = tinygltf::Value(clearCoatRoughness.Texture.TexCoordUnit);
+				clearcoatRoughnessTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, clearCoatRoughness.Texture.TexCoordUnit));
 				clearcoatExtension["clearcoatRoughnessTexture"] = tinygltf::Value(clearcoatRoughnessTexture);
 				materialHaveTextures = true;
 			}
 		}
 
-		ChannelInfo2 clearCoatNormal;
-		if (materialInfo.Channels.find("ClearCoatNormalMap") != materialInfo.Channels.end())
-			clearCoatNormal = materialInfo.Channels.at("ClearCoatNormalMap");
-
 		if (clearCoatNormal.Enable && clearCoatNormal.Texture.Name != "")
 		{
 			tinygltf::Value::Object clearcoatNormalTexture;
 			clearcoatNormalTexture["index"] = tinygltf::Value(createTextureV2(clearCoatNormal.Texture));
-			clearcoatNormalTexture["texCoord"] = tinygltf::Value(clearCoatNormal.Texture.TexCoordUnit);
+			clearcoatNormalTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, clearCoatNormal.Texture.TexCoordUnit));
 			clearcoatExtension["clearcoatNormalTexture"] = tinygltf::Value(clearcoatNormalTexture);
 			materialHaveTextures = true;
 		}
@@ -2480,8 +2575,14 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 				activeTexture = alphaMask;
 				activeTextureName = alphaMask.Texture.Name;
 			}
-			else
+			else if (activeTexture.Texture.TexCoordUnit == alphaMask.Texture.TexCoordUnit)
+			{
 				activeTextureName = combineTextures(activeTexture.Texture.Name, alphaMask.Texture.Name);
+			}
+			else
+			{
+				OSG_WARN << "WARNING: Could not combine " << activeTexture.Texture.Name << " and " << alphaMask.Texture.Name << " because they use differente TEXCOORDS" << std::endl;
+			}
 		}
 	}
 
@@ -2575,6 +2676,10 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 			OSG_WARN << "WARNING: Material '" << material.name << "' contains a refraction channel, which can be innacurate in GLTF. We convert it to " <<
 				"an opaque Transmission + IOR + Coat pipeline, but you may need to remove them and adjust it to 'Alpha Blend' later or review its transparencies." << std::endl;
 
+			// Override base color
+			if (opacity.RefractionColor.size() == 3)
+				material.pbrMetallicRoughness.baseColorFactor = { opacity.RefractionColor[0], opacity.RefractionColor[1], opacity.RefractionColor[2], opacity.Factor };
+
 			if (opacity.IOR > -1.0)
 			{
 				if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
@@ -2619,17 +2724,22 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 				activeTextureName = makeZeroTexture(opacity.Texture.Name, ZeroTexture::A);
 				activeTexture = opacity;
 			}
-			else
+			else if (activeTexture.Texture.TexCoordUnit == opacity.Texture.TexCoordUnit)
+			{
 				activeTextureName = combineTextures(activeTexture.Texture.Name, opacity.Texture.Name);
+			}
+			else
+			{
+				OSG_WARN << "WARNING: Could not combine " << activeTexture.Texture.Name << " and " << opacity.Texture.Name << " because they use differente TEXCOORDS" << std::endl;
+			}
 		}
-
 	}
 
 	// Create standalone or Opacity combined texture for AlbedoPBR/Diffuse/DiffuseColor
 	if (activeTextureName != "")
 	{
 		material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(activeTexture.Texture, activeTextureName);
-		material.pbrMetallicRoughness.baseColorTexture.texCoord = activeTexture.Texture.TexCoordUnit;
+		material.pbrMetallicRoughness.baseColorTexture.texCoord = getNewMaterialTexCoord(materialIndex, activeTexture.Texture.TexCoordUnit);
 	}
 
 	// Ambient Occlusion
@@ -2639,7 +2749,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	if (aoPBR.Enable && aoPBR.Texture.Name != "")
 	{
 		material.occlusionTexture.index = createTextureV2(aoPBR.Texture);
-		material.occlusionTexture.texCoord = aoPBR.Texture.TexCoordUnit;
+		material.occlusionTexture.texCoord = getNewMaterialTexCoord(materialIndex, aoPBR.Texture.TexCoordUnit);
 		material.occlusionTexture.strength = aoPBR.Factor;
 	}
 
@@ -2659,7 +2769,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		{
 			tinygltf::Value::Object sheenColorTexture;
 			sheenColorTexture["index"] = tinygltf::Value(createTextureV2(sheen.Texture));
-			sheenColorTexture["texCoord"] = tinygltf::Value(sheen.Texture.TexCoordUnit);
+			sheenColorTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, sheen.Texture.TexCoordUnit));
 			sheenExtension["sheenColorTexture"] = tinygltf::Value(sheenColorTexture);
 			materialHaveTextures = true;
 		}
@@ -2674,7 +2784,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	if (materialInfo.Channels.find("EmitColor") != materialInfo.Channels.end() && materialInfo.Channels.at("EmitColor").Enable)
 		emissive = materialInfo.Channels.at("EmitColor");
 
-	if (emissive.Enable && emissive.Factor > 0.0)
+	if (emissive.Enable && (emissive.Color.size() == 3 || emissive.Factor > 0.0))
 	{
 		if (emissive.Color.size() == 3)
 			material.emissiveFactor = { emissive.Color[0], emissive.Color[1], emissive.Color[2] };
@@ -2694,15 +2804,25 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		if (emissive.Texture.Name != "" && activeTexture.Enable)
 		{
 			material.emissiveTexture.index = createTextureV2(emissive.Texture);
-			material.emissiveTexture.texCoord = emissive.Texture.TexCoordUnit;
+			material.emissiveTexture.texCoord = getNewMaterialTexCoord(materialIndex, emissive.Texture.TexCoordUnit);
 			materialHaveTextures = true;
 		}
 		else if (emissive.Texture.Name != "" && !activeTexture.Enable)
 		{
 			material.pbrMetallicRoughness.baseColorTexture.index = createTextureV2(emissive.Texture);
-			material.pbrMetallicRoughness.baseColorTexture.texCoord = emissive.Texture.TexCoordUnit;
+			material.pbrMetallicRoughness.baseColorTexture.texCoord = getNewMaterialTexCoord(materialIndex, emissive.Texture.TexCoordUnit);
 			materialHaveTextures = true;
 		}
+	}
+
+	// Bump map texture
+	ChannelInfo2 bump;
+	if (materialInfo.Channels.find("BumpMap") != materialInfo.Channels.end() && materialInfo.Channels.at("BumpMap").Enable)
+		bump = materialInfo.Channels.at("BumpMap");
+	if (bump.Enable && bump.Texture.Name != "")
+	{
+		material.normalTexture.index = createTextureV2(bump.Texture);
+		material.normalTexture.texCoord = getNewMaterialTexCoord(materialIndex, bump.Texture.TexCoordUnit);
 	}
 
 	// Normal map texture
@@ -2712,7 +2832,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	if (normal.Enable && normal.Texture.Name != "")
 	{
 		material.normalTexture.index = createTextureV2(normal.Texture);
-		material.normalTexture.texCoord = normal.Texture.TexCoordUnit;
+		material.normalTexture.texCoord = getNewMaterialTexCoord(materialIndex, normal.Texture.TexCoordUnit);
 	}
 
 	// Specular Color (for classic render)
@@ -2732,7 +2852,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		{
 			tinygltf::Value::Object specularTexture;
 			specularTexture["index"] = tinygltf::Value(createTextureV2(specularColor.Texture));
-			specularTexture["texCoord"] = tinygltf::Value(specularColor.Texture.TexCoordUnit);
+			specularTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, specularColor.Texture.TexCoordUnit));
 			specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
 			materialHaveTextures = true;
 		}
@@ -2762,7 +2882,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		{
 			tinygltf::Value::Object specularTexture;
 			specularTexture["index"] = tinygltf::Value(createTextureV2(specularPBR.Texture));
-			specularTexture["texCoord"] = tinygltf::Value(specularPBR.Texture.TexCoordUnit);
+			specularTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, specularPBR.Texture.TexCoordUnit));
 			specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
 			materialHaveTextures = true;
 		}
@@ -2788,7 +2908,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 		{
 			tinygltf::Value::Object specularTexture;
 			specularTexture["index"] = tinygltf::Value(createTextureV2(specularF0.Texture));
-			specularTexture["texCoord"] = tinygltf::Value(specularF0.Texture.TexCoordUnit);
+			specularTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, specularF0.Texture.TexCoordUnit));
 			specularExtension["specularTexture"] = tinygltf::Value(specularTexture);
 			materialHaveTextures = true;
 		}
@@ -2812,7 +2932,7 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 
 		tinygltf::Value::Object anisotropyTexture;
 		anisotropyTexture["index"] = tinygltf::Value(createTextureV2(anisotropy.Texture));
-		anisotropyTexture["texCoord"] = tinygltf::Value(anisotropy.Texture.TexCoordUnit);
+		anisotropyTexture["texCoord"] = tinygltf::Value(getNewMaterialTexCoord(materialIndex, anisotropy.Texture.TexCoordUnit));
 		anisotropyExtension["anisotropyTexture"] = tinygltf::Value(anisotropyTexture);
 
 		material.extensions["KHR_materials_anisotropy"] = tinygltf::Value(anisotropyExtension);
@@ -2821,7 +2941,6 @@ int OSGtoGLTF::createGltfMaterialV2(const MaterialInfo2& materialInfo)
 	}
 
 	// Emplace material on collection
-	int materialIndex = _model.materials.size();
 	_model.materials.push_back(material);
 
 	_gltfMaterials.emplace(materialInfo.Name, materialIndex);
@@ -3074,8 +3193,6 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		return;
 	}
 
-	OSG_NOTICE << "Building Mesh: " << geomName << " [" << positions->getNumElements() << " vertices]" << std::endl;
-
 	_model.meshes.push_back(tinygltf::Mesh());
 	tinygltf::Mesh& mesh = _model.meshes.back();
 	int meshID = _model.meshes.size() - 1;
@@ -3083,6 +3200,9 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	int meshNodeId = _model.nodes.size() - 1;
 	mesh.name = geomName;
 
+	OSG_NOTICE << "Building Mesh: " << (geomName.empty() ? std::to_string(meshID) : geomName) << " [" << positions->getNumElements() << " vertices]" << std::endl;
+
+	// Parse geometry
 	if (rigGeometry)
 	{
 		_riggedMeshMap[meshID] = rigGeometry;
@@ -3133,6 +3253,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 	osg::ref_ptr<osg::Vec4Array> tangents;
 	osg::ref_ptr<osg::Vec4dArray> tangentsd;
+
 	for (auto& attrib : geom->getVertexAttribArrayList())
 	{
 		bool isTangent = false;
@@ -3168,6 +3289,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		tangents = transformArray(tangents, identity, true); // just normalize vector
 	}
 
+
 	// Get colors
 	osg::ref_ptr<osg::Vec4Array> colors = dynamic_cast<osg::Vec4Array*>(geom->getColorArray());
 
@@ -3181,6 +3303,9 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		colors = doubleToFloatArray<osg::Vec4Array>(colorsd);
 
 	std::map<int, osg::ref_ptr<osg::Vec2Array>> texcoordMap;
+	
+	int realtexCoord = 0;
+	_texcoordsMap.clear();
 	for (int i = 0; i < geom->getTexCoordArrayList().size(); i++)
 	{
 		osg::Array* basetexcoords = geom->getTexCoordArray(i);
@@ -3211,36 +3336,11 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			texCoords = flipUVs(texCoords);
 			texcoordMap[i] = texCoords;
 		}
+
+		_texcoordsMap[i] = realtexCoord++;
 	}
 
-	//osg::Array* basetexcoords;
-	//// Get the first texCoord array avaliable
-	//for (int i = 0; i < 32; i++)
-	//	if (basetexcoords = geom->getTexCoordArray(i))
-	//		break;
-
-	//osg::ref_ptr<osg::Vec2Array> texCoords = dynamic_cast<osg::Vec2Array*>(basetexcoords);
-	//osg::ref_ptr<osg::Vec2dArray> texCoordsd = dynamic_cast<osg::Vec2dArray*>(basetexcoords);
-	//if (texCoordsd)
-	//	texCoords = doubleToFloatArray<osg::Vec2Array>(texCoordsd);
-
-	//if (!texCoords.valid())
-	//{                
-	//	// See if we have 3d texture coordinates and convert them to vec2
-	//	osg::Vec3Array* texCoords3 = dynamic_cast<osg::Vec3Array*>(geom->getTexCoordArray(0));
-	//	if (texCoords3)
-	//	{
-	//		texCoords = new osg::Vec2Array;
-	//		for (unsigned int i = 0; i < texCoords3->size(); i++)
-	//		{
-	//			texCoords->push_back(osg::Vec2((*texCoords3)[i].x(), (*texCoords3)[i].y()));
-	//		}
-	//	}
-	//}
-
-	//if (texCoords)
-	//	texCoords = flipUVs(texCoords);
-
+	// Get current material first
 	int currentMaterial = getCurrentMaterialV2(geom);
 	bool materialHaveTextures = _materialsWithTextures.find(currentMaterial) != _materialsWithTextures.end();
 
@@ -3264,7 +3364,8 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 						break;
 					}
 				}
-				OSG_WARN << "WARNING: mesh '" << geomName << "' has textured material '" << materialName << "' but no texcoords." << std::endl;
+				OSG_WARN << "WARNING: mesh '" << (geomName.empty() ? std::to_string(meshID) : geomName) << 
+					"' has textured material '" << materialName << "' but no texcoords." << std::endl;
 
 				// Create fake texcoords so we don't get error while importing
 				osg::ref_ptr<osg::Vec2Array> texCoords = new osg::Vec2Array();
@@ -3309,9 +3410,27 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 			if (texcoordMap.size() > 0)
 			{
+				std::set<int> missingTexCoords;
+				missingTexCoords.insert(_materialTexCoords[currentMaterial].begin(), _materialTexCoords[currentMaterial].end());
 				for (auto& texCoord : texcoordMap)
 				{
-					getOrCreateGeometryAccessor(texCoord.second.get(), nullptr, primitive, "TEXCOORD_" + std::to_string(texCoord.first));
+					getOrCreateGeometryAccessor(texCoord.second.get(), nullptr, primitive, "TEXCOORD_" + std::to_string(_texcoordsMap[texCoord.first]));
+					missingTexCoords.erase(_texcoordsMap[texCoord.first]);
+				}
+
+				if (missingTexCoords.size() > 0)
+				{
+					std::string materialName;
+					for (auto& itr : _gltfMaterials)
+					{
+						if (itr.second == currentMaterial)
+						{
+							materialName = itr.first;
+						}
+					}
+
+					OSG_WARN << "WARNING: Material '" << materialName << "' is incompatible with mesh " << (geomName.empty() ? std::to_string(meshID) : geomName)
+						<< " because of one or more missing TEXCOORDS." << std::endl;
 				}
 			}
 		}

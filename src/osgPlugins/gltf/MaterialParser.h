@@ -32,6 +32,7 @@ namespace osgJSONParser
 		std::vector<float> Color;
 		std::vector<float> ColorFactor;
 		std::vector<float> Tint;
+		std::vector<float> RefractionColor;
 		TextureInfo2 Texture;
 
 		ChannelInfo2() :

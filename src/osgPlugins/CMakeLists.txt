@@ -277,6 +277,7 @@ IF(LIBLAS_FOUND)
 ENDIF()
 
 ADD_PLUGIN_DIRECTORY(gltf)
+ADD_PLUGIN_DIRECTORY(mview)
 
 ####################################################
 #
