@@ -2951,6 +2951,10 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 	return materialIndex;
 }
 
+int OSGtoGLTF::getCurrentMaterialMview(osg::Geometry* geometry)
+{
+	return -1;
+}
 
 #pragma endregion
 
@@ -3340,8 +3344,16 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 		_texcoordsMap[i] = realtexCoord++;
 	}
 
-	// Get current material first
-	int currentMaterial = getCurrentMaterialV2(geom);
+	// Get current material
+	std::string modelType;
+	geom->getUserValue("ModelType", modelType);
+
+	int currentMaterial = -1;
+	if (modelType == "mview")
+		currentMaterial = getCurrentMaterialMview(geom);
+	else
+		currentMaterial = getCurrentMaterialV2(geom);
+
 	bool materialHaveTextures = _materialsWithTextures.find(currentMaterial) != _materialsWithTextures.end();
 
 	for (unsigned i = 0; i < geom->getNumPrimitiveSets(); ++i)

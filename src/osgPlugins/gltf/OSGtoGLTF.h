@@ -181,6 +181,8 @@ private:
 
     int createGltfMaterialV2(osgJSONParser::MaterialInfo2& materialInfo);
 
+    int getCurrentMaterialMview(osg::Geometry* geometry);
+
 public:
     OSGtoGLTF(tinygltf::Model& model) :
         _model(model), _firstMatrix(true), _firstNamedMatrix(true), _firstMatrixNode(nullptr)
