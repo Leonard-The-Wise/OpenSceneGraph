@@ -169,6 +169,12 @@ namespace pluginfbx
 			curveY = animCurveNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
 			curveZ = animCurveNode->LclScaling.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
 		}
+		else if (channelName == "rotate")
+		{
+			curveX = animCurveNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+			curveY = animCurveNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+			curveZ = animCurveNode->LclRotation.GetCurve(fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+		}
 		else
 		{
 			OSG_WARN << "WARNING: Animation channel contains invalid name: " << channelName << std::endl;
@@ -237,6 +243,8 @@ namespace pluginfbx
 			_stackedMatrices.at(animCurveNode).decompose(t, stackedRotate, s, so);
 		}
 
+		std::vector<osg::Vec3> rotateTempArray;
+
 		for (unsigned int i = 0; i < keyframes.size(); ++i)
 		{
 			osgAnimation::QuatKeyframe& keyframe = keyframes[i];
@@ -250,6 +258,7 @@ namespace pluginfbx
 			mat.SetQ(q);
 			FbxVector4 vec4 = mat.GetR();
 			FbxDouble3 euler = FbxDouble3(vec4[0], vec4[1], vec4[2]);
+			rotateTempArray.push_back(osg::Vec3(vec4[0], vec4[1], vec4[2]));
 
 			curveX->KeySet(curveX->KeyAdd(fbxTime), fbxTime, euler[0], FbxAnimCurveDef::eInterpolationLinear);
 			curveY->KeySet(curveY->KeyAdd(fbxTime), fbxTime, euler[1], FbxAnimCurveDef::eInterpolationLinear);
