@@ -258,8 +258,8 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
         rootMatrix->addChild(meshSkeleton);
         //rootMatrix->setMatrix(osg::Matrixd::rotate(osg::Z_AXIS, -osg::Y_AXIS));
 
-        osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager();
-        rootNode->addUpdateCallback(bam);
+        //osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager();
+        //rootNode->addUpdateCallback(bam);
     }
     else
     {
@@ -419,7 +419,7 @@ osg::Matrix MViewParser::MViewReader::createBoneTransform(AnimatedObject& modelP
     osg::Matrix intermediateMatrix = linkTransform * invertedPartTransform;
 
     // 3. Multiplicação pela transformação base do cluster
-    osg::Matrix boneTransform = defaultClusterBaseTransform * intermediateMatrix;
+    osg::Matrix boneTransform = intermediateMatrix * defaultClusterBaseTransform;
 
     return boneTransform;
 }
@@ -529,11 +529,15 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
         osg::ref_ptr<osgAnimation::Bone> newBone = new osgAnimation::Bone();
         newBone->setName(_modelBonePartNames[id]);
 
-        osg::Matrix invBindMatrix = createBoneTransform(*_bonesToModelPartAndLinkObject[name].first,
-            *_bonesToModelPartAndLinkObject[name].second, modelBone.second.linkMode, modelBone.second.defaultClusterBaseTransform,
+        AnimatedObject& modelPart = *_bonesToModelPartAndLinkObject[name].first;
+        AnimatedObject& linkObject = *_bonesToModelPartAndLinkObject[name].second;
+
+        osg::Matrix outputMatrix = createBoneTransform(modelPart, linkObject, 
+            modelBone.second.linkMode, modelBone.second.defaultClusterBaseTransform,
             modelBone.second.defaultClusterWorldTransform);        
 
-        osg::Matrix boneTransform = extractBoneTransform(invBindMatrix, modelBone.second.defaultClusterBaseTransform);
+        osg::Matrix boneTransform = extractBoneTransform(outputMatrix, modelBone.second.defaultClusterBaseTransform);
+        osg::Matrix invBindMatrix = modelBone.second.defaultClusterBaseTransform;
 
         newBone->setMatrix(boneTransform);
         newBone->setInvBindMatrixInSkeletonSpace(invBindMatrix);
