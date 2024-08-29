@@ -86,7 +86,7 @@ namespace MViewParser
 
 		AnimatedObject(const MViewFile::Archive& archive, const nlohmann::json& description, int ID);
 
-		osg::Matrix getWorldTransform();
+		const osg::Matrix getWorldTransform();
 
 	private:
 
@@ -195,7 +195,7 @@ namespace MViewParser
 			isAnimated = animated;
 		}
 
-		void setAnimatedTransform(const AnimatedObject& referenceNode);
+		void setAnimatedTransform(AnimatedObject& referenceNode);
 
 		void createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& modelBonePartNames);
 

@@ -483,6 +483,7 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
                 _meshes[realMeshID].setAnimatedTransform(nodeTransform);
             }
         }
+        break;
     }
 
     // For each bone found, try to get the best model part and link on animations that can give us matrices to calculate the bone space
@@ -918,31 +919,21 @@ const osg::ref_ptr<osg::MatrixTransform> MViewParser::Mesh::asGeometryInMatrix()
     return meshMatrix;
 }
 
-void MViewParser::Mesh::setAnimatedTransform(const AnimatedObject& referenceNode)
+void MViewParser::Mesh::setAnimatedTransform(AnimatedObject& referenceNode)
 {
-    if (referenceNode.rotation && referenceNode.translation && referenceNode.scale
-        && referenceNode.rotation->getSampler()->getKeyframeContainer()->size() == 1 
-        && referenceNode.translation->getSampler()->getKeyframeContainer()->size() == 1
-        && referenceNode.scale->getSampler()->getKeyframeContainer()->size() == 1)
-    {
-        osg::Matrix matrixT;
-        osg::Matrix animatedMatrixTransform;
+    osg::Matrix matrixT = referenceNode.getWorldTransform();
+    osg::Matrix animatedMatrixTransform;
 
-        matrixT.makeScale(referenceNode.scale->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue());
-        matrixT = osg::Matrix::rotate(referenceNode.rotation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue()) * matrixT;
-        matrixT = osg::Matrix::translate(referenceNode.translation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue()) * matrixT;
+    animatedMatrixTransform = matrixT; //* osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::X_AXIS);
 
-        animatedMatrixTransform = matrixT;
+    osg::ref_ptr<osgAnimation::UpdateMatrixTransform> updateMatrix = new osgAnimation::UpdateMatrixTransform();
+    updateMatrix->setName(name);
 
-        osg::ref_ptr<osgAnimation::UpdateMatrixTransform> updateMatrix = new osgAnimation::UpdateMatrixTransform();
-        updateMatrix->setName(name);
+    osg::ref_ptr<osgAnimation::StackedMatrixElement> sme = new osgAnimation::StackedMatrixElement();
+    sme->setMatrix(animatedMatrixTransform);
+    updateMatrix->getStackedTransforms().push_back(sme);
 
-        osg::ref_ptr<osgAnimation::StackedMatrixElement> sme = new osgAnimation::StackedMatrixElement();
-        sme->setMatrix(animatedMatrixTransform);
-        updateMatrix->getStackedTransforms().push_back(sme);
-
-        meshMatrix->addUpdateCallback(updateMatrix);
-    }
+    meshMatrix->addUpdateCallback(updateMatrix);
 }
 
 void MViewParser::Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& modelBonePartNames)
@@ -1050,7 +1041,7 @@ MViewParser::AnimatedObject::AnimatedObject(const Archive& archive, const json& 
     }
 }
 
-osg::Matrix MViewParser::AnimatedObject::getWorldTransform()
+const osg::Matrix MViewParser::AnimatedObject::getWorldTransform()
 {
     osg::Matrix worldTransform;
 
