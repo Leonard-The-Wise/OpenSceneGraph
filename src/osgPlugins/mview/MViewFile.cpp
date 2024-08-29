@@ -387,10 +387,22 @@ float ByteStream::seekFloat32(size_t index) const
     return value;
 }
 
-std::vector<float> ByteStream::getMatrix(size_t index) const
-{
-    size_t offset = 64 * index;
-    std::vector<float> matrix(16);
-    std::memcpy(matrix.data(), bytes.data() + offset, 16 * sizeof(float));
+osg::Matrix ByteStream::getMatrix(size_t index) const {
+    size_t offset = 64 * index;  
+
+    if (offset + 16 * sizeof(float) > bytes.size()) 
+    {
+        OSG_FATAL << "FATAL ERROR: Insufficient data on matrix array." << std::endl;
+        throw std::runtime_error("Insufficient data to load matrix.");
+    }
+
+    osg::Matrix matrix;
+    const float* data = reinterpret_cast<const float*>(bytes.data() + offset);
+
+    // Atribui os valores diretamente aos índices da matriz
+    for (int i = 0; i < 16; ++i) {
+        matrix.ptr()[i] = data[i];
+    }
+
     return matrix;
 }

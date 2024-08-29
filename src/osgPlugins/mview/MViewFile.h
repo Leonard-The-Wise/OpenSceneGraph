@@ -25,7 +25,7 @@ namespace MViewFile
 
     private:
 
-        std::unordered_map<std::string, ArchiveFile> files;
+        std::map<std::string, ArchiveFile> files;
 
         std::vector<uint8_t> decompress(const std::vector<uint8_t>& input, uint32_t decompressedSize);
     };
@@ -52,6 +52,8 @@ namespace MViewFile
 
     class ByteStream {
     public:
+        ByteStream() {};
+
         ByteStream(const std::vector<uint8_t>& data) : bytes(data) {}
 
         bool empty() const 
@@ -77,9 +79,8 @@ namespace MViewFile
 
         float seekFloat32(size_t index) const;
 
-        std::vector<float> getMatrix(size_t index) const;
+        osg::Matrix getMatrix(size_t index) const;
 
-    private:
         std::vector<uint8_t> bytes;
     };
 

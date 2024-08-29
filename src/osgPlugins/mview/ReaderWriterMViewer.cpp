@@ -59,16 +59,7 @@ public:
     {
         OSG_FATAL << "This plugin does not support reading MVIEW files, only writting." << std::endl;
         return ReadResult::FILE_NOT_HANDLED;
-    }
-
-    //! Writes a node to GLTF.
-    WriteResult writeNode(const osg::Node& node, const std::string& location, const osgDB::Options* options) const
-    {
-        OSG_FATAL << "This plugin does not support writting MVIEW files, only reading." << std::endl;
-            return WriteResult::FILE_NOT_HANDLED;
-
-    }
-    
+    }    
 };
 
 REGISTER_OSGPLUGIN(mview, MVIEWReaderWriter)

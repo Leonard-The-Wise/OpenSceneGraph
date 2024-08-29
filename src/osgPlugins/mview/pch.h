@@ -14,6 +14,7 @@
 
 #include <osgAnimation/RigGeometry>
 #include <osgAnimation/MorphGeometry>
+#include <osgAnimation/Skeleton>
 
 #include <osgAnimation/BasicAnimationManager>
 #include <osgAnimation/Animation>
