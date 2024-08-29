@@ -75,6 +75,7 @@ namespace MViewParser
 		int modelPartIndex;
 		int parentIndex;
 		int modelPartFPS;
+		double modelPartScale;
 
 		std::vector<AnimatedProperty> animatedProperties;
 		std::map<std::string, AnimatedProperty*> animatedPropertiesMap;
@@ -123,7 +124,7 @@ namespace MViewParser
 
 		Animation(const MViewFile::Archive& archive, const nlohmann::json& description);
 
-		const osg::ref_ptr<osgAnimation::Animation> asAnimation();
+		const osg::ref_ptr<osgAnimation::Animation> asAnimation(std::set<std::string>& outUsedTargets);
 
 	};
 
@@ -239,10 +240,12 @@ namespace MViewParser
 	{
 	public:
 
-		MViewReader() : _archive(nullptr), 
-			_modelName("Imported MVIEW Scene"), 
+		MViewReader() : _archive(nullptr),
+			_modelName("Imported MVIEW Scene"),
 			_modelVersion(0),
-			_numMatricesInTable(0)
+			_numMatricesInTable(0),
+			_sceneScale(0.0),
+			_animModelsScale(0.0)
 		{}
 
 		osgDB::ReaderWriter::ReadResult readMViewFile(const std::string& fileName);
@@ -263,22 +266,24 @@ namespace MViewParser
 
 		AnimatedObject* getAnimatedObject(std::vector<AnimatedObject>& animatedObjects, int id);
 
-		osg::Matrix createBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject, int linkMode, 
-			const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform);
-
-		osg::Matrix extractBoneTransform(const osg::Matrix& outputMatrix, const osg::Matrix& defaultClusterBaseTransform);
+		osg::Matrix MViewReader::computeBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
+			int linkMode, const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform);
 
 		osg::ref_ptr<osgAnimation::Skeleton> buildBones();
 
-		osg::ref_ptr<osgAnimation::BasicAnimationManager> buildAnimationManager();
+		osg::ref_ptr<osgAnimation::BasicAnimationManager> buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton);
 
 		MViewFile::Archive* _archive;
 		std::vector<Mesh> _meshes;
 		std::vector<SkinningRig> _skinningRigs;
 		std::vector<Animation> _animations;
 		std::map<int, std::string> _modelBonePartNames;
+		std::map<int, SkinningCluster> _modelBonePartIDs;
+		std::set<std::string> _createdBones;
 		std::map<int, int> _skinIDToMeshID;
 		std::map<int, int> _meshIDtoSkinID;
+
+
 
 		std::map<std::string, std::pair<AnimatedObject*, AnimatedObject*>> _bonesToModelPartAndLinkObject;
 		std::map<std::string, osg::Matrix> _derivedBoneMatrices;
@@ -291,5 +296,7 @@ namespace MViewParser
 		std::vector<int> _meshIDs;
 		std::vector<int> _materialIDs;
 		int _numMatricesInTable;
+		double _sceneScale;
+		double _animModelsScale;
 	};
 }
