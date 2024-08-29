@@ -825,3 +825,66 @@ ref_ptr<Array> ParserHelper::decastVector(const ref_ptr<Array>& toRecast)
 
 	return returnArray;
 }
+
+
+template <typename T>
+osg::ref_ptr<T> ParserHelper::transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, bool normalize)
+{
+	osg::ref_ptr<osg::Array> returnArray;
+	osg::Matrix transposeInverse = transform;
+	transposeInverse.transpose(transposeInverse);
+	transposeInverse = osg::Matrix::inverse(transposeInverse);
+
+	switch (array->getType())
+	{
+	case osg::Array::Vec4ArrayType:
+	{
+		returnArray = new osg::Vec4Array();
+		returnArray->reserveArray(array->getNumElements());
+		for (auto& vec : *osg::dynamic_pointer_cast<const osg::Vec4Array>(array))
+		{
+			osg::Vec4 v;
+			if (normalize)
+			{
+				osg::Vec3 tangentVec3;
+				if (vec.x() == 0.0f && vec.y() == 0.0f && vec.z() == 0.0f) // Fix non-direction vectors (paliative)
+					tangentVec3 = osg::Vec3(1.0f, 0.0f, 0.0f);
+				else
+					tangentVec3 = osg::Vec3(vec.x(), vec.y(), vec.z());
+				tangentVec3 = tangentVec3 * transposeInverse;
+				tangentVec3.normalize();
+				v = osg::Vec4(tangentVec3.x(), tangentVec3.y(), tangentVec3.z(), vec.w());
+			}
+			else
+				v = vec * transform;
+			osg::dynamic_pointer_cast<osg::Vec4Array>(returnArray)->push_back(v);
+		}
+		break;
+	}
+	case osg::Array::Vec3ArrayType:
+	{
+		returnArray = new osg::Vec3Array();
+		returnArray->reserveArray(array->getNumElements());
+		for (auto& vec : *osg::dynamic_pointer_cast<const osg::Vec3Array>(array))
+		{
+			osg::Vec3 v;
+			if (normalize)
+			{
+				v = vec * transposeInverse;
+				if (v.x() == 0.0f && v.y() == 0.0f && v.z() == 0.0f)  // Fix non-direction vector (paliative)
+					v = osg::Vec3(1.0f, 0.0f, 0.0f);
+				v.normalize();
+			}
+			else
+				v = vec * transform;
+
+			osg::dynamic_pointer_cast<osg::Vec3Array>(returnArray)->push_back(v);
+		}
+		break;
+	}
+	default:
+		OSG_WARN << "WARNING: Unsuported array to transform." << std::endl;
+	}
+
+	return osg::dynamic_pointer_cast<T>(returnArray);
+}

@@ -52,6 +52,69 @@ static osg::Vec3 convertQuatToEulerDegrees(const osg::Quat& quat) {
         radiansToDegrees(rotationZ));
 }
 
+template <typename T>
+osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, bool normalize)
+{
+    osg::ref_ptr<osg::Array> returnArray;
+    osg::Matrix transposeInverse = transform;
+    transposeInverse.transpose(transposeInverse);
+    transposeInverse = osg::Matrix::inverse(transposeInverse);
+
+    switch (array->getType())
+    {
+    case osg::Array::Vec4ArrayType:
+    {
+        returnArray = new osg::Vec4Array();
+        returnArray->reserveArray(array->getNumElements());
+        for (auto& vec : *osg::dynamic_pointer_cast<const osg::Vec4Array>(array))
+        {
+            osg::Vec4 v;
+            if (normalize)
+            {
+                osg::Vec3 tangentVec3;
+                if (vec.x() == 0.0f && vec.y() == 0.0f && vec.z() == 0.0f) // Fix non-direction vectors (paliative)
+                    tangentVec3 = osg::Vec3(1.0f, 0.0f, 0.0f);
+                else
+                    tangentVec3 = osg::Vec3(vec.x(), vec.y(), vec.z());
+                tangentVec3 = tangentVec3 * transposeInverse;
+                tangentVec3.normalize();
+                v = osg::Vec4(tangentVec3.x(), tangentVec3.y(), tangentVec3.z(), vec.w());
+            }
+            else
+                v = vec * transform;
+            osg::dynamic_pointer_cast<osg::Vec4Array>(returnArray)->push_back(v);
+        }
+        break;
+    }
+    case osg::Array::Vec3ArrayType:
+    {
+        returnArray = new osg::Vec3Array();
+        returnArray->reserveArray(array->getNumElements());
+        for (auto& vec : *osg::dynamic_pointer_cast<const osg::Vec3Array>(array))
+        {
+            osg::Vec3 v;
+            if (normalize)
+            {
+                v = vec * transposeInverse;
+                if (v.x() == 0.0f && v.y() == 0.0f && v.z() == 0.0f)  // Fix non-direction vector (paliative)
+                    v = osg::Vec3(1.0f, 0.0f, 0.0f);
+                v.normalize();
+            }
+            else
+                v = vec * transform;
+
+            osg::dynamic_pointer_cast<osg::Vec3Array>(returnArray)->push_back(v);
+        }
+        break;
+    }
+    default:
+        OSG_WARN << "WARNING: Unsuported array to transform." << std::endl;
+    }
+
+    return osg::dynamic_pointer_cast<T>(returnArray);
+}
+
+
 
 static std::vector<uint8_t> loadFileToVector(const std::string& filename)
 {
@@ -195,8 +258,8 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
         rootMatrix->addChild(meshSkeleton);
         //rootMatrix->setMatrix(osg::Matrixd::rotate(osg::Z_AXIS, -osg::Y_AXIS));
 
-        //osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager();
-        //rootNode->addUpdateCallback(bam);
+        osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager();
+        rootNode->addUpdateCallback(bam);
     }
     else
     {
@@ -321,6 +384,56 @@ int MViewParser::MViewReader::getMeshIndexFromID(int id)
     return -1;
 }
 
+int MViewParser::MViewReader::getSkinningRigIDForlinkObject(int linkID)
+{
+    for (int i = 0; i < _skinningRigs.size(); ++i)
+    {
+        for (auto& skinningCluster : _skinningRigs[i].skinningClusters)
+        {
+            if (linkID == skinningCluster.linkObjectIndex)
+                return i;
+        }
+    }
+
+    return -1;
+}
+
+AnimatedObject* MViewParser::MViewReader::getAnimatedObject(std::vector<AnimatedObject>& animatedObjects, int id)
+{
+    for (auto& animatedObject : animatedObjects)
+    {
+        if (animatedObject.id == id)
+            return &animatedObject;
+    }
+
+    return nullptr;
+}
+
+osg::Matrix MViewParser::MViewReader::createBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
+    int linkMode, const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform)
+{
+    osg::Matrix linkTransform = linkObject.getWorldTransform();
+    osg::Matrix partTransform = modelPart.getWorldTransform();
+    osg::Matrix invertedPartTransform = osg::Matrix::inverse(partTransform);
+
+    osg::Matrix intermediateMatrix = linkTransform * invertedPartTransform;
+
+    // 3. Multiplicação pela transformação base do cluster
+    osg::Matrix boneTransform = defaultClusterBaseTransform * intermediateMatrix;
+
+    return boneTransform;
+}
+
+osg::Matrix MViewParser::MViewReader::extractBoneTransform(const osg::Matrix& outputMatrix, const osg::Matrix& defaultClusterBaseTransform) 
+{
+    osg::Matrix inverseBindMatrix = osg::Matrix::inverse(defaultClusterBaseTransform);
+
+    osg::Matrix boneTransform = outputMatrix * inverseBindMatrix;
+
+    return boneTransform;
+}
+
+
 osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
 {
     osg::ref_ptr<osgAnimation::Skeleton> returnSkeleton = new osgAnimation::Skeleton();
@@ -334,7 +447,6 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
 
     // Get all bone part from skinning clusters along with cluster information
     std::map<int, SkinningCluster> modelBonePartIDs;
-    std::map<int, int> skinToMeshID;
 
     for (auto& skin : _skinningRigs)
     {
@@ -360,10 +472,12 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
                 _modelBonePartNames[animationObj.modelPartIndex] = animationObj.partName;
             }
 
-            if (animationObj.sceneObjectType == "MeshSO" && animationObj.skinningRigIndex > -1)
+            if (animationObj.sceneObjectType == "MeshSO" /* && animationObj.skinningRigIndex > -1*/)
             {
                 int realMeshID = getMeshIndexFromID(animationObj.id);
-                skinToMeshID[animationObj.skinningRigIndex] = realMeshID;
+                _skinIDToMeshID[animationObj.skinningRigIndex] = realMeshID;
+                _meshIDtoSkinID[realMeshID] = animationObj.skinningRigIndex;
+                _meshes[realMeshID].meshSOReference = animationObj.id;
 
                 auto& nodeTransform = animation.animatedObjects[animationObj.modelPartIndex];
                 _meshes[realMeshID].setAnimatedTransform(nodeTransform);
@@ -371,28 +485,61 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
         }
     }
 
+    // For each bone found, try to get the best model part and link on animations that can give us matrices to calculate the bone space
+    for (auto& bonePartName : _modelBonePartNames)
+    {
+        int linkObjectID = bonePartName.first;
+        std::string boneName = bonePartName.second;
+
+        bool found = false;
+        for (auto& animation : _animations)
+        {
+            for (auto& animationObj : animation.animatedObjects)
+            {
+                if (animationObj.modelPartIndex == linkObjectID)
+                {
+                    // Find part ID on skinning cluster, so we can trace which mesh to get
+                    int skinningRigID = getSkinningRigIDForlinkObject(linkObjectID);
+                    int meshID = _skinIDToMeshID[skinningRigID];
+                    AnimatedObject* linkObjectPart = &animationObj;
+                    AnimatedObject* meshSOParent = getAnimatedObject(animation.animatedObjects, _meshIDs[meshID]);
+                    int modelPartIndex = meshSOParent->modelPartIndex;
+                    AnimatedObject* modelPart = getAnimatedObject(animation.animatedObjects, modelPartIndex);
+
+                    _bonesToModelPartAndLinkObject[boneName] = std::make_pair(modelPart, linkObjectPart);
+
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found)
+                break;
+        }
+    }
+
+
     // Create all bones
     for (auto& modelBone : modelBonePartIDs)
     {
         int id = modelBone.first;
+        std::string name = _modelBonePartNames[id];
 
         osg::ref_ptr<osgAnimation::Bone> newBone = new osgAnimation::Bone();
         newBone->setName(_modelBonePartNames[id]);
 
+        osg::Matrix invBindMatrix = createBoneTransform(*_bonesToModelPartAndLinkObject[name].first,
+            *_bonesToModelPartAndLinkObject[name].second, modelBone.second.linkMode, modelBone.second.defaultClusterBaseTransform,
+            modelBone.second.defaultClusterWorldTransform);        
+
+        osg::Matrix boneTransform = extractBoneTransform(invBindMatrix, modelBone.second.defaultClusterBaseTransform);
+
+        newBone->setMatrix(boneTransform);
+        newBone->setInvBindMatrixInSkeletonSpace(invBindMatrix);
+
         osg::ref_ptr<osgAnimation::UpdateBone> updateBone = new osgAnimation::UpdateBone();
         updateBone->setName(_modelBonePartNames[id]);
-
-        newBone->setMatrix(modelBone.second.defaultClusterWorldTransform);
-        newBone->setInvBindMatrixInSkeletonSpace(modelBone.second.defaultClusterWorldTransformInvert);
-
-        osg::ref_ptr<osgAnimation::StackedMatrixElement> stackedMatrix = new osgAnimation::StackedMatrixElement();
-        stackedMatrix->setName("bindmatrix");
-        osg::Matrix sMatrix = modelBone.second.defaultClusterBaseTransform;
-        stackedMatrix->setMatrix(sMatrix);
-
-        updateBone->getStackedTransforms().push_back(stackedMatrix);
-
-        //newBone->addUpdateCallback(updateBone);
+        newBone->addUpdateCallback(updateBone);
 
         rootBone->addChild(newBone);
     }
@@ -400,8 +547,8 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
     // Create vertexinfluencemap for each mesh
     for (int i = 0; i < _meshes.size(); ++i)
     {
-        if (skinToMeshID.find(i) != skinToMeshID.end())
-            _meshes[i].createInfluenceMap(_skinningRigs[skinToMeshID[i]], _modelBonePartNames);
+        if (_skinIDToMeshID.find(i) != _skinIDToMeshID.end())
+            _meshes[i].createInfluenceMap(_skinningRigs[_skinIDToMeshID[i]], _modelBonePartNames);
     }
 
     return returnSkeleton;
@@ -522,23 +669,26 @@ MViewParser::Mesh::Mesh(const nlohmann::json& description, const MViewFile::Arch
     cullBackFaces = desc.value("cullBackFaces", false);
 
     isAnimated = false;
+    meshSOReference = -1;
 
     name = desc.value("name", "");
     file = desc.value("file", "");
 
     meshMatrix = new osg::MatrixTransform();
     meshMatrix->setName(name);
-    if (desc.contains("transform")) {
-        const json& t = desc["transform"];
-        origin.set(t[12], t[13], t[14]);
-        meshMatrix->setMatrix(osg::Matrix(t[0], t[1], t[2], t[3],
-                                          t[4], t[5], t[6], t[7],
-                                          t[8], t[9], t[10], t[11],
-                                          t[12], t[13], t[14], t[15]));
-    }
-    else {
-        origin.set(0, 5, 0);
-    }
+
+    meshMatrixRigTransform = new osg::MatrixTransform();;
+    //if (desc.contains("transform")) {
+    //    const json& t = desc["transform"];
+    //    origin.set(t[12], t[13], t[14]);
+    //    meshMatrix->setMatrix(osg::Matrix(t[0], t[1], t[2], t[3],
+    //                                      t[4], t[5], t[6], t[7],
+    //                                      t[8], t[9], t[10], t[11],
+    //                                      t[12], t[13], t[14], t[15]));
+    //}
+    //else {
+    //    origin.set(0, 5, 0);
+    //}
 
     /*
     *  (Stride in bytes and floats)
@@ -771,18 +921,18 @@ const osg::ref_ptr<osg::MatrixTransform> MViewParser::Mesh::asGeometryInMatrix()
 void MViewParser::Mesh::setAnimatedTransform(const AnimatedObject& referenceNode)
 {
     if (referenceNode.rotation && referenceNode.translation && referenceNode.scale
-        && referenceNode.rotation->getSampler()->getKeyframeContainer()->size() == 2 
-        && referenceNode.translation->getSampler()->getKeyframeContainer()->size() == 2
-        && referenceNode.scale->getSampler()->getKeyframeContainer()->size() == 2)
+        && referenceNode.rotation->getSampler()->getKeyframeContainer()->size() == 1 
+        && referenceNode.translation->getSampler()->getKeyframeContainer()->size() == 1
+        && referenceNode.scale->getSampler()->getKeyframeContainer()->size() == 1)
     {
         osg::Matrix matrixT;
         osg::Matrix animatedMatrixTransform;
 
-        matrixT.makeScale(referenceNode.scale->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(1).getValue());
-        matrixT = osg::Matrix::rotate(referenceNode.rotation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(1).getValue()) * matrixT;
-        matrixT = osg::Matrix::translate(referenceNode.translation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(1).getValue()) * matrixT;
+        matrixT.makeScale(referenceNode.scale->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue());
+        matrixT = osg::Matrix::rotate(referenceNode.rotation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue()) * matrixT;
+        matrixT = osg::Matrix::translate(referenceNode.translation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue()) * matrixT;
 
-        //animatedMatrixTransform = matrixT;
+        animatedMatrixTransform = matrixT;
 
         osg::ref_ptr<osgAnimation::UpdateMatrixTransform> updateMatrix = new osgAnimation::UpdateMatrixTransform();
         updateMatrix->setName(name);
@@ -898,6 +1048,26 @@ MViewParser::AnimatedObject::AnimatedObject(const Archive& archive, const json& 
 
         assembleKeyFrames();
     }
+}
+
+osg::Matrix MViewParser::AnimatedObject::getWorldTransform()
+{
+    osg::Matrix worldTransform;
+
+    if (translation && scale && rotation) 
+    {
+        osg::Vec3f position = translation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue();
+        osg::Vec3f scaling = scale->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue();
+        osg::Quat orientation = rotation->getOrCreateSampler()->getOrCreateKeyframeContainer()->at(0).getValue();
+
+        osg::Matrix translationMatrix = osg::Matrix::translate(position);
+        osg::Matrix rotationMatrix = osg::Matrix::rotate(orientation);
+        osg::Matrix scaleMatrix = osg::Matrix::scale(scaling);
+
+        worldTransform = scaleMatrix * rotationMatrix * translationMatrix;
+    }
+
+    return worldTransform;
 }
 
 void MViewParser::AnimatedObject::unPackKeyFrames() 
@@ -1120,20 +1290,20 @@ osg::ref_ptr<osgAnimation::Vec3LinearChannel> MViewParser::AnimatedObject::makeV
     channel->setName(channelName);
     channel->setTargetName(partName);
 
-    if (timesArray->getNumElements() > 0)
-    {
-        channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->reserve(timesArray->getNumElements() + 1);
-        osgAnimation::Vec3Keyframe dummy;
-        osg::Vec3 vec = channelName == "scale" ? osg::Vec3(1.0, 1.0, 1.0) : osg::Vec3();
-        dummy.setTime(0);
-        dummy.setValue(vec);
-        channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(dummy);
-    }
+    //if (timesArray->getNumElements() > 0)
+    //{
+    //    channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->reserve(timesArray->getNumElements() + 1);
+    //    osgAnimation::Vec3Keyframe dummy;
+    //    osg::Vec3 vec = channelName == "scale" ? osg::Vec3(1.0, 1.0, 1.0) : osg::Vec3();
+    //    dummy.setTime(0);
+    //    dummy.setValue(vec);
+    //    channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(dummy);
+    //}
 
     for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
     {
         osgAnimation::Vec3Keyframe f;
-        osg::Vec3 vec(std::abs((*keyXArray)[i]), std::abs((*keyYArray)[i]), std::abs((*keyZArray)[i]));
+        osg::Vec3 vec((*keyXArray)[i], (*keyYArray)[i], (*keyZArray)[i]);
 
         f.setTime((*timesArray)[i]);
         f.setValue(vec);
@@ -1155,21 +1325,21 @@ osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> MViewParser::AnimatedObje
 
     channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->reserve(timesArray->getNumElements() + 1);
     
-    if (timesArray->getNumElements() > 0)
-    {
-        osgAnimation::QuatKeyframe dummy;
-        dummy.setTime(0);
-        dummy.setValue(osg::Quat());
-        channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(dummy);
-    }
+    //if (timesArray->getNumElements() > 0)
+    //{
+    //    osgAnimation::QuatKeyframe dummy;
+    //    dummy.setTime(0);
+    //    dummy.setValue(osg::Quat());
+    //    channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(dummy);
+    //}
 
     std::vector<osg::Vec3> rotateTempArray;
     for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
     {
         osgAnimation::QuatKeyframe f;
-        osg::Quat quat(degreesToRadians((*keyXArray)[i]), osg::X_AXIS,
-            degreesToRadians((*keyYArray)[i]), osg::Y_AXIS,
-            degreesToRadians((*keyZArray)[i]), osg::Z_AXIS);
+        osg::Quat quat(osg::DegreesToRadians((*keyXArray)[i]), osg::X_AXIS,
+            osg::DegreesToRadians((*keyYArray)[i]), osg::Y_AXIS,
+            osg::DegreesToRadians((*keyZArray)[i]), osg::Z_AXIS);
 
         f.setTime((*timesArray)[i]);
         f.setValue(quat);
@@ -1208,14 +1378,14 @@ const osg::ref_ptr<osgAnimation::Animation> MViewParser::Animation::asAnimation(
         if (// animatedObject.sceneObjectType == "MeshSO" || 
             (animatedObject.sceneObjectType == "Node" && animatedObject.skinningRigIndex == -1 && animatedObject.parentIndex == 0))
         {
-            //if (animatedObject.translation && animatedObject.translation->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
-            //    animation->getChannels().push_back(animatedObject.translation);
+            if (animatedObject.translation && animatedObject.translation->getOrCreateSampler()->getKeyframeContainer()->size() > 0)
+                animation->getChannels().push_back(animatedObject.translation);
 
-            //if (animatedObject.rotation && animatedObject.rotation->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
-            //    animation->getChannels().push_back(animatedObject.rotation);
+            if (animatedObject.rotation && animatedObject.rotation->getOrCreateSampler()->getKeyframeContainer()->size() > 0)
+                animation->getChannels().push_back(animatedObject.rotation);
 
-            //if (animatedObject.scale && animatedObject.scale->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
-            //    animation->getChannels().push_back(animatedObject.scale);
+            if (animatedObject.scale && animatedObject.scale->getOrCreateSampler()->getKeyframeContainer()->size() > 0)
+                animation->getChannels().push_back(animatedObject.scale);
 
             //if (animatedObject.rotationEuler && animatedObject.rotationEuler->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
             //    animation->getChannels().push_back(animatedObject.rotationEuler);

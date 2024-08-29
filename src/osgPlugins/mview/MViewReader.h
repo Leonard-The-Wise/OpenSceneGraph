@@ -81,10 +81,12 @@ namespace MViewParser
 
 		osg::ref_ptr<osgAnimation::Vec3LinearChannel> translation;
 		osg::ref_ptr<osgAnimation::Vec3LinearChannel> scale;
-		osg::ref_ptr<osgAnimation::Vec3LinearChannel> rotationEuler;
+		// osg::ref_ptr<osgAnimation::Vec3LinearChannel> rotationEuler;
 		osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> rotation;
 
 		AnimatedObject(const MViewFile::Archive& archive, const nlohmann::json& description, int ID);
+
+		osg::Matrix getWorldTransform();
 
 	private:
 
@@ -178,6 +180,8 @@ namespace MViewParser
 		std::string meshMaterial;
 		bool isAnimated;
 		osg::ref_ptr<osg::MatrixTransform> meshMatrix;
+		osg::ref_ptr<osg::MatrixTransform> meshMatrixRigTransform;
+		int meshSOReference;
 
 		std::vector<SubMesh> subMeshes;
 
@@ -255,6 +259,15 @@ namespace MViewParser
 
 		int getMeshIndexFromID(int id);
 
+		int getSkinningRigIDForlinkObject(int linkID);
+
+		AnimatedObject* getAnimatedObject(std::vector<AnimatedObject>& animatedObjects, int id);
+
+		osg::Matrix createBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject, int linkMode, 
+			const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform);
+
+		osg::Matrix extractBoneTransform(const osg::Matrix& outputMatrix, const osg::Matrix& defaultClusterBaseTransform);
+
 		osg::ref_ptr<osgAnimation::Skeleton> buildBones();
 
 		osg::ref_ptr<osgAnimation::BasicAnimationManager> buildAnimationManager();
@@ -264,6 +277,11 @@ namespace MViewParser
 		std::vector<SkinningRig> _skinningRigs;
 		std::vector<Animation> _animations;
 		std::map<int, std::string> _modelBonePartNames;
+		std::map<int, int> _skinIDToMeshID;
+		std::map<int, int> _meshIDtoSkinID;
+
+		std::map<std::string, std::pair<AnimatedObject*, AnimatedObject*>> _bonesToModelPartAndLinkObject;
+		std::map<std::string, osg::Matrix> _derivedBoneMatrices;
 
 		std::string _modelName;
 		std::string _modelAuthor;

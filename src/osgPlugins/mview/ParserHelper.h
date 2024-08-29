@@ -22,5 +22,8 @@ public:
 
 	static osg::ref_ptr<osg::Array> decastVector(const osg::ref_ptr<osg::Array>& toRecast);
 
+	template<typename T>
+	static osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, bool normalize);
+
 };
 
