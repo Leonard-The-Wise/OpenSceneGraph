@@ -240,7 +240,7 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
     }
 
     rootMatrix->addChild(rootMesh);
-    //rootMatrix->setUserValue("firstMatrix", true);
+    rootMatrix->setUserValue("firstMatrix", true);
 
     rootNode->addChild(rootMatrix);
 
@@ -730,11 +730,11 @@ Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& arch
     int d = b;
     b = b + 12 + 8;
 
-    int uvStride = 0;
+    int uvfStride = 0;
     if (hasSecondaryTexCoord)
     {
         b += 8;
-        uvStride = 2;
+        uvfStride = 2;
     }
 
     int e = b;
@@ -798,7 +798,7 @@ Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& arch
 
         if (hasVertexColor)
         {
-            const uint8_t* colorBytes = reinterpret_cast<const uint8_t*>(c + fstride + 8 + uvStride);
+            const uint8_t* colorBytes = reinterpret_cast<const uint8_t*>(c + fstride + 8 + uvfStride);
             (*colorsArray)[static_cast<size_t>(4) * i] = colorBytes[0];
             (*colorsArray)[static_cast<size_t>(4) * i + 1] = colorBytes[1];
             (*colorsArray)[static_cast<size_t>(4) * i + 2] = colorBytes[2];
