@@ -1369,19 +1369,19 @@ const osg::ref_ptr<osgAnimation::Animation> Animation::asAnimation(std::set<std:
         if (// animatedObject.sceneObjectType == "MeshSO" || 
             (animatedObject.sceneObjectType == "Node" && animatedObject.skinningRigIndex == -1 && animatedObject.parentIndex == 0))
         {
-            if (animatedObject.translation && animatedObject.translation->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
+            if (animatedObject.translation && animatedObject.translation->getOrCreateSampler()->getKeyframeContainer()->size() > 0)
             {
                 animation->getChannels().push_back(animatedObject.translation);
                 outUsedTargets.emplace(animatedObject.translation->getTargetName());
             }
 
-            if (animatedObject.rotation && animatedObject.rotation->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
+            if (animatedObject.rotation && animatedObject.rotation->getOrCreateSampler()->getKeyframeContainer()->size() > 0)
             {
                 animation->getChannels().push_back(animatedObject.rotation);
                 outUsedTargets.emplace(animatedObject.translation->getTargetName());
             }
 
-            if (animatedObject.scale && animatedObject.scale->getOrCreateSampler()->getKeyframeContainer()->size() > 1)
+            if (animatedObject.scale && animatedObject.scale->getOrCreateSampler()->getKeyframeContainer()->size() > 0)
             {
                 animation->getChannels().push_back(animatedObject.scale);
                 outUsedTargets.emplace(animatedObject.translation->getTargetName());
