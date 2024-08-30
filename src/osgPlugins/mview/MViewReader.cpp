@@ -12,45 +12,6 @@ using json = nlohmann::json;
 using namespace MViewFile;
 using namespace MViewParser;
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-static float normalizeAngle(float angleInDegrees)
-{
-    angleInDegrees = fmod(angleInDegrees, 360.0f);
-    if (angleInDegrees < 0.0f) {
-        angleInDegrees += 360.0f;
-    }
-    return angleInDegrees;
-}
-
-static float degreesToRadians(float degrees)
-{
-    return normalizeAngle(degrees) * (M_PI / 180.0f);
-}
-
-static float radiansToDegrees(float radians) {
-    return radians * (180.0f / M_PI);
-}
-
-// Função para converter osg::Quat para ângulos XYZ em graus
-static osg::Vec3 convertQuatToEulerDegrees(const osg::Quat& quat) {
-    double q0 = quat.w();  // componente w do quaternion
-    double q1 = quat.x();  // componente x do quaternion
-    double q2 = quat.y();  // componente y do quaternion
-    double q3 = quat.z();  // componente z do quaternion
-
-    // Calcular os ângulos de Euler a partir dos componentes do quaternion
-    double rotationX = atan2(2.0 * (q0 * q1 + q2 * q3), 1.0 - 2.0 * (q1 * q1 + q2 * q2));
-    double rotationY = asin(2.0 * (q0 * q2 - q3 * q1));
-    double rotationZ = atan2(2.0 * (q0 * q3 + q1 * q2), 1.0 - 2.0 * (q2 * q2 + q3 * q3));
-
-    // Converter os ângulos de radianos para graus
-    return osg::Vec3(radiansToDegrees(rotationX),
-        radiansToDegrees(rotationY),
-        radiansToDegrees(rotationZ));
-}
 
 template <typename T>
 osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, bool normalize)
@@ -113,8 +74,6 @@ osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, b
 
     return osg::dynamic_pointer_cast<T>(returnArray);
 }
-
-
 
 static std::vector<uint8_t> loadFileToVector(const std::string& filename)
 {
@@ -180,8 +139,6 @@ osgDB::ReaderWriter::ReadResult MViewReader::readMViewFile(const std::string& fi
 
         std::string fileContents = ByteStream(sceneFile.data).asString();
 
-        OSG_NOTICE << "Parsing MVIEW Scene file" << std::endl;
-
         json sceneJson;
 
         try {
@@ -193,23 +150,27 @@ osgDB::ReaderWriter::ReadResult MViewReader::readMViewFile(const std::string& fi
             return osgDB::ReaderWriter::ReadResult::ERROR_IN_READING_FILE;
         }
 
-        //OSG_NOTICE << "Unpacking textures..." << std::endl;
+        OSG_NOTICE << "Unpacking textures..." << std::endl;
 
-        //if (!osgDB::makeDirectory("textures"))
-        //{
-        //    OSG_FATAL << "Could not create a directory for textures!" << std::endl;
-        //    throw "Exiting...";
-        //}
+        if (!osgDB::makeDirectory("textures"))
+        {
+            OSG_FATAL << "Could not create a directory for textures!" << std::endl;
+            throw "Exiting...";
+        }
 
-        //for (auto& textureName : _archive->getTextures())
-        //{
-        //    OSG_NOTICE << " -> textures/" << textureName << std::endl;
-        //    ArchiveFile textureFile = _archive->extract(textureName);
-        //    if (textureName == "thumbnail.jpg")
-        //        writeVectorToFile(textureName, textureFile.data);
-        //    else
-        //        writeVectorToFile("textures\\" + textureName, textureFile.data);
-        //}
+        for (auto& textureName : _archive->getTextures())
+        {
+            ArchiveFile textureFile = _archive->extract(textureName);
+            if (textureName == "thumbnail.jpg")
+                writeVectorToFile(textureName, textureFile.data);
+            else
+            {
+                OSG_NOTICE << " -> textures/" << textureName << std::endl;
+                writeVectorToFile("textures\\" + textureName, textureFile.data);
+            }
+        }
+
+        OSG_NOTICE << "Parsing MVIEW Scene file" << std::endl;
 
         return parseScene(sceneJson);
     }
@@ -288,7 +249,7 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
     return rootNode;
 }
 
-void MViewParser::MViewReader::fillMetaData(const json& sceneData)
+void MViewReader::fillMetaData(const json& sceneData)
 {
     // Grab metadata
     if (sceneData.contains("metaData"))
@@ -300,7 +261,7 @@ void MViewParser::MViewReader::fillMetaData(const json& sceneData)
     }
 }
 
-void MViewParser::MViewReader::getMeshes(const json& sceneData)
+void MViewReader::getMeshes(const json& sceneData)
 {
     // Grab meshes
     if (sceneData.contains("meshes") && sceneData["meshes"].is_array())
@@ -330,7 +291,7 @@ void MViewParser::MViewReader::getMeshes(const json& sceneData)
     }
 }
 
-bool MViewParser::MViewReader::parseAnimations(const json& sceneData)
+bool MViewReader::parseAnimations(const json& sceneData)
 {
     if (!sceneData.contains("AnimData"))
         return false;
@@ -395,7 +356,7 @@ bool MViewParser::MViewReader::parseAnimations(const json& sceneData)
     return true;
 }
 
-int MViewParser::MViewReader::getMeshIndexFromID(int id)
+int MViewReader::getMeshIndexFromID(int id)
 {
     int i = 0;
     for (int meshID : _meshIDs)
@@ -408,7 +369,7 @@ int MViewParser::MViewReader::getMeshIndexFromID(int id)
     return -1;
 }
 
-int MViewParser::MViewReader::getSkinningRigIDForlinkObject(int linkID)
+int MViewReader::getSkinningRigIDForlinkObject(int linkID)
 {
     for (int i = 0; i < _skinningRigs.size(); ++i)
     {
@@ -422,7 +383,7 @@ int MViewParser::MViewReader::getSkinningRigIDForlinkObject(int linkID)
     return -1;
 }
 
-AnimatedObject* MViewParser::MViewReader::getAnimatedObject(std::vector<AnimatedObject>& animatedObjects, int id)
+AnimatedObject* MViewReader::getAnimatedObject(std::vector<AnimatedObject>& animatedObjects, int id)
 {
     for (auto& animatedObject : animatedObjects)
     {
@@ -433,7 +394,7 @@ AnimatedObject* MViewParser::MViewReader::getAnimatedObject(std::vector<Animated
     return nullptr;
 }
 
-osg::Matrix MViewParser::MViewReader::computeBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
+osg::Matrix MViewReader::computeBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
     int linkMode, const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform)
 {
     // 1. Obtenha as transformações do osso e da parte
@@ -452,8 +413,7 @@ osg::Matrix MViewParser::MViewReader::computeBoneTransform(AnimatedObject& model
     return boneTransform;
 }
 
-
-osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
+osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
 {
     osg::ref_ptr<osgAnimation::Skeleton> returnSkeleton = new osgAnimation::Skeleton();
     returnSkeleton->setDataVariance(osg::Object::DYNAMIC);
@@ -574,7 +534,7 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewParser::MViewReader::buildBones()
     return returnSkeleton;
 }
 
-osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewParser::MViewReader::buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton)
+osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewReader::buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton)
 {
     osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = new osgAnimation::BasicAnimationManager();
 
@@ -608,7 +568,7 @@ osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewParser::MViewReader::buil
 }
 
 
-MViewParser::SkinningRig::SkinningRig(Archive& archive, const json& json, ByteStream& byteStream)
+SkinningRig::SkinningRig(Archive& archive, const json& json, ByteStream& byteStream)
 {
     isRigValid = false;
     srcVFile = json["file"].get<std::string>();
@@ -692,7 +652,7 @@ MViewParser::SkinningRig::SkinningRig(Archive& archive, const json& json, ByteSt
 
 }
 
-MViewParser::SubMesh::SubMesh(const nlohmann::json& description)
+SubMesh::SubMesh(const nlohmann::json& description)
 {
     materialName = description.value("material", "");
     firstIndex = description.value("firstIndex", 0);
@@ -701,7 +661,7 @@ MViewParser::SubMesh::SubMesh(const nlohmann::json& description)
     wireIndexCount = description.value("wireIndexCount", 0);
 }
 
-MViewParser::Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& archiveFile)
+Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& archiveFile)
 {
     desc = description;
     descDump = description.dump();
@@ -893,7 +853,7 @@ MViewParser::Mesh::Mesh(const nlohmann::json& description, const MViewFile::Arch
         bounds.max.z() - bounds.min.z()) / 3;
 }
 
-const osg::ref_ptr<osg::Geometry> MViewParser::Mesh::asGeometry()
+const osg::ref_ptr<osg::Geometry> Mesh::asGeometry()
 {
     osg::ref_ptr<osgAnimation::RigGeometry> rigGeometry;
     osg::ref_ptr<osg::Geometry> trueGeometry = new osg::Geometry();
@@ -948,7 +908,7 @@ const osg::ref_ptr<osg::Geometry> MViewParser::Mesh::asGeometry()
     return isAnimated ? rigGeometry->asGeometry() : trueGeometry;
 }
 
-const osg::ref_ptr<osg::MatrixTransform> MViewParser::Mesh::asGeometryInMatrix()
+const osg::ref_ptr<osg::MatrixTransform> Mesh::asGeometryInMatrix()
 {
     osg::ref_ptr<osg::Geode> rootMesh = new osg::Geode();
     rootMesh->addDrawable(asGeometry());
@@ -958,7 +918,7 @@ const osg::ref_ptr<osg::MatrixTransform> MViewParser::Mesh::asGeometryInMatrix()
     return meshMatrix;
 }
 
-void MViewParser::Mesh::setAnimatedTransform(AnimatedObject& referenceNode)
+void Mesh::setAnimatedTransform(AnimatedObject& referenceNode)
 {
     osg::Matrix animatedMatrixTransform;
 
@@ -975,7 +935,7 @@ void MViewParser::Mesh::setAnimatedTransform(AnimatedObject& referenceNode)
     meshMatrix->addUpdateCallback(updateMatrix);
 }
 
-void MViewParser::Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& modelBonePartNames)
+void Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& modelBonePartNames)
 {
     influenceMap = new osgAnimation::VertexInfluenceMap();
 
@@ -1007,7 +967,7 @@ void MViewParser::Mesh::createInfluenceMap(const SkinningRig& skinningRig, const
         isAnimated = true;
 }
 
-void MViewParser::Mesh::unpackUnitVectors(osg::ref_ptr<osg::FloatArray>& returnArray, const uint16_t* buffer, int vCount, int byteStride)
+void Mesh::unpackUnitVectors(osg::ref_ptr<osg::FloatArray>& returnArray, const uint16_t* buffer, int vCount, int byteStride)
 {
     for (int e = 0; e < vCount; ++e) 
     {
@@ -1044,7 +1004,7 @@ void MViewParser::Mesh::unpackUnitVectors(osg::ref_ptr<osg::FloatArray>& returnA
     }
 }
 
-MViewParser::AnimatedObject::AnimatedObject(const Archive& archive, const json& description, int ID) :
+AnimatedObject::AnimatedObject(const Archive& archive, const json& description, int ID) :
     keyFramesByteStream(nullptr)
 {
     id = ID;
@@ -1081,7 +1041,7 @@ MViewParser::AnimatedObject::AnimatedObject(const Archive& archive, const json& 
     }
 }
 
-const osg::Matrix MViewParser::AnimatedObject::getWorldTransform()
+const osg::Matrix AnimatedObject::getWorldTransform()
 {
     osg::Matrix worldTransform;
 
@@ -1101,7 +1061,7 @@ const osg::Matrix MViewParser::AnimatedObject::getWorldTransform()
     return worldTransform;
 }
 
-void MViewParser::AnimatedObject::unPackKeyFrames() 
+void AnimatedObject::unPackKeyFrames() 
 {
     if (keyFramesByteStream && !keyFramesByteStream->empty())
     {
@@ -1208,7 +1168,7 @@ std::vector<std::pair<int, float>> AnimatedObject::extractKeyframes(const Animat
     return keyframes;
 }
 
-void MViewParser::AnimatedObject::assembleKeyFrames()
+void AnimatedObject::assembleKeyFrames()
 {
     // Get Translation
     auto itrTransX = animatedPropertiesMap.find("Translation X");
@@ -1302,7 +1262,7 @@ void MViewParser::AnimatedObject::assembleKeyFrames()
     }
 }
 
-void MViewParser::AnimatedObject::copyFromExtractedKeys(const std::string& keyName, osg::ref_ptr<osg::FloatArray>& timesArray, osg::ref_ptr<osg::FloatArray>& keyArray)
+void AnimatedObject::copyFromExtractedKeys(const std::string& keyName, osg::ref_ptr<osg::FloatArray>& timesArray, osg::ref_ptr<osg::FloatArray>& keyArray)
 {
     std::vector<std::pair<int, float>> extractedKeys = extractKeyframes(*(animatedPropertiesMap[keyName]));
 
@@ -1313,7 +1273,7 @@ void MViewParser::AnimatedObject::copyFromExtractedKeys(const std::string& keyNa
     }
 }
 
-osg::ref_ptr<osgAnimation::Vec3LinearChannel> MViewParser::AnimatedObject::makeVec3LinearFromArrays(const std::string channelName,
+osg::ref_ptr<osgAnimation::Vec3LinearChannel> AnimatedObject::makeVec3LinearFromArrays(const std::string channelName,
     osg::ref_ptr<osg::FloatArray>& timesArray, osg::ref_ptr<osg::FloatArray>& keyXArray, osg::ref_ptr<osg::FloatArray>& keyYArray,
     osg::ref_ptr<osg::FloatArray>& keyZArray)
 {
@@ -1345,7 +1305,7 @@ osg::ref_ptr<osgAnimation::Vec3LinearChannel> MViewParser::AnimatedObject::makeV
     return channel;
 }
 
-osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> MViewParser::AnimatedObject::makeQuatLinearFromArrays(const std::string channelName, 
+osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> AnimatedObject::makeQuatLinearFromArrays(const std::string channelName, 
     osg::ref_ptr<osg::FloatArray>& timesArray, osg::ref_ptr<osg::FloatArray>& keyXArray, osg::ref_ptr<osg::FloatArray>& keyYArray, 
     osg::ref_ptr<osg::FloatArray>& keyZArray)
 {
@@ -1383,7 +1343,7 @@ osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> MViewParser::AnimatedObje
     return channel;
 }
 
-MViewParser::Animation::Animation(const MViewFile::Archive& archive, const nlohmann::json& description)
+Animation::Animation(const MViewFile::Archive& archive, const nlohmann::json& description)
 {
     name = description.value("name", "");
     expectedNumAnimatedObjects = description.value("numAnimatedObjects", 0);
@@ -1398,7 +1358,7 @@ MViewParser::Animation::Animation(const MViewFile::Archive& archive, const nlohm
     }
 }
 
-const osg::ref_ptr<osgAnimation::Animation> MViewParser::Animation::asAnimation(std::set<std::string>& outUsedTargets)
+const osg::ref_ptr<osgAnimation::Animation> Animation::asAnimation(std::set<std::string>& outUsedTargets)
 {
     osg::ref_ptr<osgAnimation::Animation> animation = new osgAnimation::Animation();
 

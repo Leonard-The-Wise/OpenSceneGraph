@@ -36,40 +36,43 @@ constexpr const int ApplicationKey = 0x37FA76B5;
 osgDB::ReaderWriter::WriteResult GLTFWriter::write(const osg::Node& node, const std::string& location, bool isBinary,
 	const osgDB::Options* options) const
 {
-	std::istringstream iss(options->getOptionString());
-	std::string opt;
-
 	// Causes crash (actually return nothing) if applicationKey is wrong!
 	int applicationKey = 0;
 
-	bool realWriteBinary = isBinary;
-	std::string realLocation = location;
-	while (iss >> opt)
+	if (options)
 	{
-		std::string pre_equals;
-		std::string post_equals;
+		std::istringstream iss(options->getOptionString());
+		std::string opt;
 
-		size_t found = opt.find("=");
-		if (found != std::string::npos)
+		bool realWriteBinary = isBinary;
+		std::string realLocation = location;
+		while (iss >> opt)
 		{
-			pre_equals = opt.substr(0, found);
-			post_equals = opt.substr(found + 1);
-		}
-		else
-		{
-			pre_equals = opt;
-		}
+			std::string pre_equals;
+			std::string post_equals;
 
-		if (pre_equals == "XParam")
-		{
-			applicationKey = atoi(post_equals.c_str());
-		}
+			size_t found = opt.find("=");
+			if (found != std::string::npos)
+			{
+				pre_equals = opt.substr(0, found);
+				post_equals = opt.substr(found + 1);
+			}
+			else
+			{
+				pre_equals = opt;
+			}
 
-		if (pre_equals == "BinaryGltf")
-		{
-			realWriteBinary = true;
-			std::string fileDir = osgDB::getFilePath(location);
-			realLocation = (fileDir == "" ? "" : fileDir + "\\") + osgDB::getNameLessExtension(location) + ".glb";
+			if (pre_equals == "XParam")
+			{
+				applicationKey = atoi(post_equals.c_str());
+			}
+
+			if (pre_equals == "BinaryGltf")
+			{
+				realWriteBinary = true;
+				std::string fileDir = osgDB::getFilePath(location);
+				realLocation = (fileDir == "" ? "" : fileDir + "\\") + osgDB::getNameLessExtension(location) + ".glb";
+			}
 		}
 	}
 
