@@ -1429,16 +1429,6 @@ osg::ref_ptr<osgAnimation::Vec3LinearChannel> AnimatedObject::makeVec3LinearFrom
     channel->setName(channelName);
     channel->setTargetName(partName);
 
-    //if (timesArray->getNumElements() > 0)
-    //{
-    //    channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->reserve(timesArray->getNumElements() + 1);
-    //    osgAnimation::Vec3Keyframe dummy;
-    //    osg::Vec3 vec = channelName == "scale" ? osg::Vec3(1.0, 1.0, 1.0) : osg::Vec3();
-    //    dummy.setTime(0);
-    //    dummy.setValue(vec);
-    //    channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(dummy);
-    //}
-
     for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
     {
         osgAnimation::Vec3Keyframe f;
@@ -1464,14 +1454,6 @@ osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> AnimatedObject::makeQuatL
 
     channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->reserve(timesArray->getNumElements() + 1);
     
-    //if (timesArray->getNumElements() > 0)
-    //{
-    //    osgAnimation::QuatKeyframe dummy;
-    //    dummy.setTime(0);
-    //    dummy.setValue(osg::Quat());
-    //    channel->getOrCreateSampler()->getOrCreateKeyframeContainer()->push_back(dummy);
-    //}
-
     std::vector<osg::Vec3> rotateTempArray;
     for (unsigned int i = 0; i < timesArray->getNumElements(); ++i)
     {
