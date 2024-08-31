@@ -219,7 +219,8 @@ namespace MViewParser
 		osg::ref_ptr<osg::MatrixTransform> meshMatrix;
 		osg::ref_ptr<osg::MatrixTransform> meshMatrixRigTransform;
 		int meshSOReferenceID;
-		AnimatedObject* associateAnimatedNode;
+		AnimatedObject* associateModelPart;
+		AnimatedObject* associateParent;
 
 		bool isRigidSkin;
 
@@ -237,7 +238,8 @@ namespace MViewParser
 
 		void setAnimatedTransform(AnimatedObject& referenceNode);
 
-		void createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& modelBonePartNames);
+		void createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& possibleBonePartNames,
+			std::set<std::string>& refRealBoneNames);
 
 	private:
 
@@ -323,7 +325,8 @@ namespace MViewParser
 
 		osg::ref_ptr<osgAnimation::Skeleton> buildBones();
 
-		osg::ref_ptr<osgAnimation::BasicAnimationManager> buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton);
+		osg::ref_ptr<osgAnimation::BasicAnimationManager> buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton,
+			osg::ref_ptr<osg::MatrixTransform> rootMatrix);
 
 		void findFixedTransforms();
 
@@ -331,9 +334,9 @@ namespace MViewParser
 		std::vector<Mesh> _meshes;
 		std::vector<SkinningRig> _skinningRigs;
 		std::vector<Animation> _animations;
-		std::map<int, std::string> _modelBonePartNames;
+		std::map<int, std::string> _possibleBonePartNames;
 		std::map<int, SkinningCluster> _modelBonePartIDs;
-		std::set<std::string> _createdBones;
+		std::set<std::string> _createdTargets;
 		std::map<int, int> _skinIDToMeshID;
 		std::map<int, int> _meshIDtoSkinID;
 

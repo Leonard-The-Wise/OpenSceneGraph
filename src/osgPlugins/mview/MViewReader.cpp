@@ -220,9 +220,14 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
 
         for (auto& mesh : _meshes)
         {
-            if (mesh.isAnimated)
+            if (mesh.isAnimated && !mesh.isRigidSkin)
             {
                 meshSkeleton->addChild(mesh.asGeometryInMatrix());
+            }
+            else if (mesh.isRigidSkin)
+            {
+                rootMesh->addChild(mesh.asGeometryInMatrix());
+                _createdTargets.emplace(mesh.name);
             }
             else
                 rootMesh->addDrawable(mesh.asGeometry());
@@ -240,7 +245,7 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
 
         if (!_options.NoAnimations)
         {
-            osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager(meshSkeleton);
+            osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager(meshSkeleton, rootMatrix);
             rootNode->addUpdateCallback(bam);
         }
     }
@@ -458,7 +463,7 @@ void MViewParser::MViewReader::solveAnimationLinks()
         {
             if (animationObj.sceneObjectType == "Node" && animationObj.skinningRigIndex == -1 && animationObj.parentIndex == 0)
             {
-                _modelBonePartNames[animationObj.modelPartIndex] = animationObj.partName;
+                _possibleBonePartNames[animationObj.modelPartIndex] = animationObj.partName;
             }
 
             if (animationObj.sceneObjectType == "MeshSO" /* && animationObj.skinningRigIndex > -1 */)
@@ -471,7 +476,9 @@ void MViewParser::MViewReader::solveAnimationLinks()
                 }
                 _meshes[realMeshID].meshSOReferenceID = animationObj.id;
                 int modelPartIndex = animation.animatedObjects[animationObj.id].modelPartIndex;
-                _meshes[realMeshID].associateAnimatedNode = &animation.animatedObjects[modelPartIndex];
+                int modelParent = animation.animatedObjects[animationObj.id].parentIndex;
+                _meshes[realMeshID].associateModelPart = &animation.animatedObjects[modelPartIndex];
+                _meshes[realMeshID].associateParent = &animation.animatedObjects[modelParent];
 
                 auto& nodeTransform = animation.animatedObjects[animationObj.modelPartIndex];
                 _meshes[realMeshID].setAnimatedTransform(nodeTransform);
@@ -481,7 +488,7 @@ void MViewParser::MViewReader::solveAnimationLinks()
     }
 
     // For each bone found, try to get the best model part and link on animations that can give us matrices to calculate the bone space
-    for (auto& bonePartName : _modelBonePartNames)
+    for (auto& bonePartName : _possibleBonePartNames)
     {
         int linkObjectID = bonePartName.first;
         std::string boneName = bonePartName.second;
@@ -520,6 +527,18 @@ void MViewParser::MViewReader::solveAnimationLinks()
 
 osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
 {
+
+    // Create vertexinfluencemap for each mesh so we can know the real bone names (fake bones have associate skinningCluster.isRigidSkin = true)
+    std::set<std::string> realBoneNames;
+    for (int i = 0; i < _meshes.size(); ++i)
+    {
+        if (_meshIDtoSkinID.find(i) != _meshIDtoSkinID.end())
+        {
+            int skinID = _meshIDtoSkinID[i];
+            _meshes[i].createInfluenceMap(_skinningRigs[skinID], _possibleBonePartNames, realBoneNames);
+        }
+    }
+
     osg::ref_ptr<osgAnimation::Skeleton> returnSkeleton = new osgAnimation::Skeleton();
     returnSkeleton->setDataVariance(osg::Object::DYNAMIC);
     returnSkeleton->setName("Armature");
@@ -533,7 +552,10 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
     for (auto& modelBone : _modelBonePartIDs)
     {
         int id = modelBone.first;
-        std::string name = _modelBonePartNames[id];
+        std::string name = _possibleBonePartNames[id];
+
+        if (realBoneNames.find(name) == realBoneNames.end())
+            continue;
 
         osg::ref_ptr<osgAnimation::Bone> newBone = new osgAnimation::Bone();
         newBone->setName(name);
@@ -555,23 +577,14 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
         newBone->addUpdateCallback(updateBone);
 
         rootBone->addChild(newBone);
-        _createdBones.emplace(name);
-    }
-
-    // Create vertexinfluencemap for each mesh
-    for (int i = 0; i < _meshes.size(); ++i)
-    {
-        if (_meshIDtoSkinID.find(i) != _meshIDtoSkinID.end())
-        {
-            int skinID = _meshIDtoSkinID[i];
-            _meshes[i].createInfluenceMap(_skinningRigs[skinID], _modelBonePartNames);
-        }
+        _createdTargets.emplace(name);
     }
 
     return returnSkeleton;
 }
 
-osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewReader::buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton)
+osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewReader::buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton,
+    osg::ref_ptr<osg::MatrixTransform> rootMatrix)
 {
     osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = new osgAnimation::BasicAnimationManager();
 
@@ -581,8 +594,8 @@ osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewReader::buildAnimationMan
         bam->getAnimationList().push_back(animation.asAnimation(usedTargets));
     }
 
-    // Find model bone part names and erease it from usedTargets
-    for (auto& t : _createdBones)
+    // Find model target part names and erease it from usedTargets
+    for (auto& t : _createdTargets)
     {
         if (usedTargets.find(t) != usedTargets.end())
             usedTargets.erase(t);
@@ -591,14 +604,14 @@ osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewReader::buildAnimationMan
     // Create all remaining bones to avoid getting errors
     for (auto& target : usedTargets)
     {
-        osg::ref_ptr<osgAnimation::Bone> newBone = new osgAnimation::Bone();
-        newBone->setName(target);
+        osg::ref_ptr<osg::MatrixTransform> newMatrix = new osg::MatrixTransform();
+        newMatrix->setName(target);
 
-        osg::ref_ptr<osgAnimation::UpdateBone> updateBone = new osgAnimation::UpdateBone();
-        updateBone->setName(target);
-        newBone->addUpdateCallback(updateBone);
+        osg::ref_ptr<osgAnimation::UpdateMatrixTransform> updateMt = new osgAnimation::UpdateMatrixTransform();
+        updateMt->setName(target);
+        newMatrix->addUpdateCallback(updateMt);
 
-        meshSkeleton->addChild(newBone);
+        rootMatrix->addChild(newMatrix);
     }
 
     return bam;
@@ -741,7 +754,7 @@ Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& arch
 
     isAnimated = false;
     meshSOReferenceID = -1;
-    associateAnimatedNode = nullptr;
+    associateModelPart = nullptr;
     isRigidSkin = false;
 
     name = desc.value("name", "");
@@ -753,10 +766,19 @@ Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& arch
     if (desc.contains("transform")) {
         const json& t = desc["transform"];
         origin.set(t[12], t[13], t[14]);
-        meshMatrix->setMatrix(osg::Matrix(t[0], t[1], t[2], t[3],
-                                          t[4], t[5], t[6], t[7],
-                                          t[8], t[9], t[10], t[11],
-                                          t[12], t[13], t[14], t[15]));
+
+        osg::Matrix transform = osg::Matrix(t[0], t[1], t[2], t[3],
+            t[4], t[5], t[6], t[7],
+            t[8], t[9], t[10], t[11],
+            t[12], t[13], t[14], t[15]);
+
+        meshMatrix->setMatrix(transform);
+
+        osg::Vec3d translation, scale;
+        osg::Quat rotation, so;
+        transform.decompose(translation, rotation, scale, so);
+        transform = osg::Matrix::identity();
+
     }
     else {
         origin.set(0, 5, 0);
@@ -942,7 +964,18 @@ const osg::ref_ptr<osg::Geometry> Mesh::asGeometry(bool NoRigging)
     }
 
     // Set arrays
-    trueGeometry->setVertexArray(vertex);
+    osg::ref_ptr<osg::Vec3Array> trueVertices = vertex;
+    if (isRigidSkin)
+    {
+        meshMatrix->setMatrix(osg::Matrix::identity());
+
+        // Create an updateMatrix target for this matrix
+        //osg::ref_ptr<osgAnimation::UpdateMatrixTransform> umt = new osgAnimation::UpdateMatrixTransform();
+        //umt->setName(name);
+        //meshMatrix->addUpdateCallback(umt);        
+    }
+
+    trueGeometry->setVertexArray(trueVertices);
     trueGeometry->setNormalArray(normals);
 
     if (colors)
@@ -1009,71 +1042,58 @@ void Mesh::setAnimatedTransform(AnimatedObject& referenceNode)
     meshMatrix->addUpdateCallback(updateMatrix);
 }
 
-void Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& modelBonePartNames)
+void Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& possibleBonePartNames,
+    std::set<std::string>& refRealBoneNames)
 {
+    // test
+    if (skinningRig.isRigidSkin)
+    {
+        this->isRigidSkin = true;
+        return;
+    }
+
     influenceMap = new osgAnimation::VertexInfluenceMap();
 
     int linkMapIndex = 0;
     int numErrors = 0;
 
-    if (!skinningRig.isRigidSkin)
+    for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
     {
-        for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
-        {
-            int linkCount = skinningRig.linkMapCount[vertexIndex];
-            double weightSum = 0.0;
+        int linkCount = skinningRig.linkMapCount[vertexIndex];
+        double weightSum = 0.0;
 
-            // Primeiro, calcule a soma dos pesos para o vértice atual usando precisão double
+        // Primeiro, calcule a soma dos pesos para o vértice atual usando precisão double
+        for (int weightIndex = 0; weightIndex < linkCount; ++weightIndex)
+        {
+            weightSum += static_cast<double>(skinningRig.linkMapWeights[linkMapIndex + weightIndex]);
+        }
+
+        // Se a soma for maior que 0, normalize os pesos para que a soma total seja 1
+        if (weightSum > 0.0)
+        {
             for (int weightIndex = 0; weightIndex < linkCount; ++weightIndex)
             {
-                weightSum += static_cast<double>(skinningRig.linkMapWeights[linkMapIndex + weightIndex]);
-            }
+                double normalizedWeight = static_cast<double>(skinningRig.linkMapWeights[linkMapIndex + weightIndex]) / weightSum;  // Ajuste proporcional
+                int clusterIndex = skinningRig.linkMapClusterIndices[linkMapIndex + weightIndex];
 
-            // Se a soma for maior que 0, normalize os pesos para que a soma total seja 1
-            if (weightSum > 0.0)
-            {
-                for (int weightIndex = 0; weightIndex < linkCount; ++weightIndex)
+                int partNumber = skinningRig.skinningClusters[clusterIndex].linkObjectIndex;
+
+                auto it = possibleBonePartNames.find(partNumber);
+                if (it != possibleBonePartNames.end())
                 {
-                    double normalizedWeight = static_cast<double>(skinningRig.linkMapWeights[linkMapIndex + weightIndex]) / weightSum;  // Ajuste proporcional
-                    int clusterIndex = skinningRig.linkMapClusterIndices[linkMapIndex + weightIndex];
-
-                    int partNumber = skinningRig.skinningClusters[clusterIndex].linkObjectIndex;
-
-                    auto it = modelBonePartNames.find(partNumber);
-                    if (it != modelBonePartNames.end())
-                    {
-                        const std::string& boneName = it->second;
-                        (*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, static_cast<float>(normalizedWeight)));
-                    }
-                    else
-                    {
-                        ++numErrors;
-                    }
+                    const std::string& boneName = it->second;
+                    (*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, static_cast<float>(normalizedWeight)));
+                    refRealBoneNames.emplace(boneName);
+                }
+                else
+                {
+                    ++numErrors;
                 }
             }
+        }
 
-            linkMapIndex += linkCount;
-        }
+        linkMapIndex += linkCount;
     }
-    else
-    {
-        this->isRigidSkin = true;
-        int partNumber = skinningRig.skinningClusters.size() > 0 ? skinningRig.skinningClusters[0].linkObjectIndex : -1;
-        auto it = modelBonePartNames.find(partNumber);
-        if (it != modelBonePartNames.end())
-        {
-            const std::string& boneName = it->second;
-            for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
-            {
-                (*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, 1.0));
-            }
-        }
-        else
-        {
-            ++numErrors;
-        }
-    }
-
 
     if (influenceMap->size() > 0)
         isAnimated = true;
