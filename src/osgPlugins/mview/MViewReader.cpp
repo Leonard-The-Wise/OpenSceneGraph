@@ -203,6 +203,9 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
     // Get skinning information
     bool hasAnimations = parseAnimations(sceneData);
 
+    // Solve all mesh / bones -> animation links
+    solveAnimationLinks();
+
     // Dummy test: Create a root node, a matrix, a geode and attach meshes to them
     osg::ref_ptr<osg::Group> rootNode = new osg::Group();
     osg::ref_ptr<osg::MatrixTransform> rootMatrix = new osg::MatrixTransform();
@@ -432,17 +435,8 @@ osg::Matrix MViewReader::computeBoneTransform(AnimatedObject& modelPart, Animate
     return boneTransform;
 }
 
-osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
+void MViewParser::MViewReader::solveAnimationLinks()
 {
-    osg::ref_ptr<osgAnimation::Skeleton> returnSkeleton = new osgAnimation::Skeleton();
-    returnSkeleton->setDataVariance(osg::Object::DYNAMIC);
-    returnSkeleton->setName("Armature");
-
-    osg::ref_ptr<osgAnimation::Bone> rootBone = new osgAnimation::Bone();
-    rootBone->setName("RootBone");
-
-    returnSkeleton->addChild(rootBone);
-
     for (auto& skin : _skinningRigs)
     {
         for (auto& cluster : skin.skinningClusters)
@@ -467,7 +461,7 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
                 _modelBonePartNames[animationObj.modelPartIndex] = animationObj.partName;
             }
 
-            if (animationObj.sceneObjectType == "MeshSO" /* && animationObj.skinningRigIndex > -1 */ )
+            if (animationObj.sceneObjectType == "MeshSO" /* && animationObj.skinningRigIndex > -1 */)
             {
                 int realMeshID = getMeshIndexFromID(animationObj.id);
                 if (animationObj.skinningRigIndex > -1)
@@ -475,7 +469,9 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
                     _skinIDToMeshID[animationObj.skinningRigIndex] = realMeshID;
                     _meshIDtoSkinID[realMeshID] = animationObj.skinningRigIndex;
                 }
-                _meshes[realMeshID].meshSOReference = animationObj.id;
+                _meshes[realMeshID].meshSOReferenceID = animationObj.id;
+                int modelPartIndex = animation.animatedObjects[animationObj.id].modelPartIndex;
+                _meshes[realMeshID].associateAnimatedNode = &animation.animatedObjects[modelPartIndex];
 
                 auto& nodeTransform = animation.animatedObjects[animationObj.modelPartIndex];
                 _meshes[realMeshID].setAnimatedTransform(nodeTransform);
@@ -520,6 +516,18 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
                 break;
         }
     }
+}
+
+osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
+{
+    osg::ref_ptr<osgAnimation::Skeleton> returnSkeleton = new osgAnimation::Skeleton();
+    returnSkeleton->setDataVariance(osg::Object::DYNAMIC);
+    returnSkeleton->setName("Armature");
+
+    osg::ref_ptr<osgAnimation::Bone> rootBone = new osgAnimation::Bone();
+    rootBone->setName("RootBone");
+
+    returnSkeleton->addChild(rootBone);
 
     // Create all bones
     for (auto& modelBone : _modelBonePartIDs)
@@ -732,7 +740,9 @@ Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& arch
     cullBackFaces = desc.value("cullBackFaces", false);
 
     isAnimated = false;
-    meshSOReference = -1;
+    meshSOReferenceID = -1;
+    associateAnimatedNode = nullptr;
+    isRigidSkin = false;
 
     name = desc.value("name", "");
     file = desc.value("file", "");
@@ -1047,6 +1057,7 @@ void Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int
     }
     else
     {
+        this->isRigidSkin = true;
         int partNumber = skinningRig.skinningClusters.size() > 0 ? skinningRig.skinningClusters[0].linkObjectIndex : -1;
         auto it = modelBonePartNames.find(partNumber);
         if (it != modelBonePartNames.end())

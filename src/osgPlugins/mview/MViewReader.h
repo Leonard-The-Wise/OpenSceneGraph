@@ -218,7 +218,10 @@ namespace MViewParser
 		bool isAnimated;
 		osg::ref_ptr<osg::MatrixTransform> meshMatrix;
 		osg::ref_ptr<osg::MatrixTransform> meshMatrixRigTransform;
-		int meshSOReference;
+		int meshSOReferenceID;
+		AnimatedObject* associateAnimatedNode;
+
+		bool isRigidSkin;
 
 		std::vector<SubMesh> subMeshes;
 
@@ -315,6 +318,8 @@ namespace MViewParser
 
 		osg::Matrix MViewReader::computeBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
 			int linkMode, const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform);
+
+		void solveAnimationLinks();
 
 		osg::ref_ptr<osgAnimation::Skeleton> buildBones();
 
