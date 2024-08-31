@@ -318,7 +318,7 @@ namespace MViewParser
 
 		AnimatedObject* getAnimatedObject(std::vector<AnimatedObject>& animatedObjects, int id);
 
-		osg::Matrix MViewReader::computeBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
+		osg::Matrix MViewReader::computeBonePoseTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
 			int linkMode, const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform);
 
 		void solveAnimationLinks();

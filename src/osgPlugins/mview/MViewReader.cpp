@@ -421,7 +421,7 @@ AnimatedObject* MViewReader::getAnimatedObject(std::vector<AnimatedObject>& anim
     return nullptr;
 }
 
-osg::Matrix MViewReader::computeBoneTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
+osg::Matrix MViewReader::computeBonePoseTransform(AnimatedObject& modelPart, AnimatedObject& linkObject,
     int linkMode, const osg::Matrix& defaultClusterBaseTransform, const osg::Matrix& defaultClusterWorldTransform)
 {
     // 1. Obtenha as transformações do osso e da parte
@@ -563,13 +563,14 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
         AnimatedObject& modelPart = *_bonesToModelPartAndLinkObject[name].first;
         AnimatedObject& linkObject = *_bonesToModelPartAndLinkObject[name].second;
 
-        osg::Matrix boneTransform = computeBoneTransform(modelPart, linkObject,
+        osg::Matrix bonePoseTransform = computeBonePoseTransform(modelPart, linkObject,
             modelBone.second.linkMode, modelBone.second.defaultClusterBaseTransform,
             modelBone.second.defaultClusterWorldTransform);
 
         osg::Matrix invBindMatrix = modelBone.second.defaultClusterBaseTransform;
+        osg::Matrix restMatrix = osg::Matrix::inverse(invBindMatrix);
 
-        newBone->setMatrix(boneTransform);
+        newBone->setMatrix(restMatrix);
         newBone->setInvBindMatrixInSkeletonSpace(invBindMatrix);
 
         osg::ref_ptr<osgAnimation::UpdateBone> updateBone = new osgAnimation::UpdateBone();
