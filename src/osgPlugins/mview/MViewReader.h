@@ -66,6 +66,16 @@ namespace MViewParser
 		}
 	};
 
+	class AnimatedTransform {
+	public:
+		osg::Matrix matrix;
+		osg::Matrix cachedmatrix0;
+
+		bool isValid;
+		AnimatedTransform() : isValid(false) {};
+
+	};
+
 	class AnimatedObject {
 	public:
 		std::string partName;
@@ -76,18 +86,37 @@ namespace MViewParser
 		int parentIndex;
 		int modelPartFPS;
 		double modelPartScale;
+		bool useFixedWorldTransform;
+		bool useFixedLocalTransform;
+		osg::Matrix cachedWorldTransform0;
+		osg::Matrix cachedmatrix0;
 
 		std::vector<AnimatedProperty> animatedProperties;
 		std::map<std::string, AnimatedProperty*> animatedPropertiesMap;
+		AnimatedTransform animatedLocalTransform;
 
 		osg::ref_ptr<osgAnimation::Vec3LinearChannel> translation;
 		osg::ref_ptr<osgAnimation::Vec3LinearChannel> scale;
 		// osg::ref_ptr<osgAnimation::Vec3LinearChannel> rotationEuler;
 		osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> rotation;
 
+		//AnimatedObject() : skinningRigIndex(-1), id(-1), modelPartIndex(-1), modelPartFPS(0), modelPartScale(0.0)
+		//{};
 		AnimatedObject(const MViewFile::Archive& archive, const nlohmann::json& description, int ID);
 
+		bool hasAnimatedTransform();
+
 		const osg::Matrix getWorldTransform();
+
+		inline void setFixedWorldTransform(osg::Matrix w) {
+			useFixedWorldTransform = true;
+			cachedWorldTransform0 = w;
+		}
+
+		inline void setFixedLocalTransform(osg::Matrix l) {
+			useFixedLocalTransform = true;
+			cachedmatrix0 = l;
+		}
 
 	private:
 
@@ -122,9 +151,16 @@ namespace MViewParser
 		std::vector<AnimatedObject> animatedObjects;
 		osg::Matrix sceneTransform;
 
+		//Animation() : expectedNumAnimatedObjects(0) {};
 		Animation(const MViewFile::Archive& archive, const nlohmann::json& description);
 
 		const osg::ref_ptr<osgAnimation::Animation> asAnimation(std::set<std::string>& outUsedTargets);
+
+		bool hasAnimationInHierarchy(const AnimatedObject& animatedObject);
+		bool hasParentTypeInHierarchy(const AnimatedObject& animatedObject, const std::string& sceneObjectType);
+
+	private:
+		bool searchAnimationUpHierarchy(const AnimatedObject& animatedObject);
 
 	};
 
@@ -188,7 +224,7 @@ namespace MViewParser
 
 		Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& archiveFile);
 
-		const osg::ref_ptr<osg::Geometry> asGeometry();
+		const osg::ref_ptr<osg::Geometry> asGeometry(bool NoRigging = false);
 
 		const osg::ref_ptr<osg::MatrixTransform> asGeometryInMatrix();
 
@@ -235,6 +271,13 @@ namespace MViewParser
 		void unpackUnitVectors(osg::ref_ptr<osg::FloatArray>& a, const uint16_t* c, int b, int d);
 	};
 
+	struct ProgramOptions {
+	public:
+		bool NoAnimations;
+		bool NoRigging;
+
+		ProgramOptions() : NoAnimations(false), NoRigging(false){};
+	};
 
 	class MViewReader
 	{
@@ -247,6 +290,10 @@ namespace MViewParser
 			_sceneScale(0.0),
 			_animModelsScale(0.0)
 		{}
+
+		inline void setOptions(const ProgramOptions& options) {
+			_options = options;
+		}
 
 		osgDB::ReaderWriter::ReadResult readMViewFile(const std::string& fileName);
 
@@ -273,6 +320,8 @@ namespace MViewParser
 
 		osg::ref_ptr<osgAnimation::BasicAnimationManager> buildAnimationManager(osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton);
 
+		void findFixedTransforms();
+
 		MViewFile::Archive* _archive;
 		std::vector<Mesh> _meshes;
 		std::vector<SkinningRig> _skinningRigs;
@@ -283,7 +332,7 @@ namespace MViewParser
 		std::map<int, int> _skinIDToMeshID;
 		std::map<int, int> _meshIDtoSkinID;
 
-
+		ProgramOptions _options;
 
 		std::map<std::string, std::pair<AnimatedObject*, AnimatedObject*>> _bonesToModelPartAndLinkObject;
 		std::map<std::string, osg::Matrix> _derivedBoneMatrices;

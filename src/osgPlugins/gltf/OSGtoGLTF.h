@@ -9,6 +9,7 @@
 #include "json.hpp"
 
 #include "MaterialParser.h"
+#include "MViewMaterial.h"
 
 //! Visitor that builds a GLTF data model from an OSG scene graph.
 class OSGtoGLTF : public osg::NodeVisitor
@@ -23,7 +24,7 @@ private:
     typedef std::map<std::string, int> BoneIDNames;
     typedef std::map<int, osg::ref_ptr<osgAnimation::RigGeometry>> RiggedMeshStack;
 
-    std::vector< osg::ref_ptr< osg::Texture > > _textures;
+    std::vector<osg::ref_ptr<osg::Texture>> _textures;
 
     tinygltf::Model& _model;
     std::stack<tinygltf::Node*> _gltfNodeStack;
@@ -37,6 +38,7 @@ private:
     bool _firstNamedMatrix;
     osg::Node* _firstMatrixNode;
     std::string _modelName;
+    bool _modelTypeMVIEW;
 
     std::stack<std::pair<int, tinygltf::Skin*>> _gltfSkeletons;
     BindMatrices _skeletonInvBindMatrices;
@@ -47,13 +49,15 @@ private:
     std::set<std::string> _gltfAllTargets;                // Valid and invalid animated targets for gltf Rig nodes
     std::map<std::string, int> _gltfValidAnimationTargets;// Valid animated targets for gltf Rig nodes
     std::map<std::string, int> _gltfMorphTargets;         // Animated targets for gltf Morph nodes
-    std::map<std::string, int> _gltfMaterials;
-    std::map<std::string, int> _gltfTextures;
+    std::map<std::string, int> _gltfMaterials;            // Materials created for GLTF export
+    std::map<std::string, int> _gltfTextures;             // Textures created for GLTF export
+    std::map<std::string, int> _gltfImages;               // Images created for GLTF export
     std::map<int, osg::Matrix> _gltfStackedMatrices;      // Stacked matrix transform for an Animation Target (node ID)
     std::set<int> _materialsWithTextures;                 // Save if current material has an assigned texture to it
     std::map<int, int> _statesetGltfMaterial;             // Save stateset UniqueID -> gltf Material ID
     std::map<int, int> _texcoordsMap;                     // Save virtual osg texCoord -> real gltf texCoord
     std::map<int, std::set<int>> _materialTexCoords;      // Save a list of texcoords for material
+    std::map<std::string, MViewMaterial> _mviewMaterials; // Saves a list of MVIEW Materials
 
     // Keeps track of morph target times and weights
     std::map<float, std::map<std::string, float>> _morphTargetTimeWeights;
@@ -173,7 +177,7 @@ private:
 
     int getNewMaterialTexCoord(int materialIndex, int originalTexCoord);
 
-    int createTextureV2(const osgJSONParser::TextureInfo2& texInfo, const std::string& textureNameOverride = "");
+    int createTextureV2(const osgJSONParser::TextureInfo2& texInfo, const std::string& textureNameOverride = "", bool stripNames = true);
 
     int getCurrentMaterialV2(osg::Geometry* geometry);
 
@@ -181,11 +185,20 @@ private:
 
     int createGltfMaterialV2(osgJSONParser::MaterialInfo2& materialInfo);
 
+    int createTextureMView(const std::string& name, bool textureFilterNearest, bool textureWrapClamp);
+
+    int createGltfSubTextureMView(const std::string& originalFile, const std::string& suffix, const std::string& materialName, 
+        const std::vector<double>& uTexRange, bool textureFilterNearest, bool textureWrapClamp);
+
     int getCurrentMaterialMview(osg::Geometry* geometry);
+
+    int createGltfMaterialMView(const MViewMaterial& mviewMaterial);
+
+    void buildMViewMaterials(const std::string& fileContents);
 
 public:
     OSGtoGLTF(tinygltf::Model& model) :
-        _model(model), _firstMatrix(true), _firstNamedMatrix(true), _firstMatrixNode(nullptr)
+        _model(model), _firstMatrix(true), _firstNamedMatrix(true), _firstMatrixNode(nullptr), _modelTypeMVIEW(false)
     {
         setTraversalMode(TRAVERSE_ALL_CHILDREN);
         _model.scenes.push_back(tinygltf::Scene());

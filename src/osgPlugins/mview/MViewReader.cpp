@@ -13,6 +13,8 @@ using namespace MViewFile;
 using namespace MViewParser;
 
 
+#pragma region "Static functions"
+
 template <typename T>
 osg::ref_ptr<T> transformArray(osg::ref_ptr<T>& array, osg::Matrix& transform, bool normalize)
 {
@@ -122,6 +124,11 @@ static void writeVectorToFile(const std::string& filename, const std::vector<uin
     file.close();
 }
 
+#pragma endregion
+
+
+#pragma region "MView Reader"
+
 osgDB::ReaderWriter::ReadResult MViewReader::readMViewFile(const std::string& fileName)
 {
     OSG_NOTICE << "Loading Marmoset Viewer archive: " << fileName << std::endl;
@@ -204,7 +211,7 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
     rootMesh->setName("RootNode");
     rootMatrix->setName(_modelName);
 
-    if (hasAnimations)
+    if (hasAnimations && !_options.NoRigging)
     {
         osg::ref_ptr<osgAnimation::Skeleton> meshSkeleton = buildBones();
 
@@ -228,15 +235,27 @@ osg::ref_ptr<osg::Node> MViewReader::parseScene(const json& sceneData)
         rootMatrix->addChild(meshSkeleton);
         rootMatrix->setMatrix(osg::Matrixd::rotate(osg::Z_AXIS, -osg::Y_AXIS));
 
-        osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager(meshSkeleton);
-        rootNode->addUpdateCallback(bam);
+        if (!_options.NoAnimations)
+        {
+            osg::ref_ptr<osgAnimation::BasicAnimationManager> bam = buildAnimationManager(meshSkeleton);
+            rootNode->addUpdateCallback(bam);
+        }
     }
     else
     {
         for (auto& mesh : _meshes)
         {
-            rootMesh->addDrawable(mesh.asGeometry());
+            rootMesh->addDrawable(mesh.asGeometry(_options.NoRigging));
         }
+
+        osg::Matrix scale;
+        if (_animModelsScale > 0.0 && _sceneScale > 0.0)
+        {
+            double factor = _animModelsScale * _sceneScale;
+            scale = osg::Matrix::scale(osg::Vec3(factor, factor, factor));
+        }
+        rootMatrix->setMatrix(scale * osg::Matrixd::rotate(osg::Z_AXIS, -osg::Y_AXIS));
+
     }
 
     rootMatrix->addChild(rootMesh);
@@ -448,11 +467,14 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
                 _modelBonePartNames[animationObj.modelPartIndex] = animationObj.partName;
             }
 
-            if (animationObj.sceneObjectType == "MeshSO" /* && animationObj.skinningRigIndex > -1*/)
+            if (animationObj.sceneObjectType == "MeshSO" /* && animationObj.skinningRigIndex > -1 */ )
             {
                 int realMeshID = getMeshIndexFromID(animationObj.id);
-                _skinIDToMeshID[animationObj.skinningRigIndex] = realMeshID;
-                _meshIDtoSkinID[realMeshID] = animationObj.skinningRigIndex;
+                if (animationObj.skinningRigIndex > -1)
+                {
+                    _skinIDToMeshID[animationObj.skinningRigIndex] = realMeshID;
+                    _meshIDtoSkinID[realMeshID] = animationObj.skinningRigIndex;
+                }
                 _meshes[realMeshID].meshSOReference = animationObj.id;
 
                 auto& nodeTransform = animation.animatedObjects[animationObj.modelPartIndex];
@@ -477,13 +499,17 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
                 {
                     // Find part ID on skinning cluster, so we can trace which mesh to get
                     int skinningRigID = getSkinningRigIDForlinkObject(linkObjectID);
-                    int meshID = _skinIDToMeshID[skinningRigID];
-                    AnimatedObject* linkObjectPart = &animationObj;
-                    AnimatedObject* meshSOParent = getAnimatedObject(animation.animatedObjects, _meshIDs[meshID]);
-                    int modelPartIndex = meshSOParent->modelPartIndex;
-                    AnimatedObject* modelPart = getAnimatedObject(animation.animatedObjects, modelPartIndex);
 
-                    _bonesToModelPartAndLinkObject[boneName] = std::make_pair(modelPart, linkObjectPart);
+                    if (skinningRigID > -1)
+                    {
+                        int meshID = _skinIDToMeshID[skinningRigID];
+                        AnimatedObject* linkObjectPart = &animationObj;
+                        AnimatedObject* meshSOParent = getAnimatedObject(animation.animatedObjects, _meshIDs[meshID]);
+                        int modelPartIndex = meshSOParent->modelPartIndex;
+                        AnimatedObject* modelPart = getAnimatedObject(animation.animatedObjects, modelPartIndex);
+
+                        _bonesToModelPartAndLinkObject[boneName] = std::make_pair(modelPart, linkObjectPart);
+                    }
 
                     found = true;
                     break;
@@ -502,7 +528,7 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
         std::string name = _modelBonePartNames[id];
 
         osg::ref_ptr<osgAnimation::Bone> newBone = new osgAnimation::Bone();
-        newBone->setName(_modelBonePartNames[id]);
+        newBone->setName(name);
 
         AnimatedObject& modelPart = *_bonesToModelPartAndLinkObject[name].first;
         AnimatedObject& linkObject = *_bonesToModelPartAndLinkObject[name].second;
@@ -517,7 +543,7 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
         newBone->setInvBindMatrixInSkeletonSpace(invBindMatrix);
 
         osg::ref_ptr<osgAnimation::UpdateBone> updateBone = new osgAnimation::UpdateBone();
-        updateBone->setName(_modelBonePartNames[id]);
+        updateBone->setName(name);
         newBone->addUpdateCallback(updateBone);
 
         rootBone->addChild(newBone);
@@ -527,8 +553,11 @@ osg::ref_ptr<osgAnimation::Skeleton> MViewReader::buildBones()
     // Create vertexinfluencemap for each mesh
     for (int i = 0; i < _meshes.size(); ++i)
     {
-        if (_skinIDToMeshID.find(i) != _skinIDToMeshID.end())
-            _meshes[i].createInfluenceMap(_skinningRigs[_skinIDToMeshID[i]], _modelBonePartNames);
+        if (_meshIDtoSkinID.find(i) != _meshIDtoSkinID.end())
+        {
+            int skinID = _meshIDtoSkinID[i];
+            _meshes[i].createInfluenceMap(_skinningRigs[skinID], _modelBonePartNames);
+        }
     }
 
     return returnSkeleton;
@@ -567,6 +596,39 @@ osg::ref_ptr<osgAnimation::BasicAnimationManager> MViewReader::buildAnimationMan
     return bam;
 }
 
+void MViewParser::MViewReader::findFixedTransforms()
+{
+    // Itera sobre todas as animações
+    for (auto& animation : _animations)
+    {
+        for (auto& animatedObject : animation.animatedObjects)
+        {
+            if (!animatedObject.useFixedWorldTransform && !animation.hasAnimationInHierarchy(animatedObject))
+            {
+                if (animatedObject.sceneObjectType == "Material") {
+                    // Se o objeto for do tipo "Material", define a transformação fixa como identidade
+                    animatedObject.setFixedWorldTransform(osg::Matrix::identity());
+                    animatedObject.setFixedLocalTransform(osg::Matrix::identity());
+                }
+                else {
+                    osg::Matrix worldTransform;
+                    osg::Matrix localTransform;
+
+                    // Verifica se o objeto tem um "SceneRootSO" na hierarquia de pais
+                    if (animation.hasParentTypeInHierarchy(animatedObject, "SceneRootSO"))
+                    {
+
+                    }
+                }
+            }
+        }
+    }
+}
+
+#pragma endregion
+
+
+#pragma region "Auxiliar Objects"
 
 SkinningRig::SkinningRig(Archive& archive, const json& json, ByteStream& byteStream)
 {
@@ -628,7 +690,7 @@ SkinningRig::SkinningRig(Archive& archive, const json& json, ByteStream& byteStr
             std::copy(data.begin() + bIndex, data.begin() + cIndex, linkMapCount.begin());
 
             // Calcula o tamanho de linkMapClusterIndices com base nos dados
-            size_t linkMapClusterIndicesSize = numClusterLinks;//(data.size() - cIndex) / sizeof(uint16_t);
+            size_t linkMapClusterIndicesSize = numClusterLinks;
             linkMapClusterIndices.resize(linkMapClusterIndicesSize);
             std::copy(reinterpret_cast<const uint16_t*>(data.data() + cIndex),
                 reinterpret_cast<const uint16_t*>(data.data() + cIndex + 2 * linkMapClusterIndicesSize),
@@ -853,13 +915,15 @@ Mesh::Mesh(const nlohmann::json& description, const MViewFile::ArchiveFile& arch
         bounds.max.z() - bounds.min.z()) / 3;
 }
 
-const osg::ref_ptr<osg::Geometry> Mesh::asGeometry()
+const osg::ref_ptr<osg::Geometry> Mesh::asGeometry(bool NoRigging)
 {
+    if (NoRigging)  // DO NOT set like isAnimated = !NoRigging cause it is defined somewhere else.
+        isAnimated = false;
+
     osg::ref_ptr<osgAnimation::RigGeometry> rigGeometry;
     osg::ref_ptr<osg::Geometry> trueGeometry = new osg::Geometry();
 
     trueGeometry->setName(name);
-    trueGeometry->setUserValue("ModelType", std::string("mview"));
 
     if (isAnimated)
     {
@@ -940,31 +1004,71 @@ void Mesh::createInfluenceMap(const SkinningRig& skinningRig, const std::map<int
     influenceMap = new osgAnimation::VertexInfluenceMap();
 
     int linkMapIndex = 0;
+    int numErrors = 0;
 
-    for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) 
+    if (!skinningRig.isRigidSkin)
     {
-        int linkCount = skinningRig.linkMapCount[vertexIndex];  
-        
-        for (int weightIndex = 0; weightIndex < linkCount; ++weightIndex) 
+        for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
         {
-            float weight = skinningRig.linkMapWeights[linkMapIndex + weightIndex];
-            int clusterIndex = skinningRig.linkMapClusterIndices[linkMapIndex + weightIndex];
+            int linkCount = skinningRig.linkMapCount[vertexIndex];
+            double weightSum = 0.0;
 
-            int partNumber = skinningRig.skinningClusters[clusterIndex].linkObjectIndex;
-
-            auto it = modelBonePartNames.find(partNumber);
-            if (it != modelBonePartNames.end()) 
+            // Primeiro, calcule a soma dos pesos para o vértice atual usando precisão double
+            for (int weightIndex = 0; weightIndex < linkCount; ++weightIndex)
             {
-                const std::string& boneName = it->second;
-                (*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, weight));
+                weightSum += static_cast<double>(skinningRig.linkMapWeights[linkMapIndex + weightIndex]);
+            }
+
+            // Se a soma for maior que 0, normalize os pesos para que a soma total seja 1
+            if (weightSum > 0.0)
+            {
+                for (int weightIndex = 0; weightIndex < linkCount; ++weightIndex)
+                {
+                    double normalizedWeight = static_cast<double>(skinningRig.linkMapWeights[linkMapIndex + weightIndex]) / weightSum;  // Ajuste proporcional
+                    int clusterIndex = skinningRig.linkMapClusterIndices[linkMapIndex + weightIndex];
+
+                    int partNumber = skinningRig.skinningClusters[clusterIndex].linkObjectIndex;
+
+                    auto it = modelBonePartNames.find(partNumber);
+                    if (it != modelBonePartNames.end())
+                    {
+                        const std::string& boneName = it->second;
+                        (*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, static_cast<float>(normalizedWeight)));
+                    }
+                    else
+                    {
+                        ++numErrors;
+                    }
+                }
+            }
+
+            linkMapIndex += linkCount;
+        }
+    }
+    else
+    {
+        int partNumber = skinningRig.skinningClusters.size() > 0 ? skinningRig.skinningClusters[0].linkObjectIndex : -1;
+        auto it = modelBonePartNames.find(partNumber);
+        if (it != modelBonePartNames.end())
+        {
+            const std::string& boneName = it->second;
+            for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
+            {
+                (*influenceMap)[boneName].push_back(std::make_pair(vertexIndex, 1.0));
             }
         }
-
-        linkMapIndex += linkCount;
+        else
+        {
+            ++numErrors;
+        }
     }
+
 
     if (influenceMap->size() > 0)
         isAnimated = true;
+
+    if (numErrors > 0)
+        OSG_WARN << "WARNING: Found " << numErrors << " errors while building skin for mesh " << name << std::endl;
 }
 
 void Mesh::unpackUnitVectors(osg::ref_ptr<osg::FloatArray>& returnArray, const uint16_t* buffer, int vCount, int byteStride)
@@ -1015,6 +1119,8 @@ AnimatedObject::AnimatedObject(const Archive& archive, const json& description, 
     parentIndex = description.value("parentIndex", 0);
     modelPartFPS = description.value("modelPartFPS", 0);
     modelPartScale = description.value("modelPartScale", 0.0);
+    useFixedLocalTransform = false;
+    useFixedWorldTransform = false;
 
     if (description.contains("animatedProperties"))
     {
@@ -1039,6 +1145,16 @@ AnimatedObject::AnimatedObject(const Archive& archive, const json& description, 
 
         assembleKeyFrames();
     }
+}
+
+bool MViewParser::AnimatedObject::hasAnimatedTransform()
+{
+    if (translation && translation->getSampler()->getKeyframeContainer()->size() > 1 || 
+        rotation && rotation->getSampler()->getKeyframeContainer()->size() > 1 ||
+        scale && scale->getSampler()->getKeyframeContainer()->size() > 1)
+        return true;
+
+    return false;
 }
 
 const osg::Matrix AnimatedObject::getWorldTransform()
@@ -1393,3 +1509,91 @@ const osg::ref_ptr<osgAnimation::Animation> Animation::asAnimation(std::set<std:
     return animation;
 }
 
+bool MViewParser::Animation::hasAnimationInHierarchy(const AnimatedObject& animatedObject)
+{
+    // Verifica se há animação na hierarquia do objeto
+    if (searchAnimationUpHierarchy(animatedObject))
+    {
+        return true;
+    }
+
+    // Verifica se o objeto não é a raiz do modelo e se há animação na hierarquia do seu pai
+    if (animatedObject.id != animatedObject.modelPartIndex &&
+        searchAnimationUpHierarchy(animatedObjects[animatedObject.modelPartIndex]))
+    {
+        return true;
+    }
+
+    // Verifica se há algum pai do tipo "TurnTableSO" ou "CameraSO" na hierarquia
+    if (hasParentTypeInHierarchy(animatedObject, "TurnTableSO") ||
+        hasParentTypeInHierarchy(animatedObject, "CameraSO")) {
+        return true;
+    }
+
+    // Verifica se o próprio objeto é do tipo "CameraSO"
+    if (animatedObject.sceneObjectType == "CameraSO") {
+        return true;
+    }
+
+    return false;
+}
+
+bool MViewParser::Animation::searchAnimationUpHierarchy(const AnimatedObject& animatedObject)
+{
+    int currentId = animatedObject.id;
+
+    // Limita a busca a 100 iterações para evitar loops infinitos
+    for (int iteration = 0; iteration < 100; iteration++)
+    {
+        AnimatedObject& currentObject = animatedObjects[currentId];
+
+        if (currentObject.animatedLocalTransform.isValid) {
+            // Se o objeto tiver uma transformação animada ou
+			// Se o objeto atual não for a raiz do modelo e a busca em sua hierarquia pai encontrar uma animação
+            if (currentObject.hasAnimatedTransform() ||
+                (currentObject.id != currentObject.modelPartIndex &&
+                    searchAnimationUpHierarchy(animatedObjects[currentObject.modelPartIndex]))) 
+            {
+                return true; // Animação encontrada na hierarquia
+            }
+        }
+
+        // Se o objeto atual for seu próprio pai, encerra a busca
+        if (currentId == currentObject.parentIndex) {
+            break;
+        }
+
+        // Avança para o próximo pai na hierarquia
+        currentId = currentObject.parentIndex;
+    }
+
+    return false;
+}
+
+bool MViewParser::Animation::hasParentTypeInHierarchy(const AnimatedObject& animatedObject, const std::string& sceneObjectType)
+{
+    int parentIndex = animatedObject.parentIndex;  // Inicializa o índice do pai
+    int maxIterations = 100;                       // Limite máximo de iterações para evitar loops infinitos
+
+    for (int iteration = 0; iteration < maxIterations; ++iteration) {
+        // Acessa o objeto pai na hierarquia
+        const AnimatedObject& parentObject = this->animatedObjects[parentIndex];
+
+        // Verifica se o tipo do objeto pai corresponde ao tipo alvo
+        if (parentObject.sceneObjectType == sceneObjectType) {
+            return true;  // Encontrou o tipo alvo, retorna true
+        }
+
+        // Se o índice do pai não mudou, interrompe a busca
+        if (parentIndex == parentObject.parentIndex) {
+            break;  // Evita loop infinito, interrompe a busca
+        }
+
+        // Atualiza o índice do pai para o próximo na hierarquia
+        parentIndex = parentObject.parentIndex;
+    }
+
+    return false;
+}
+
+#pragma endregion

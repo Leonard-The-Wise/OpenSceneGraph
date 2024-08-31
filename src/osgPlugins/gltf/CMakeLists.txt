@@ -6,6 +6,7 @@ SET(TARGET_H
     tiny_gltf.h
     json.hpp
     MaterialParser.h
+    MViewMaterial.h
 )
 
 SET(TARGET_SRC
@@ -14,6 +15,7 @@ SET(TARGET_SRC
     pch.cpp
     ReaderWriterGLTF.cpp
     MaterialParser.cpp
+    MViewMaterial.cpp
 )
 
 SET(TARGET_ADDED_LIBRARIES

@@ -25,6 +25,7 @@
 #include <osgAnimation/StackedScaleElement>
 
 #include "tiny_gltf.h"
+#include "json.hpp"
 
 #include "Stringify.h"
 #include "GLTFWriter.h"
@@ -38,14 +39,14 @@ osgDB::ReaderWriter::WriteResult GLTFWriter::write(const osg::Node& node, const 
 {
 	// Causes crash (actually return nothing) if applicationKey is wrong!
 	int applicationKey = 0;
+	bool realWriteBinary = isBinary;
+	std::string realLocation = location;
 
 	if (options)
 	{
 		std::istringstream iss(options->getOptionString());
 		std::string opt;
 
-		bool realWriteBinary = isBinary;
-		std::string realLocation = location;
 		while (iss >> opt)
 		{
 			std::string pre_equals;

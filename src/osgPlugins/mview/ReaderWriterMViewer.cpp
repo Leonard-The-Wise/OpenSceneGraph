@@ -53,6 +53,8 @@ public:
 
 		int applicationKey = 0;
 
+		MViewParser::ProgramOptions progOptions;
+
 		if (options)
 		{
 
@@ -75,6 +77,16 @@ public:
 				else
 				{
 					pre_equals = opt;
+				}
+
+				if (pre_equals == "NoAnimations")
+				{
+					progOptions.NoAnimations = true;
+				}
+
+				if (pre_equals == "NoRigging")
+				{
+					progOptions.NoRigging = true;
 				}
 
 				if (pre_equals == "XParam")
@@ -101,6 +113,7 @@ public:
 
 
         MViewParser::MViewReader mviewReader;
+		mviewReader.setOptions(progOptions);
 
         return mviewReader.readMViewFile(fileName);
     }

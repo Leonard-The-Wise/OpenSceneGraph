@@ -38,8 +38,10 @@
 #include "json.hpp"
 
 #include "MaterialParser.h"
+#include "MViewMaterial.h"
 
 using namespace osgJSONParser;
+using json = nlohmann::json;
 
 #include "OSGtoGLTF.h"
 
@@ -595,6 +597,7 @@ static std::string makeZeroTexture(const std::string& redChannelFile, ZeroTextur
 	return outputFileName;
 }
 
+// Don't do static here (unreferenced function)
 std::string invertTexture(const std::string& redChannelFile)
 {
 	std::string outputFileName = stripAllExtensions(redChannelFile) + ".i.png";
@@ -627,37 +630,39 @@ std::string invertTexture(const std::string& redChannelFile)
 	return outputFileName;
 }
 
-static std::string combineTextures(const std::string& rgbFile, const std::string& redChannelFile)
+static std::string combineTextures(const std::string& rgbFile, const std::string& redChannelFile, bool stripFileName = true)
 {
-	std::string outputFileName = stripAllExtensions(rgbFile) + ".a-combined.png";
+	std::string outputFileName = stripAllExtensions(rgbFile) + ".comb.png";
 
 	if (osgDB::fileExists("textures\\" + outputFileName))
 		return outputFileName;
 
 	int width, height, channels;
-	unsigned char* rgbData = stbi_load(std::string("textures\\" + stripAllExtensions(rgbFile) + ".png").c_str(), &width, &height, &channels, 3);
+	std::string rgbFileName = stripFileName ? stripAllExtensions(rgbFile) + ".png" : rgbFile;
+	unsigned char* rgbData = stbi_load(std::string("textures\\" + rgbFileName).c_str(), &width, &height, &channels, 3);
 	if (!rgbData) 
 	{
-		OSG_WARN << "Error loading RGB texture " << rgbFile << " to combine!" << std::endl;
-		return rgbFile;
+		OSG_WARN << "Error loading RGB texture " << rgbFileName << " to combine!" << std::endl;
+		return rgbFileName;
 	}
 
 	int rWidth, rHeight, rChannels;
-	unsigned char* redData = stbi_load(std::string("textures\\" + stripAllExtensions(redChannelFile) + ".png").c_str(), &rWidth, &rHeight, &rChannels, 1);
-	if (!redData || rWidth != width || rHeight != height || rChannels > 1) 
+	std::string redChannelFileName = stripFileName ? stripAllExtensions(redChannelFile) + ".png" : redChannelFile;
+	unsigned char* redData = stbi_load(std::string("textures\\" + redChannelFileName).c_str(), &rWidth, &rHeight, &rChannels, 1);
+	if (!redData || rWidth != width || rHeight != height) 
 	{
-		OSG_WARN << "Error loading R channel texture " << redChannelFile << " to combine or incompatible channels!" << std::endl;
+		OSG_WARN << "Error loading R channel texture " << redChannelFileName << " to combine or incompatible channels!" << std::endl;
 		stbi_image_free(rgbData);
-		return rgbFile;
+		return rgbFileName;
 	}
 
 	unsigned char* combinedData = new unsigned char[width * height * 4];
 
 	for (int i = 0; i < width * height; ++i) {
-		combinedData[i * 4] = rgbData[i * 3];         // R
-		combinedData[i * 4 + 1] = rgbData[i * 3 + 1]; // G
-		combinedData[i * 4 + 2] = rgbData[i * 3 + 2]; // B
-		combinedData[i * 4 + 3] = redData[i];         // A (usando o canal R da segunda textura)
+		combinedData[i * 4] = rgbData[i * 3];				 // R
+		combinedData[i * 4 + 1] = rgbData[i * 3 + 1];		 // G
+		combinedData[i * 4 + 2] = rgbData[i * 3 + 2];		 // B
+		combinedData[i * 4 + 3] = redData[i];    // A (usando o canal R da segunda textura)
 	}
 
 	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 4, combinedData, width * 4);
@@ -667,30 +672,32 @@ static std::string combineTextures(const std::string& rgbFile, const std::string
 	delete[] combinedData;
 
 	OSG_NOTICE << "Created new texture " << outputFileName << " to combine both Opacity and Albedo/Diffuse colors in one image as required by GLTF 2.0 standard." << std::endl;
-	OSG_NOTICE << "You may manually remove " << rgbFile << " and " << redChannelFile << " later if you want." << std::endl;
+	OSG_NOTICE << "You may manually remove " << rgbFileName << " and " << redChannelFileName << " later if you want." << std::endl;
 
 	return outputFileName;
 }
 
-static std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, const std::string& metallicFile)
+static std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, const std::string& metallicFile, bool stripFileName = true)
 {
-	std::string outputFileName = stripAllExtensions(roughnessFile) + ".m-combined.png";
+	std::string outputFileName = stripAllExtensions(roughnessFile) + ".comb.png";
 
 	if (osgDB::fileExists("textures\\" + outputFileName))
 		return outputFileName;
 
 	int width, height, channels;
-	unsigned char* roughnessData = stbi_load(std::string("textures\\" + stripAllExtensions(roughnessFile) + ".png").c_str(), &width, &height, &channels, 1);
-	if (!roughnessData || channels > 1)
+	std::string roughnessFileName = stripFileName ? stripAllExtensions(roughnessFile) + ".png" : roughnessFile;
+	unsigned char* roughnessData = stbi_load(std::string("textures\\" + roughnessFileName).c_str(), &width, &height, &channels, 1);
+	if (!roughnessData)
 	{
-		OSG_WARN << "Error loading roughness texture " << roughnessFile << "!" << std::endl;
-		return roughnessFile;
+		OSG_WARN << "Error loading roughness texture " << roughnessFileName << "!" << std::endl;
+		return roughnessFileName;
 	}
 
 	int mWidth, mHeight, mChannels;
-	unsigned char* metallicData = stbi_load(std::string("textures\\" + stripAllExtensions(metallicFile) + ".png").c_str(), &mWidth, &mHeight, &mChannels, 1);
-	if (!metallicData || mWidth != width || mHeight != height || mChannels > 1) {
-		OSG_WARN << "Error loading metallic texture or incompatible size! [" << metallicFile << "]" << std::endl;
+	std::string metallicFileName = stripFileName ? stripAllExtensions(metallicFile) + ".png" : metallicFile;
+	unsigned char* metallicData = stbi_load(std::string("textures\\" + metallicFileName).c_str(), &mWidth, &mHeight, &mChannels, 1);
+	if (!metallicData || mWidth != width || mHeight != height) {
+		OSG_WARN << "Error loading metallic texture or incompatible size! [" << metallicFileName << "]" << std::endl;
 		stbi_image_free(roughnessData);
 		return roughnessFile;
 	}
@@ -710,13 +717,63 @@ static std::string combineRoughnessMetallicTextures(const std::string& roughness
 	delete[] combinedData;
 
 	OSG_NOTICE << "Created new texture " << outputFileName << " to combine both Roughness (G) and Metallic (B) colors in one image as required by GLTF 2.0 standard." << std::endl;
-	OSG_NOTICE << "You may manually remove " << roughnessFile << " and " << metallicFile << " later if you want." << std::endl;
+	OSG_NOTICE << "You may manually remove " << roughnessFileName << " and " << metallicFileName << " later if you want." << std::endl;
 	// std::remove(std::string("textures\\" + stripAllExtensions(roughnessFile) + ".png").c_str());
 	// std::remove(std::string("textures\\" + stripAllExtensions(metallicFile) + ".png").c_str());
 
 	return outputFileName;
 }
 
+static uint8_t* extractSubTexture(const std::vector<double>& uTexRange, const uint8_t* textureData, int textureWidth, int textureHeight, int channels,
+	int& outSubTextureWidth, int& outSubTextureHeight)
+{
+	if (uTexRange.size() != 4) {
+		return nullptr; 
+	}
+
+	// Calcule as dimensões da sub-textura
+	int subTextureWidth = static_cast<int>(uTexRange[0] * textureWidth);
+	int subTextureHeight = static_cast<int>(uTexRange[1] * textureHeight);
+
+	// Aloca memória para a sub-textura
+	uint8_t* subTextureData = new uint8_t[subTextureWidth * subTextureHeight * channels];
+
+	// Loop para extrair a sub-textura (invertendo a extração)
+	for (int y = 0; y < subTextureHeight; ++y) {
+		for (int x = 0; x < subTextureWidth; ++x) {
+			// Calcula as coordenadas originais (fracionárias)
+			double hM_x = static_cast<double>(x) / subTextureWidth;
+			double hM_y = static_cast<double>(y) / subTextureHeight;
+
+			// Aplica escala e deslocamento conforme o shader
+			double finalCoordX = std::fmod(hM_x, 1.0) * uTexRange[0] + uTexRange[2];
+			double finalCoordY = std::fmod(hM_y, 1.0) * uTexRange[1] + uTexRange[3];
+
+			// Inverte a coordenada Y para a extração
+			finalCoordY = 1.0 - finalCoordY;
+
+			// Converte para coordenadas de pixel
+			int texX = static_cast<int>(finalCoordX * textureWidth);
+			int texY = static_cast<int>(finalCoordY * textureHeight);
+
+			// Garante que as coordenadas estejam dentro dos limites da textura
+			texX = std::min(std::max(texX, 0), textureWidth - 1);
+			texY = std::min(std::max(texY, 0), textureHeight - 1);
+
+			// Copia os dados da textura original para a sub-textura, mantendo a ordem original
+			int subTextureIndex = ((subTextureHeight - 1 - y) * subTextureWidth + x) * channels;
+			for (int c = 0; c < channels; ++c) {
+				int atlasIndex = (texY * textureWidth + texX) * channels + c;
+				subTextureData[subTextureIndex + c] = textureData[atlasIndex];
+			}
+		}
+	}
+
+	outSubTextureWidth = subTextureWidth;
+	outSubTextureHeight = subTextureHeight;
+
+	return subTextureData;
+}
 
 #pragma endregion
 
@@ -1993,11 +2050,15 @@ int OSGtoGLTF::getNewMaterialTexCoord(int materialIndex, int originalTexCoord)
 	return texCoord;
 }
 
-int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo, const std::string& textureNameOverride)
+int OSGtoGLTF::createTextureV2(const TextureInfo2& texInfo, const std::string& textureNameOverride, bool stripNames)
 {
-	std::string fileName = stripAllExtensions(texInfo.Name) + ".png";
-	if (textureNameOverride != "")
-		fileName = stripAllExtensions(textureNameOverride) + ".png";
+	std::string fileName = texInfo.Name;
+	if (stripNames)
+	{
+		fileName = stripAllExtensions(texInfo.Name) + ".png";
+		if (textureNameOverride != "")
+			fileName = stripAllExtensions(textureNameOverride) + ".png";
+	}
 
 	fileName = "textures/" + fileName;
 
@@ -2951,9 +3012,270 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 	return materialIndex;
 }
 
+
+int OSGtoGLTF::createTextureMView(const std::string& name, bool textureFilterNearest, bool textureWrapClamp)
+{
+	std::string fileName = name;
+
+	fileName = "textures/" + fileName;
+
+	int imageIndex = -1;
+	if (_gltfImages.find(fileName) != _gltfImages.end())
+	{
+		imageIndex = _gltfImages[fileName];
+	}
+	else
+	{
+		tinygltf::Image gltfImage;
+		gltfImage.uri = fileName;
+		imageIndex = _model.images.size();
+		_model.images.push_back(gltfImage);
+
+		_gltfImages[fileName] = imageIndex;
+	}
+
+	tinygltf::Sampler sampler;
+	sampler.magFilter = getFilterModeFromString("LINEAR");
+	sampler.minFilter = getFilterModeFromString("LINEAR_MIPMAP_LINEAR");
+	sampler.wrapS = getWrapModeFromString("REPEAT");
+	sampler.wrapT = getWrapModeFromString("REPEAT");
+	int samplerIndex = _model.samplers.size();
+	_model.samplers.push_back(sampler);
+
+	tinygltf::Texture gltfTexture;
+	gltfTexture.sampler = samplerIndex;
+	gltfTexture.source = imageIndex;
+
+	int textureIndex = _model.textures.size();
+	_model.textures.push_back(gltfTexture);
+
+	_gltfTextures.emplace(fileName, textureIndex);
+
+	return textureIndex;
+}
+
+int OSGtoGLTF::createGltfSubTextureMView(const std::string& originalFile, const std::string& suffix, const std::string& materialName, 
+	const std::vector<double>& uTexRange, bool textureFilterNearest, bool textureWrapClamp)
+{
+	std::string outputFileName = stripAllExtensions(originalFile) + "." + suffix + ".png";
+
+	// Creates a new file for subtexture
+	if (!osgDB::fileExists("textures\\" + outputFileName))
+	{
+		FILE* f = fopen(std::string("textures\\" + originalFile).c_str(), "rb");
+		int width, height, channels, rWidth, rHeight, rChannels;
+		if (f)
+		{
+			stbi_info_from_file(f, &rWidth, &rHeight, &rChannels);
+			fclose(f);
+		}
+		else
+		{
+			OSG_WARN << "WARNING: Could not read file " << originalFile << " to create subtexture for channel " << suffix << " of material " << materialName << "." << std::endl;
+			return -1;
+		}
+
+		unsigned char* rgbData = stbi_load(std::string("textures\\" + originalFile).c_str(), &width, &height, &channels, rChannels);
+
+		if (!rgbData)
+		{
+			OSG_WARN << "WARNING: Could not read file " << originalFile << " to create subtexture for channel " << suffix << " of material " << materialName << "." << std::endl;
+			return -1;
+		}
+		int subTextureWidth, subTextureHeight;
+		unsigned char* newTexture = extractSubTexture(uTexRange, rgbData, width, height, channels, subTextureWidth, subTextureHeight);
+
+		if (!newTexture)
+		{
+			OSG_WARN << "WARNING: Could not create subtexture for channel " << suffix << " of material " << materialName << " from file " << originalFile << std::endl;
+			return -1;
+		}
+
+		stbi_write_png(std::string("textures\\" + outputFileName).c_str(), subTextureWidth, subTextureHeight, channels, newTexture, subTextureWidth * channels);
+
+		stbi_image_free(rgbData);
+		delete[] newTexture;
+
+		OSG_NOTICE << "Created texture " << outputFileName << " for channel " << suffix << " of material " << materialName << std::endl;
+	}
+
+	return createTextureMView(outputFileName, textureFilterNearest, textureWrapClamp);
+}
+
+
 int OSGtoGLTF::getCurrentMaterialMview(osg::Geometry* geometry)
 {
-	return -1;
+	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
+
+	// Push material and textures from OSG. If not found, try the default one (first in load order).
+	std::string geometryName = geometry->getName();
+	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getStateSet() : geometry->getStateSet();
+	const osg::Material* mat = stateSet ? dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL)) : NULL;
+
+	std::string materialName = mat ? mat->getName() : "";
+
+	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
+		return _gltfMaterials[materialName];
+
+	if (materialName.empty() || _mviewMaterials.find(materialName) == _mviewMaterials.end())
+		return -1;
+
+	MViewMaterial mviewMaterial = _mviewMaterials[materialName];
+
+	return createGltfMaterialMView(mviewMaterial);
+}
+
+int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
+{
+	tinygltf::Material material;
+	material.name = mvMat.name;
+	int materialIndex = _model.materials.size();
+
+	// Combine combinable textures
+	std::string albedoTex = mvMat.albedoTex;
+	std::string metalRoughnessTex;
+	std::string extrasTex = mvMat.extrasTex;
+	if (!mvMat.albedoTex.empty() && !mvMat.alphaTex.empty())
+		albedoTex = combineTextures(mvMat.albedoTex, mvMat.alphaTex, false);
+
+	if (!mvMat.glossTex.empty() && !mvMat.reflectivityTex.empty())
+		metalRoughnessTex = combineRoughnessMetallicTextures(mvMat.glossTex, mvMat.reflectivityTex, false);
+	else if (!mvMat.glossTex.empty())
+		metalRoughnessTex = mvMat.glossTex;
+	else
+		metalRoughnessTex = mvMat.reflectivityTex;
+
+	if (!mvMat.extrasTex.empty() && !mvMat.extrasTexA.empty())
+		extrasTex = combineTextures(mvMat.extrasTex, mvMat.extrasTexA, false);
+
+	// Place apropriate channels
+	if (!albedoTex.empty())
+		material.pbrMetallicRoughness.baseColorTexture.index = createTextureMView(albedoTex, mvMat.textureFilterNearest, mvMat.textureWrapClamp);
+	if (!metalRoughnessTex.empty())
+		material.pbrMetallicRoughness.metallicRoughnessTexture.index = createTextureMView(metalRoughnessTex, mvMat.textureFilterNearest, mvMat.textureWrapClamp);
+	if (!mvMat.normalTex.empty())
+		material.normalTexture.index = createTextureMView(mvMat.normalTex, mvMat.textureFilterNearest, mvMat.textureWrapClamp);
+
+	// Resolve blend
+	if (mvMat.blend == "none" && mvMat.alphaTest > 0.0)
+		material.alphaMode = "MASK";
+	else if (mvMat.blend == "alpha")
+		material.alphaMode = "BLEND";
+
+	// Emission and Ambient occlusion stays in extrasTexCoordRanges
+	if (mvMat.emissiveIntensity >= 0.0)
+		material.emissiveFactor = { mvMat.emissiveIntensity, mvMat.emissiveIntensity, mvMat.emissiveIntensity };
+	if (mvMat.extrasTexCoordRanges.find("emissiveTex") != mvMat.extrasTexCoordRanges.end())
+	{
+		material.emissiveTexture.index = createGltfSubTextureMView(extrasTex, "emiss", material.name, mvMat.extrasTexCoordRanges.at("emissiveTex"), 
+			mvMat.textureFilterNearest, mvMat.textureWrapClamp);
+		material.emissiveTexture.texCoord = mvMat.emissiveSecondaryUV ? 1 : 0;
+	}
+
+	if (mvMat.extrasTexCoordRanges.find("aoTex") != mvMat.extrasTexCoordRanges.end())
+	{
+		material.occlusionTexture.index = createGltfSubTextureMView(extrasTex, "occl", material.name, mvMat.extrasTexCoordRanges.at("aoTex"), 
+			mvMat.textureFilterNearest, mvMat.textureWrapClamp);
+		material.occlusionTexture.texCoord = mvMat.aoSecondaryUV ? 1 : 0;
+	}
+
+
+	// Process extensions
+	if (mvMat.usesRefraction)
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_ior") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_ior");
+		}
+
+		tinygltf::Value::Object iorExtension;
+		iorExtension["ior"] = tinygltf::Value(mvMat.refractionParams.IORActual);
+		material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
+
+		if (!mvMat.refractionParams.useAlbedoTint)
+			material.pbrMetallicRoughness.baseColorFactor = { mvMat.refractionParams.tint[0], mvMat.refractionParams.tint[1], mvMat.refractionParams.tint[2], 1 };
+
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_transmission") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_transmission");
+		}
+
+		tinygltf::Value::Object transmissionExtension;
+		transmissionExtension["transmissionFactor"] = tinygltf::Value(1.0);
+		material.extensions["KHR_materials_transmission"] = tinygltf::Value(transmissionExtension);
+	}
+
+	if (mvMat.ggxSpecular)
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_specular");
+		}
+
+		tinygltf::Value::Object specularExtension;
+		specularExtension["specularFactor"] = tinygltf::Value(1.0);
+		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
+	}
+
+
+	if (mvMat.useAniso)
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_anisotropy") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_anisotropy");
+		}
+
+		tinygltf::Value::Object anisotropyExtension;
+		anisotropyExtension["anisotropyStrength"] = tinygltf::Value(mvMat.anisoParams.strength);
+		float angle = 0.0;
+		if (mvMat.anisoParams.tangent.size() > 1)
+			angle = std::atan2(mvMat.anisoParams.tangent[1], mvMat.anisoParams.tangent[0]);
+		anisotropyExtension["anisotropyRotation"] = tinygltf::Value(angle);
+
+		if (mvMat.extrasTexCoordRanges.find("anisoTex") != mvMat.extrasTexCoordRanges.end())
+		{
+			tinygltf::Value::Object anisotropyTexture;
+			anisotropyTexture["index"] = tinygltf::Value(createGltfSubTextureMView(extrasTex, "aniso", material.name, mvMat.extrasTexCoordRanges.at("anisoTex"), 
+				mvMat.textureFilterNearest, mvMat.textureWrapClamp));
+			anisotropyExtension["anisotropyTexture"] = tinygltf::Value(anisotropyTexture);
+		}
+		material.extensions["KHR_materials_anisotropy"] = tinygltf::Value(anisotropyExtension);
+	}
+
+	_model.materials.push_back(material);
+	_gltfMaterials.emplace(material.name, materialIndex);
+
+	if (!mvMat.albedoTex.empty() || !mvMat.alphaTex.empty()  || !mvMat.extrasTex.empty() || !mvMat.extrasTexA.empty() 
+		|| !mvMat.glossTex.empty() || !mvMat.normalTex.empty() || !mvMat.reflectivityTex.empty())
+	{
+		_materialsWithTextures.emplace(materialIndex);
+	}
+
+	return materialIndex;
+
+}
+
+void OSGtoGLTF::buildMViewMaterials(const std::string& fileContents)
+{
+	json doc;
+
+	try {
+		doc = json::parse(fileContents);
+	}
+	catch (json::parse_error&)
+	{
+		return;
+	}	
+
+	if (doc.contains("materials") && doc["materials"].is_array())
+	{
+		for (auto& material : doc["materials"])
+		{
+			std::string matName = material.value("name", "");
+			MViewMaterial newMat(material);
+			_mviewMaterials[matName] = newMat;
+		}
+	}
 }
 
 #pragma endregion
@@ -2975,6 +3297,15 @@ void OSGtoGLTF::apply(osg::Node& node)
 	std::string NodeName = node.getName();
 	if (skeleton)
 		NodeName = NodeName.empty() ? "Skeleton" : NodeName;
+
+	// Check for Marmoset View file type.
+	std::string mviewFile;
+	node.getUserValue("MVIEWScene", mviewFile);
+	if (!mviewFile.empty())
+	{
+		_modelTypeMVIEW = true;
+		buildMViewMaterials(mviewFile);
+	}
 
 	// Grab the model name from first matrix to use later (or now if it coincides)
 	if (_firstNamedMatrix && matrix)
@@ -3345,11 +3676,8 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	}
 
 	// Get current material
-	std::string modelType;
-	geom->getUserValue("ModelType", modelType);
-
 	int currentMaterial = -1;
-	if (modelType == "mview")
+	if (_modelTypeMVIEW )
 		currentMaterial = getCurrentMaterialMview(geom);
 	else
 		currentMaterial = getCurrentMaterialV2(geom);
