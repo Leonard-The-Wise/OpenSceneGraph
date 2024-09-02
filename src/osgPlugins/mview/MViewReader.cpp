@@ -152,8 +152,9 @@ osgDB::ReaderWriter::ReadResult MViewReader::readMViewFile(const std::string& fi
         try {
             sceneJson = json::parse(fileContents);
         }
-        catch (json::parse_error&)
+        catch (json::parse_error& e)
         {
+            OSG_FATAL << "Json parse error: " << e.what() << " byte:" << e.byte << std::endl;
             OSG_FATAL << "Could not parse 'scene.json' in marmoset view archive. File is corrupted" << std::endl;
             return osgDB::ReaderWriter::ReadResult::ERROR_IN_READING_FILE;
         }
@@ -476,7 +477,7 @@ void MViewParser::MViewReader::solveAnimationLinks()
                     _meshIDtoSkinID[realMeshID] = animationObj.skinningRigIndex;
                 }
                 _meshes[realMeshID].meshSOReferenceID = animationObj.id;
-                _meshes[realMeshID].skinningRigReference = &_skinningRigs[animationObj.skinningRigIndex];
+                _meshes[realMeshID].skinningRigReference = animationObj.skinningRigIndex > -1 ? &_skinningRigs[animationObj.skinningRigIndex] : nullptr;
 
                 auto& nodeTransform = animation.animatedObjects[animationObj.modelPartIndex];
                 _meshes[realMeshID].setAnimatedTransform(nodeTransform);
@@ -1064,7 +1065,7 @@ void Mesh::setAnimatedTransform(AnimatedObject& referenceNode)
 void Mesh::createInfluenceMap(const std::map<int, std::string>& possibleBonePartNames, std::set<std::string>& refRealBoneNames)
 {
     // test
-    if (this->skinningRigReference->isRigidSkin)
+    if (!this->skinningRigReference || this->skinningRigReference->isRigidSkin)
     {
         this->isRigidSkin = true;
         return;
@@ -1513,7 +1514,7 @@ Animation::Animation(const MViewFile::Archive& archive, const nlohmann::json& de
     if (description.contains("animatedObjects"))
     {
         int id = 0;
-        animatedObjects.resize(description["animatedObjects"].size());
+        animatedObjects.reserve(description["animatedObjects"].size());
         for (auto& animatedObject : description["animatedObjects"])
         {
             AnimatedObject* newAnim = new AnimatedObject(archive, animatedObject, id++);
@@ -1565,11 +1566,14 @@ const osg::ref_ptr<osgAnimation::Animation> Animation::asAnimation(const std::ve
     for (auto& mesh : meshes)
     {
         // Find associated rig objects 
-        for (auto& skinCluster : mesh.skinningRigReference->skinningClusters)
+        if (mesh.skinningRigReference)
         {
-            int modelPart = skinCluster.linkObjectIndex;
-            if (animatedModelPartIds.find(modelPart) != animatedModelPartIds.end())
-                animationsToGo.emplace(animatedModelPartIds.at(modelPart));
+            for (auto& skinCluster : mesh.skinningRigReference->skinningClusters)
+            {
+                int modelPart = skinCluster.linkObjectIndex;
+                if (animatedModelPartIds.find(modelPart) != animatedModelPartIds.end())
+                    animationsToGo.emplace(animatedModelPartIds.at(modelPart));
+            }
         }
 
         // Find current mesh associated Node (possible animated)

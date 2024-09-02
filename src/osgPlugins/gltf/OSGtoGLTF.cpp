@@ -677,7 +677,7 @@ static std::string combineTextures(const std::string& rgbFile, const std::string
 	return outputFileName;
 }
 
-static std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, const std::string& metallicFile, bool stripFileName = true)
+static std::string combineRoughnessMetallicTextures(const std::string& roughnessFile, const std::string& metallicFile, bool stripFileName = true, bool invertRough = false)
 {
 	std::string outputFileName = stripAllExtensions(roughnessFile) + ".comb.png";
 
@@ -705,9 +705,9 @@ static std::string combineRoughnessMetallicTextures(const std::string& roughness
 	unsigned char* combinedData = new unsigned char[width * height * 3];
 
 	for (int i = 0; i < width * height; ++i) {
-		combinedData[i * 3] = 0;                    // R (deixado em 0)
-		combinedData[i * 3 + 1] = roughnessData[i]; // G (usando o canal R da textura de roughness)
-		combinedData[i * 3 + 2] = metallicData[i];  // B (usando o canal R da textura de metallic)
+		combinedData[i * 3] = 0;                    
+		combinedData[i * 3 + 1] = invertRough ? 1 - roughnessData[i] : roughnessData[i];
+		combinedData[i * 3 + 2] = metallicData[i];
 	}
 
 	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 3, combinedData, width * 3);
@@ -773,6 +773,40 @@ static uint8_t* extractSubTexture(const std::vector<double>& uTexRange, const ui
 	outSubTextureHeight = subTextureHeight;
 
 	return subTextureData;
+}
+
+static std::string createRoughnessTexture(const std::string& roughnessFile, bool stripFileName = true, bool invertRough = false)
+{
+	std::string outputFileName = stripAllExtensions(roughnessFile) + ".comb.png";
+
+	if (osgDB::fileExists("textures\\" + outputFileName))
+		return outputFileName;
+
+	int width, height, channels;
+	std::string roughnessFileName = stripFileName ? stripAllExtensions(roughnessFile) + ".png" : roughnessFile;
+	unsigned char* roughnessData = stbi_load(std::string("textures\\" + roughnessFileName).c_str(), &width, &height, &channels, 1);
+	if (!roughnessData)
+	{
+		OSG_WARN << "Error loading roughness texture " << roughnessFileName << "!" << std::endl;
+		return roughnessFileName;
+	}
+
+	unsigned char* combinedData = new unsigned char[width * height * 3];
+
+	for (int i = 0; i < width * height; ++i) {
+		combinedData[i * 3] = 0;
+		combinedData[i * 3 + 1] = invertRough ? 1 - roughnessData[i] : roughnessData[i];
+		combinedData[i * 3 + 2] = 0;
+	}
+
+	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 3, combinedData, width * 3);
+
+	stbi_image_free(roughnessData);
+	delete[] combinedData;
+
+	OSG_NOTICE << "Created new texture " << outputFileName << " put roughness channel in the right position, as required by GLTF 2.0." << std::endl;
+
+	return outputFileName;
 }
 
 #pragma endregion
@@ -3129,12 +3163,13 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 	if (!mvMat.albedoTex.empty() && !mvMat.alphaTex.empty())
 		albedoTex = combineTextures(mvMat.albedoTex, mvMat.alphaTex, false);
 
-	if (!mvMat.glossTex.empty() && !mvMat.reflectivityTex.empty())
-		metalRoughnessTex = combineRoughnessMetallicTextures(mvMat.glossTex, mvMat.reflectivityTex, false);
-	else if (!mvMat.glossTex.empty())
-		metalRoughnessTex = mvMat.glossTex;
-	else
-		metalRoughnessTex = mvMat.reflectivityTex;
+	//if (!mvMat.glossTex.empty() && !mvMat.reflectivityTex.empty())
+	//	metalRoughnessTex = combineRoughnessMetallicTextures(mvMat.glossTex, mvMat.reflectivityTex, false, true);
+	//else if (!mvMat.glossTex.empty())
+	//	metalRoughnessTex = mvMat.glossTex;
+	//else
+	//	metalRoughnessTex = mvMat.reflectivityTex;
+	metalRoughnessTex = createRoughnessTexture(mvMat.glossTex, false, true);
 
 	if (!mvMat.extrasTex.empty() && !mvMat.extrasTexA.empty())
 		extrasTex = combineTextures(mvMat.extrasTex, mvMat.extrasTexA, false);
@@ -3203,7 +3238,7 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 		material.extensions["KHR_materials_transmission"] = tinygltf::Value(transmissionExtension);
 	}
 
-	if (mvMat.ggxSpecular)
+	if (0 & mvMat.ggxSpecular)
 	{
 		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
 		{
@@ -3212,6 +3247,22 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 
 		tinygltf::Value::Object specularExtension;
 		specularExtension["specularFactor"] = tinygltf::Value(1.0);
+		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
+	}
+
+	if (!mvMat.reflectivityTex.empty())
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_specular");
+		}
+
+		tinygltf::Value::Object specularExtension;
+		tinygltf::Value::Object specularTexture;
+		specularTexture["index"] = tinygltf::Value(createTextureMView(mvMat.reflectivityTex, mvMat.textureFilterNearest, mvMat.textureWrapClamp));
+		specularExtension["specularColorTexture"] = tinygltf::Value(specularTexture);
+		std::vector<double> v = { 1.0, 1.0, 1.0 };
+		specularExtension.emplace("specularColorFactor", tinygltf::Value::Array(v.begin(), v.end()));
 		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
 	}
 

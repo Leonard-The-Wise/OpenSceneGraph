@@ -1,6 +1,9 @@
 
 #include "pch.h"
 
+#include <Windows.h>
+
+
 #include "MViewFile.h"
 #include "json.hpp"
 
@@ -334,7 +337,15 @@ std::string ByteStream::readCString()
 
 std::string ByteStream::asString() const
 {
-    return std::string(bytes.begin(), bytes.end());
+    int wideCharSize = MultiByteToWideChar(CP_ACP, 0, reinterpret_cast<const char*>(bytes.data()), bytes.size(), nullptr, 0);
+    std::wstring wideString(wideCharSize, 0);
+    MultiByteToWideChar(CP_ACP, 0, reinterpret_cast<const char*>(bytes.data()), bytes.size(), &wideString[0], wideCharSize);
+
+    int utf8Size = WideCharToMultiByte(CP_UTF8, 0, wideString.c_str(), wideString.size(), nullptr, 0, nullptr, nullptr);
+    std::string utf8String(utf8Size, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wideString.c_str(), wideString.size(), &utf8String[0], utf8Size, nullptr, nullptr);
+
+    return utf8String;
 }
 
 std::vector<uint8_t> ByteStream::readBytes(size_t length)
