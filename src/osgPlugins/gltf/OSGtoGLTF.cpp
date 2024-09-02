@@ -3103,17 +3103,8 @@ int OSGtoGLTF::createGltfSubTextureMView(const std::string& originalFile, const 
 }
 
 
-int OSGtoGLTF::getCurrentMaterialMview(osg::Geometry* geometry)
+int OSGtoGLTF::getCurrentMaterialMview(const std::string& materialName)
 {
-	osgAnimation::RigGeometry* rigGeometry = dynamic_cast<osgAnimation::RigGeometry*>(geometry);
-
-	// Push material and textures from OSG. If not found, try the default one (first in load order).
-	std::string geometryName = geometry->getName();
-	osg::ref_ptr<osg::StateSet> stateSet = rigGeometry ? rigGeometry->getSourceGeometry()->getStateSet() : geometry->getStateSet();
-	const osg::Material* mat = stateSet ? dynamic_cast<const osg::Material*>(stateSet->getAttribute(osg::StateAttribute::MATERIAL)) : NULL;
-
-	std::string materialName = mat ? mat->getName() : "";
-
 	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
 		return _gltfMaterials[materialName];
 
@@ -3684,9 +3675,7 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 	// Get current material
 	int currentMaterial = -1;
-	if (_modelTypeMVIEW )
-		currentMaterial = getCurrentMaterialMview(geom);
-	else
+	if (!_modelTypeMVIEW)
 		currentMaterial = getCurrentMaterialV2(geom);
 
 	bool materialHaveTextures = _materialsWithTextures.find(currentMaterial) != _materialsWithTextures.end();
@@ -3697,6 +3686,14 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 
 		mesh.primitives.push_back(tinygltf::Primitive());
 		tinygltf::Primitive& primitive = mesh.primitives.back();
+
+		if (_modelTypeMVIEW)
+		{
+			std::string materialName;
+			pset->getUserValue("material", materialName);
+			if (!materialName.empty())
+				currentMaterial = getCurrentMaterialMview(materialName);
+		}
 
 		if (currentMaterial >= 0)
 		{

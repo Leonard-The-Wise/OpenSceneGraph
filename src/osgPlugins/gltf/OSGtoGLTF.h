@@ -190,7 +190,7 @@ private:
     int createGltfSubTextureMView(const std::string& originalFile, const std::string& suffix, const std::string& materialName, 
         const std::vector<double>& uTexRange, bool textureFilterNearest, bool textureWrapClamp);
 
-    int getCurrentMaterialMview(osg::Geometry* geometry);
+    int getCurrentMaterialMview(const std::string& materialName);
 
     int createGltfMaterialMView(const MViewMaterial& mviewMaterial);
 

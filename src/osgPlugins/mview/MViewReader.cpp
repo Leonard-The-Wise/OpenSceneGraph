@@ -980,18 +980,42 @@ const osg::ref_ptr<osg::Geometry> Mesh::asGeometry(bool NoRigging)
     if (texCoords2)
         trueGeometry->setTexCoordArray(1, texCoords2);
 
-    trueGeometry->addPrimitiveSet(indices);
+    //trueGeometry->addPrimitiveSet(indices);
+    //if (subMeshes.size() > 0)
+    //{
+    //    osg::ref_ptr<osg::StateSet> ss = new osg::StateSet();
+    //    osg::ref_ptr<osg::Material> mat = new osg::Material();
 
-    if (subMeshes.size() > 0)
+    //    mat->setName(subMeshes[0].materialName);
+    //    ss->setAttribute(mat, osg::StateAttribute::MATERIAL);
+
+    //    trueGeometry->setStateSet(ss);
+    //}
+
+    // Create Primitives for mesh
+    for (auto& submesh : subMeshes)
     {
-        osg::ref_ptr<osg::StateSet> ss = new osg::StateSet();
-        osg::ref_ptr<osg::Material> mat = new osg::Material();
+        osg::ref_ptr<osg::DrawElementsUInt> newPrimitive = new osg::DrawElementsUInt();
+        newPrimitive->setMode(GL_TRIANGLES);
+        newPrimitive->setUserValue("material", submesh.materialName);
 
-        mat->setName(subMeshes[0].materialName);
-        ss->setAttribute(mat, osg::StateAttribute::MATERIAL);
+        newPrimitive->reserveElements(submesh.indexCount);
+        int totalSize = submesh.firstIndex + submesh.indexCount;
+        if (totalSize <= indices->size())
+        {
+            for (int i = submesh.firstIndex; i < totalSize; ++i)
+            {
+                newPrimitive->push_back((*indices)[i]);
+            }
 
-        trueGeometry->setStateSet(ss);
+            trueGeometry->addPrimitiveSet(newPrimitive);
+        }
+        else
+        {
+            OSG_WARN << "WARNING: Mesh " << name << " contains a submesh with more indices than current vertices. Ignoring..." << std::endl;
+        }
     }
+
 
     // Configure rigGeometry
     if (isAnimated)
