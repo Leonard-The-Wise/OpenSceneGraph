@@ -100,8 +100,9 @@ namespace MViewParser
 		// osg::ref_ptr<osgAnimation::Vec3LinearChannel> rotationEuler;
 		osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> rotation;
 
-		//AnimatedObject() : skinningRigIndex(-1), id(-1), modelPartIndex(-1), modelPartFPS(0), modelPartScale(0.0)
-		//{};
+		AnimatedObject() : skinningRigIndex(-1), id(-1), modelPartIndex(-1), parentIndex(-1), modelPartFPS(0), modelPartScale(0.0),
+			useFixedWorldTransform(false), useFixedLocalTransform(false)
+		{};
 		AnimatedObject(const MViewFile::Archive& archive, const nlohmann::json& description, int ID);
 
 		bool hasAnimatedTransform();
@@ -117,6 +118,8 @@ namespace MViewParser
 			useFixedLocalTransform = true;
 			cachedmatrix0 = l;
 		}
+
+		void setTranslationScale(double sceneScale);
 
 	private:
 
@@ -141,26 +144,6 @@ namespace MViewParser
 		osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> makeQuatLinearFromArrays(const std::string channelName,
 			osg::ref_ptr<osg::FloatArray>& timesArray, osg::ref_ptr<osg::FloatArray>& keyXArray, osg::ref_ptr<osg::FloatArray>& keyYArray,
 			osg::ref_ptr<osg::FloatArray>& keyZArray);
-
-	};
-
-	class Animation {
-	public:
-		std::string name;
-		int expectedNumAnimatedObjects;
-		std::vector<AnimatedObject> animatedObjects;
-		osg::Matrix sceneTransform;
-
-		//Animation() : expectedNumAnimatedObjects(0) {};
-		Animation(const MViewFile::Archive& archive, const nlohmann::json& description);
-
-		const osg::ref_ptr<osgAnimation::Animation> asAnimation(std::set<std::string>& outUsedTargets);
-
-		bool hasAnimationInHierarchy(const AnimatedObject& animatedObject);
-		bool hasParentTypeInHierarchy(const AnimatedObject& animatedObject, const std::string& sceneObjectType);
-
-	private:
-		bool searchAnimationUpHierarchy(const AnimatedObject& animatedObject);
 
 	};
 
@@ -219,8 +202,7 @@ namespace MViewParser
 		osg::ref_ptr<osg::MatrixTransform> meshMatrix;
 		osg::ref_ptr<osg::MatrixTransform> meshMatrixRigTransform;
 		int meshSOReferenceID;
-		AnimatedObject* associateModelPart;
-		AnimatedObject* associateParent;
+		SkinningRig* skinningRigReference;
 
 		bool isRigidSkin;
 
@@ -238,7 +220,7 @@ namespace MViewParser
 
 		void setAnimatedTransform(AnimatedObject& referenceNode);
 
-		void createInfluenceMap(const SkinningRig& skinningRig, const std::map<int, std::string>& possibleBonePartNames,
+		void createInfluenceMap(const std::map<int, std::string>& possibleBonePartNames,
 			std::set<std::string>& refRealBoneNames);
 
 	private:
@@ -274,6 +256,29 @@ namespace MViewParser
 		Bounds bounds;
 		// Método para descompactar os vetores unitários (normais, tangentes, etc.)
 		void unpackUnitVectors(osg::ref_ptr<osg::FloatArray>& a, const uint16_t* c, int b, int d);
+	};
+
+	class Animation {
+	public:
+		std::string name;
+		int expectedNumAnimatedObjects;
+		std::vector<AnimatedObject> animatedObjects;
+		std::map<int, AnimatedObject*> animatedModelPartIds;
+		osg::Matrix sceneTransform;
+
+		//Animation() : expectedNumAnimatedObjects(0) {};
+		Animation(const MViewFile::Archive& archive, const nlohmann::json& description);
+
+		const osg::ref_ptr<osgAnimation::Animation> asAnimation(std::set<std::string>& outUsedTargets);
+
+		const osg::ref_ptr<osgAnimation::Animation> asAnimation(const std::vector<Mesh>& meshes, double sceneScale, std::set<std::string>& outUsedTargets);
+
+		bool hasAnimationInHierarchy(const AnimatedObject& animatedObject);
+		bool hasParentTypeInHierarchy(const AnimatedObject& animatedObject, const std::string& sceneObjectType);
+
+	private:
+		bool searchAnimationUpHierarchy(const AnimatedObject& animatedObject);
+
 	};
 
 	struct ProgramOptions {

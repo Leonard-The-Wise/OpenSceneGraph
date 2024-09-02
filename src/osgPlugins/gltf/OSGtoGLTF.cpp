@@ -3161,6 +3161,13 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 		material.alphaMode = "MASK";
 	else if (mvMat.blend == "alpha")
 		material.alphaMode = "BLEND";
+	else if (mvMat.blend == "add")
+	{
+		OSG_WARN << "WARNING: Material " << material.name << " requires additive blending, but it is unsupported by GLTF format. Switching to blend." << std::endl;
+		material.alphaMode = "BLEND";
+		auto& b = material.pbrMetallicRoughness.baseColorFactor;
+		material.pbrMetallicRoughness.baseColorFactor = { b[0], b[1], b[2], 0.2 };
+	}
 
 	// Emission and Ambient occlusion stays in extrasTexCoordRanges
 	if (mvMat.emissiveIntensity >= 0.0)
