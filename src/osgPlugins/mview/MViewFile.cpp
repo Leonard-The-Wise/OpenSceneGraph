@@ -45,7 +45,8 @@ ArchiveFile Archive::get(const std::string& name) const
 ArchiveFile Archive::extract(const std::string& name)
 {
     ArchiveFile file = get(name);
-    files.erase(name);
+    if (files.find(name) != files.end())
+        files.erase(name);
     return file;
 }
 

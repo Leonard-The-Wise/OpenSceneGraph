@@ -2528,11 +2528,6 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 		materialInfo.Channels.at("DiffuseColor").Color.size() == 3)
 		activeColor = materialInfo.Channels.at("DiffuseColor");
 
-	if (activeColor.Enable)
-	{
-		material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
-	}
-
 	// Decide which texture to use.
 	// Priority: AlbedoPBR, DiffusePBR, DiffuseColor
 	std::string activeTextureName;
@@ -2545,6 +2540,14 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 	else if (!materialInfo.UsePBR && materialInfo.Channels.find("DiffuseColor") != materialInfo.Channels.end() && materialInfo.Channels.at("DiffuseColor").Enable &&
 		materialInfo.Channels.at("DiffuseColor").Texture.Name != "")
 		activeTexture = materialInfo.Channels.at("DiffuseColor");
+
+	if (activeTexture.Enable)
+		activeColor.Enable = false;
+
+	if (activeColor.Enable)
+	{
+		material.pbrMetallicRoughness.baseColorFactor = { activeColor.Color[0], activeColor.Color[1], activeColor.Color[2], activeColor.Factor };
+	}
 
 	if (activeTexture.Enable)
 	{

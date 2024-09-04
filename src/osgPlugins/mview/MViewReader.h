@@ -285,8 +285,9 @@ namespace MViewParser
 	public:
 		bool NoAnimations;
 		bool NoRigging;
+		bool NoTextures;
 
-		ProgramOptions() : NoAnimations(false), NoRigging(false){};
+		ProgramOptions() : NoAnimations(false), NoRigging(false), NoTextures(false) {};
 	};
 
 	class MViewReader

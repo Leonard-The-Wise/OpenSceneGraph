@@ -89,6 +89,11 @@ public:
 					progOptions.NoRigging = true;
 				}
 
+				if (pre_equals == "NoTextures")
+				{
+					progOptions.NoTextures = true;
+				}
+
 				if (pre_equals == "XParam")
 				{
 					applicationKey = atoi(post_equals.c_str());

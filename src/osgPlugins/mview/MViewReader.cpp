@@ -159,21 +159,22 @@ osgDB::ReaderWriter::ReadResult MViewReader::readMViewFile(const std::string& fi
             return osgDB::ReaderWriter::ReadResult::ERROR_IN_READING_FILE;
         }
 
-        OSG_NOTICE << "Unpacking textures..." << std::endl;
+        ArchiveFile thumbNailFile = _archive->extract("thumbnail.jpg");
+        writeVectorToFile("thumbnail.jpg", thumbNailFile.data);
 
-        if (!osgDB::makeDirectory("textures"))
+        if (!_options.NoTextures)
         {
-            OSG_FATAL << "Could not create a directory for textures!" << std::endl;
-            throw "Exiting...";
-        }
+            OSG_NOTICE << "Unpacking textures..." << std::endl;
 
-        for (auto& textureName : _archive->getTextures())
-        {
-            ArchiveFile textureFile = _archive->extract(textureName);
-            if (textureName == "thumbnail.jpg")
-                writeVectorToFile(textureName, textureFile.data);
-            else
+            if (!osgDB::makeDirectory("textures"))
             {
+                OSG_FATAL << "Could not create a directory for textures!" << std::endl;
+                throw "Exiting...";
+            }
+
+            for (auto& textureName : _archive->getTextures())
+            {
+                ArchiveFile textureFile = _archive->extract(textureName);
                 OSG_NOTICE << " -> textures/" << textureName << std::endl;
                 writeVectorToFile("textures\\" + textureName, textureFile.data);
             }
