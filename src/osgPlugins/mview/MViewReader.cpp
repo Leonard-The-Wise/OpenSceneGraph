@@ -974,8 +974,8 @@ const osg::ref_ptr<osg::Geometry> Mesh::asGeometry(bool NoRigging)
     trueGeometry->setVertexArray(trueVertices);
     trueGeometry->setNormalArray(normals);
 
-    if (colors)
-        trueGeometry->setColorArray(colors);
+    //if (colors)
+    //    trueGeometry->setColorArray(colors);
 
     trueGeometry->setTexCoordArray(0, texCoords);
     if (texCoords2)

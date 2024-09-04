@@ -809,6 +809,54 @@ static std::string createRoughnessTexture(const std::string& roughnessFile, bool
 	return outputFileName;
 }
 
+static std::string createMatallicTexture(const std::string& metallicFile, bool stripFileName = true)
+{
+	std::string outputFileName = stripAllExtensions(metallicFile) + ".comb.png";
+
+	if (osgDB::fileExists("textures\\" + outputFileName))
+		return outputFileName;
+
+	int width, height, channels;
+	std::string metallicFileName = stripFileName ? stripAllExtensions(metallicFile) + ".png" : metallicFile;
+	unsigned char* metallicData = stbi_load(std::string("textures\\" + metallicFileName).c_str(), &width, &height, &channels, 1);
+	if (!metallicData)
+	{
+		OSG_WARN << "Error loading metallic texture " << metallicFileName << "!" << std::endl;
+		return metallicFileName;
+	}
+
+	unsigned char* combinedData = new unsigned char[width * height * 3];
+
+	for (int i = 0; i < width * height; ++i) {
+		combinedData[i * 3] = 0;
+		combinedData[i * 3 + 1] = 0;
+		combinedData[i * 3 + 2] = metallicData[i];
+	}
+
+	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 3, combinedData, width * 3);
+
+	stbi_image_free(metallicData);
+	delete[] combinedData;
+
+	OSG_NOTICE << "Created new texture " << outputFileName << " put metallic channel in the right position, as required by GLTF 2.0." << std::endl;
+
+	return outputFileName;
+}
+
+static int getTextureNumChannels(const std::string& texture, bool stripFileName = true)
+{
+	int width = 0, height = 0, channels = 0;
+
+	std::string textureFileName = stripFileName ? stripAllExtensions(texture) + ".png" : texture;
+	FILE* f = fopen(std::string("textures\\" + textureFileName).c_str(), "rb");
+	if (f)
+	{
+		stbi_info_from_file(f, &width, &height, &channels);
+		fclose(f);
+	}
+
+	return channels;
+}
 #pragma endregion
 
 
@@ -3068,11 +3116,15 @@ int OSGtoGLTF::createTextureMView(const std::string& name, bool textureFilterNea
 		_gltfImages[fileName] = imageIndex;
 	}
 
+	std::string texFilter = textureFilterNearest ? "NEAREST" : "LINEAR";
+	std::string texFilterMipMap = textureFilterNearest ? "NEAREST_MIPMAP_LINEAR" : "LINEAR_MIPMAP_LINEAR";
+	std::string wrap = textureWrapClamp ? "CLAMP_TO_EDGE" : "REPEAT";
+
 	tinygltf::Sampler sampler;
-	sampler.magFilter = getFilterModeFromString("LINEAR");
-	sampler.minFilter = getFilterModeFromString("LINEAR_MIPMAP_LINEAR");
-	sampler.wrapS = getWrapModeFromString("REPEAT");
-	sampler.wrapT = getWrapModeFromString("REPEAT");
+	sampler.magFilter = getFilterModeFromString(texFilter);
+	sampler.minFilter = getFilterModeFromString(texFilterMipMap);
+	sampler.wrapS = getWrapModeFromString(wrap);
+	sampler.wrapT = getWrapModeFromString(wrap);
 	int samplerIndex = _model.samplers.size();
 	_model.samplers.push_back(sampler);
 
@@ -3136,7 +3188,6 @@ int OSGtoGLTF::createGltfSubTextureMView(const std::string& originalFile, const 
 	return createTextureMView(outputFileName, textureFilterNearest, textureWrapClamp);
 }
 
-
 int OSGtoGLTF::getCurrentMaterialMview(const std::string& materialName)
 {
 	if (_gltfMaterials.find(materialName) != _gltfMaterials.end())
@@ -3163,13 +3214,20 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 	if (!mvMat.albedoTex.empty() && !mvMat.alphaTex.empty())
 		albedoTex = combineTextures(mvMat.albedoTex, mvMat.alphaTex, false);
 
-	//if (!mvMat.glossTex.empty() && !mvMat.reflectivityTex.empty())
-	//	metalRoughnessTex = combineRoughnessMetallicTextures(mvMat.glossTex, mvMat.reflectivityTex, false, true);
-	//else if (!mvMat.glossTex.empty())
-	//	metalRoughnessTex = mvMat.glossTex;
-	//else
-	//	metalRoughnessTex = mvMat.reflectivityTex;
-	metalRoughnessTex = createRoughnessTexture(mvMat.glossTex, false, true);
+	bool useMetal = false, useSpecular = false;
+	if (!mvMat.reflectivityTex.empty())
+	{
+		int numChannels = getTextureNumChannels(mvMat.reflectivityTex, false);
+		useMetal = (1 == numChannels);
+		useSpecular = (3 == numChannels);
+	}
+
+	if (!mvMat.glossTex.empty() && useMetal)
+		metalRoughnessTex = combineRoughnessMetallicTextures(mvMat.glossTex, mvMat.reflectivityTex, false, true);
+	else if (!mvMat.glossTex.empty())
+		metalRoughnessTex = createRoughnessTexture(mvMat.glossTex, false, true);
+	else if (useMetal)
+		metalRoughnessTex = createMatallicTexture(mvMat.reflectivityTex, false);
 
 	if (!mvMat.extrasTex.empty() && !mvMat.extrasTexA.empty())
 		extrasTex = combineTextures(mvMat.extrasTex, mvMat.extrasTexA, false);
@@ -3184,9 +3242,12 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 
 	// Resolve blend
 	if (mvMat.blend == "none" && mvMat.alphaTest > 0.0)
+	{
 		material.alphaMode = "MASK";
+		material.alphaCutoff = mvMat.alphaTest;
+	}
 	else if (mvMat.blend == "alpha")
-		material.alphaMode = "BLEND";
+		material.alphaMode = "MASK";
 	else if (mvMat.blend == "add")
 	{
 		OSG_WARN << "WARNING: Material " << material.name << " requires additive blending, but it is unsupported by GLTF format. Switching to blend." << std::endl;
@@ -3196,13 +3257,12 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 	}
 
 	// Emission and Ambient occlusion stays in extrasTexCoordRanges
-	if (mvMat.emissiveIntensity >= 0.0)
-		material.emissiveFactor = { mvMat.emissiveIntensity, mvMat.emissiveIntensity, mvMat.emissiveIntensity };
 	if (mvMat.extrasTexCoordRanges.find("emissiveTex") != mvMat.extrasTexCoordRanges.end())
 	{
 		material.emissiveTexture.index = createGltfSubTextureMView(extrasTex, "emiss", material.name, mvMat.extrasTexCoordRanges.at("emissiveTex"), 
 			mvMat.textureFilterNearest, mvMat.textureWrapClamp);
 		material.emissiveTexture.texCoord = mvMat.emissiveSecondaryUV ? 1 : 0;
+		material.emissiveFactor = { 1.0, 1.0, 1.0 };
 	}
 
 	if (mvMat.extrasTexCoordRanges.find("aoTex") != mvMat.extrasTexCoordRanges.end())
@@ -3211,7 +3271,6 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 			mvMat.textureFilterNearest, mvMat.textureWrapClamp);
 		material.occlusionTexture.texCoord = mvMat.aoSecondaryUV ? 1 : 0;
 	}
-
 
 	// Process extensions
 	if (mvMat.usesRefraction)
@@ -3222,7 +3281,8 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 		}
 
 		tinygltf::Value::Object iorExtension;
-		iorExtension["ior"] = tinygltf::Value(mvMat.refractionParams.IORActual);
+		double ior = mvMat.refractionParams.IORActual >= 0.0 ? mvMat.refractionParams.IORActual : (mvMat.refractionParams.IOR >= 0.0 ? mvMat.refractionParams.IOR : 1.0);
+		iorExtension["ior"] = tinygltf::Value(ior);
 		material.extensions["KHR_materials_ior"] = tinygltf::Value(iorExtension);
 
 		if (!mvMat.refractionParams.useAlbedoTint)
@@ -3238,19 +3298,7 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 		material.extensions["KHR_materials_transmission"] = tinygltf::Value(transmissionExtension);
 	}
 
-	if (0 & mvMat.ggxSpecular)
-	{
-		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
-		{
-			_model.extensionsUsed.emplace_back("KHR_materials_specular");
-		}
-
-		tinygltf::Value::Object specularExtension;
-		specularExtension["specularFactor"] = tinygltf::Value(1.0);
-		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
-	}
-
-	if (!mvMat.reflectivityTex.empty())
+	if (useSpecular)
 	{
 		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_specular") == _model.extensionsUsed.end())
 		{
@@ -3260,12 +3308,26 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 		tinygltf::Value::Object specularExtension;
 		tinygltf::Value::Object specularTexture;
 		specularTexture["index"] = tinygltf::Value(createTextureMView(mvMat.reflectivityTex, mvMat.textureFilterNearest, mvMat.textureWrapClamp));
+		specularExtension["specularFactor"] = tinygltf::Value(1.0);
 		specularExtension["specularColorTexture"] = tinygltf::Value(specularTexture);
-		std::vector<double> v = { 1.0, 1.0, 1.0 };
+		std::vector<double> v = { 0, 0, 0 };
+		if (mvMat.fresnel.size() == 3)
+			v = { mvMat.fresnel[0] * 5.0, mvMat.fresnel[1] * 5.0, mvMat.fresnel[2] * 5.0 };
 		specularExtension.emplace("specularColorFactor", tinygltf::Value::Array(v.begin(), v.end()));
 		material.extensions["KHR_materials_specular"] = tinygltf::Value(specularExtension);
 	}
 
+	if (mvMat.emissiveIntensity >= 0.0)
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_emissive_strength") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_emissive_strength");
+		}
+
+		tinygltf::Value::Object emissiveExtension;
+		emissiveExtension["emissiveStrength"] = tinygltf::Value(1.0);
+		material.extensions["KHR_materials_emissive_strength"] = tinygltf::Value(emissiveExtension);
+	}
 
 	if (mvMat.useAniso)
 	{
