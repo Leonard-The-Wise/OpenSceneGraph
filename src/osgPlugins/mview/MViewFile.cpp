@@ -325,6 +325,7 @@ void BigInt::trim() {
         digits.pop_back();
     }
 }
+
 std::string ByteStream::readCString()
 {
     auto it = std::find(bytes.begin(), bytes.end(), 0);

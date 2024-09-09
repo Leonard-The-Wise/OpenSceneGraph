@@ -131,12 +131,12 @@ static void writeVectorToFile(const std::string& filename, const std::vector<uin
 
 osgDB::ReaderWriter::ReadResult MViewReader::readMViewFile(const std::string& fileName)
 {
-    OSG_NOTICE << "Loading Marmoset Viewer archive: " << fileName << std::endl;
+    OSG_NOTICE << "Loading Marmoset Viewer archive..." << std::endl; // << fileName << std::endl;
 
     _archive = new Archive(loadFileToVector(fileName));
 
     ArchiveFile sceneFile = _archive->extract("scene.json");
-    writeVectorToFile("scene.json", sceneFile.data);
+    //writeVectorToFile("scene.json", sceneFile.data);
 
     if (!sceneFile.name.empty())
     {
