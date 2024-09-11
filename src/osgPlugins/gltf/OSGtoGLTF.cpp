@@ -3852,7 +3852,10 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 			std::string materialName;
 			pset->getUserValue("material", materialName);
 			if (!materialName.empty())
+			{
 				currentMaterial = getCurrentMaterialMview(materialName);
+				materialHaveTextures = _materialsWithTextures.find(currentMaterial) != _materialsWithTextures.end();
+			}
 		}
 
 		if (currentMaterial >= 0)
