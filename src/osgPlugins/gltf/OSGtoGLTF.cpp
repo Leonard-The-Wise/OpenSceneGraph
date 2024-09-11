@@ -3381,6 +3381,24 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 		material.extensions["KHR_materials_anisotropy"] = tinygltf::Value(anisotropyExtension);
 	}
 
+	if (mvMat.useMicroFiber)
+	{
+		if (std::find(_model.extensionsUsed.begin(), _model.extensionsUsed.end(), "KHR_materials_sheen") == _model.extensionsUsed.end())
+		{
+			_model.extensionsUsed.emplace_back("KHR_materials_sheen");
+		}
+
+		tinygltf::Value::Object sheenExtension;
+		if (mvMat.microfiberParams.fresnelColor.size() >= 3)
+		{
+			std::vector<double> v = { mvMat.microfiberParams.fresnelColor[0], mvMat.microfiberParams.fresnelColor[1], mvMat.microfiberParams.fresnelColor[2] };
+			sheenExtension.emplace("sheenColorFactor", tinygltf::Value::Array(v.begin(), v.end()));
+		}
+
+		sheenExtension["sheenRoughnessFactor"] = tinygltf::Value(1 - mvMat.microfiberParams.fresnelGlossMask);
+		material.extensions["KHR_materials_sheen"] = tinygltf::Value(sheenExtension);
+	}
+
 	_model.materials.push_back(material);
 	_gltfMaterials.emplace(material.name, materialIndex);
 
