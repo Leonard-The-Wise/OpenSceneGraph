@@ -47,6 +47,18 @@ bool ParserHelper::getSafeDouble(const std::string& in, double& outValue)
 	return true;
 }
 
+bool ParserHelper::getBooleanValue(const nlohmann::json& json, const std::string& key, bool defaultValue) 
+{
+	if (json.contains(key)) {
+		if (json[key].is_boolean()) {
+			return json[key].get<bool>();
+		}
+		else if (json[key].is_number_integer()) {
+			return json[key].get<int>() != 0;
+		}
+	}
+	return defaultValue;
+}
 
 ref_ptr<Array> ParserHelper::recastArray(const ref_ptr<Array>& toRecast, DesiredVectorSize vecSize)
 {

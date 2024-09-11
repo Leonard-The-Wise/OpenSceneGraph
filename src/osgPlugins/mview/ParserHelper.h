@@ -18,6 +18,8 @@ public:
 
 	static bool getSafeDouble(const std::string& in, double& outValue);
 
+	static bool getBooleanValue(const nlohmann::json& json, const std::string& key, bool defaultValue = false);
+
 	static osg::ref_ptr<osg::Array> recastArray(const osg::ref_ptr<osg::Array>& toRecast, DesiredVectorSize vecSize);
 
 	static osg::ref_ptr<osg::Array> decastVector(const osg::ref_ptr<osg::Array>& toRecast);

@@ -2,6 +2,20 @@
 #include "json.hpp"
 #include "MViewMaterial.h"
 
+static bool getBooleanValue(const nlohmann::json& json, const std::string& key, bool defaultValue) 
+{
+	if (json.contains(key)) {
+		if (json[key].is_boolean()) {
+			return json[key].get<bool>();
+		}
+		else if (json[key].is_number_integer()) {
+			return json[key].get<int>() != 0;
+		}
+	}
+	return defaultValue;
+}
+
+
 // Construtor para AnisoParams
 MViewMaterial::AnisoParams::AnisoParams(const nlohmann::json& json) {
     integral = json.value("integral", -1.0f);
@@ -13,10 +27,10 @@ MViewMaterial::AnisoParams::AnisoParams(const nlohmann::json& json) {
 MViewMaterial::RefractionParams::RefractionParams(const nlohmann::json& json) {
     IOR = json.value("IOR", -1.0f);
     IORActual = json.value("IORActual", -1.0f);
-    distantBackground = json.value("distantBackground", false);
-    newRefraction = json.value("newRefraction", false);
+    distantBackground = getBooleanValue(json, "distantBackground", false);
+    newRefraction = getBooleanValue(json, "newRefraction", false);
     tint = json.value("tint", std::vector<float>());
-    useAlbedoTint = json.value("useAlbedoTint", false);
+    useAlbedoTint = getBooleanValue(json, "useAlbedoTint", false);
 }
 
 // Construtor para MicrofiberParams
@@ -59,11 +73,11 @@ MViewMaterial::MViewMaterial(const nlohmann::json& jsonConfig)
     extrasTexA = jsonConfig.value("extrasTexA", "");
 
     usesBlending = (blend != "none");
-    usesRefraction = jsonConfig.value("refraction", false);
-    useSkin = jsonConfig.value("useSkin", false);
-    useMicroFiber = jsonConfig.value("microfiber", false);
-    useAniso = jsonConfig.value("aniso", false);
-    ggxSpecular = jsonConfig.value("ggxSpecular", false);
+    usesRefraction = getBooleanValue(jsonConfig, "refraction", false);
+    useSkin = getBooleanValue(jsonConfig, "useSkin", false);
+    useMicroFiber = getBooleanValue(jsonConfig, "microfiber", false);
+    useAniso = getBooleanValue(jsonConfig, "aniso", false);
+    ggxSpecular = getBooleanValue(jsonConfig, "ggxSpecular", false);
 
     shadowAlphaTest = alphaTest;
     castShadows = (blend != "add");
@@ -72,15 +86,15 @@ MViewMaterial::MViewMaterial(const nlohmann::json& jsonConfig)
     fresnel = jsonConfig.value("fresnel", std::vector<float>());
     emissiveIntensity = jsonConfig.value("emissiveIntensity", -1.0f);
 
-    tangentGenerateBitangent = jsonConfig.value("tangentGenerateBitangent", false);
-    tangentNormalize = jsonConfig.value("tangentNormalize", false);
-    tangentOrthogonalize = jsonConfig.value("tangentOrthogonalize", false);
+    tangentGenerateBitangent = getBooleanValue(jsonConfig, "tangentGenerateBitangent", false);
+    tangentNormalize = getBooleanValue(jsonConfig, "tangentNormalize", false);
+    tangentOrthogonalize = getBooleanValue(jsonConfig, "tangentOrthogonalize", false);
 
-    textureFilterNearest = jsonConfig.value("textureFilterNearest", false);
-    textureWrapClamp = jsonConfig.value("textureWrapClamp", false);
+    textureFilterNearest = getBooleanValue(jsonConfig, "textureFilterNearest", false);
+    textureWrapClamp = getBooleanValue(jsonConfig, "textureWrapClamp", false);
 
-    aoSecondaryUV = jsonConfig.value("aoSecondaryUV", false);
-    emissiveSecondaryUV = jsonConfig.value("emissiveSecondaryUV", false);
+    aoSecondaryUV = getBooleanValue(jsonConfig, "aoSecondaryUV", false);
+    emissiveSecondaryUV = getBooleanValue(jsonConfig, "emissiveSecondaryUV", false);
 
     horizonSmoothing = jsonConfig.value("horizonSmoothing", -1.0f);
     vOffset = uOffset = 0.0f;

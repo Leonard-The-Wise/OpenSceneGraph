@@ -735,6 +735,11 @@ static uint8_t* extractSubTexture(const std::vector<double>& uTexRange, const ui
 	int subTextureWidth = static_cast<int>(uTexRange[0] * textureWidth);
 	int subTextureHeight = static_cast<int>(uTexRange[1] * textureHeight);
 
+	if (subTextureWidth == 0)
+		subTextureWidth = 1;
+	if (subTextureHeight == 0)
+		subTextureHeight = 1;
+
 	// Aloca memória para a sub-textura
 	uint8_t* subTextureData = new uint8_t[subTextureWidth * subTextureHeight * channels];
 
@@ -857,6 +862,26 @@ static int getTextureNumChannels(const std::string& texture, bool stripFileName 
 
 	return channels;
 }
+
+static int isValidTexture(const std::string& texture, bool stripFileName = true)
+{
+	if (texture.empty())
+		return false;
+
+	int width = 0, height = 0, channels = 0;
+
+	std::string textureFileName = stripFileName ? stripAllExtensions(texture) + ".png" : texture;
+	FILE* f = fopen(std::string("textures\\" + textureFileName).c_str(), "rb");
+	if (f)
+	{
+		stbi_info_from_file(f, &width, &height, &channels);
+		fclose(f);
+	}
+
+	return width > 1 && height > 1;
+}
+
+
 #pragma endregion
 
 
@@ -3359,8 +3384,9 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 	_model.materials.push_back(material);
 	_gltfMaterials.emplace(material.name, materialIndex);
 
-	if (!mvMat.albedoTex.empty() || !mvMat.alphaTex.empty()  || !mvMat.extrasTex.empty() || !mvMat.extrasTexA.empty() 
-		|| !mvMat.glossTex.empty() || !mvMat.normalTex.empty() || !mvMat.reflectivityTex.empty())
+	if (isValidTexture(mvMat.albedoTex, false) || isValidTexture(mvMat.alphaTex, false) || isValidTexture(mvMat.extrasTex, false) || 
+		isValidTexture(mvMat.extrasTexA, false)	|| isValidTexture(mvMat.glossTex, false) || isValidTexture(mvMat.normalTex, false) || 
+		isValidTexture(mvMat.reflectivityTex, false))
 	{
 		_materialsWithTextures.emplace(materialIndex);
 	}
