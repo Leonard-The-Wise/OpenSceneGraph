@@ -814,7 +814,7 @@ static std::string createRoughnessTexture(const std::string& roughnessFile, bool
 	return outputFileName;
 }
 
-static std::string createMatallicTexture(const std::string& metallicFile, bool stripFileName = true)
+static std::string createMetallicTexture(const std::string& metallicFile, bool stripFileName = true)
 {
 	std::string outputFileName = stripAllExtensions(metallicFile) + ".comb.png";
 
@@ -844,6 +844,41 @@ static std::string createMatallicTexture(const std::string& metallicFile, bool s
 	delete[] combinedData;
 
 	OSG_NOTICE << "Created new texture " << outputFileName << " put metallic channel in the right position, as required by GLTF 2.0." << std::endl;
+
+	return outputFileName;
+}
+
+static std::string createAlphaTexture(const std::string& alpha, bool stripFileName = true)
+{
+	std::string outputFileName = stripAllExtensions(alpha) + ".comb.png";
+
+	if (osgDB::fileExists("textures\\" + outputFileName))
+		return outputFileName;
+
+	int width, height, channels;
+	std::string alphaTexture = stripFileName ? stripAllExtensions(alpha) + ".png" : alpha;
+	unsigned char* alphaData = stbi_load(std::string("textures\\" + alphaTexture).c_str(), &width, &height, &channels, 1);
+	if (!alphaData)
+	{
+		OSG_WARN << "Error loading alpha texture " << alpha << "!" << std::endl;
+		return alpha;
+	}
+
+	unsigned char* combinedData = new unsigned char[width * height * 4];
+
+	for (int i = 0; i < width * height; ++i) {
+		combinedData[i * 4] = alphaData[i];
+		combinedData[i * 4 + 1] = alphaData[i];
+		combinedData[i * 4 + 2] = alphaData[i];
+		combinedData[i * 4 + 3] = alphaData[i];
+	}
+
+	stbi_write_png(std::string("textures\\" + outputFileName).c_str(), width, height, 4, combinedData, width * 4);
+
+	stbi_image_free(alphaData);
+	delete[] combinedData;
+
+	OSG_NOTICE << "Created new texture " << outputFileName << " put alpha channel in the right position, as required by GLTF 2.0." << std::endl;
 
 	return outputFileName;
 }
@@ -2744,7 +2779,7 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 			if (activeTexture.Texture.Name == "")
 			{
 				activeTexture = alphaMask;
-				activeTextureName = alphaMask.Texture.Name;
+				activeTextureName = createAlphaTexture(alphaMask.Texture.Name);
 			}
 			else if (activeTexture.Texture.TexCoordUnit == alphaMask.Texture.TexCoordUnit)
 			{
@@ -2892,7 +2927,7 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 			if (activeTexture.Texture.Name == "")
 			{
 				material.alphaMode = "BLEND"; // Got no texture to blend to, so we must create one empty + alpha channel
-				activeTextureName = makeZeroTexture(opacity.Texture.Name, ZeroTexture::A);
+				activeTextureName = createAlphaTexture(opacity.Texture.Name);
 				activeTexture = opacity;
 			}
 			else if (activeTexture.Texture.TexCoordUnit == opacity.Texture.TexCoordUnit)
@@ -3255,7 +3290,7 @@ int OSGtoGLTF::createGltfMaterialMView(const MViewMaterial& mvMat)
 	else if (!mvMat.glossTex.empty())
 		metalRoughnessTex = createRoughnessTexture(mvMat.glossTex, false, true);
 	else if (useMetal)
-		metalRoughnessTex = createMatallicTexture(mvMat.reflectivityTex, false);
+		metalRoughnessTex = createMetallicTexture(mvMat.reflectivityTex, false);
 
 	if (!mvMat.extrasTex.empty() && !mvMat.extrasTexA.empty())
 		extrasTex = combineTextures(mvMat.extrasTex, mvMat.extrasTexA, false);
