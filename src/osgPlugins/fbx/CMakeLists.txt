@@ -14,6 +14,7 @@ SET(TARGET_SRC
     WriterCompareTriangle.cpp
     WriterNodeVisitor.cpp
     fbxMaterialToOsgStateSet.cpp
+    MViewmaterial.cpp
 )
 
 SET(TARGET_H
@@ -22,6 +23,7 @@ SET(TARGET_H
     ReaderWriterFBX.h
     WriterCompareTriangle.h
     WriterNodeVisitor.h
+    MViewMaterial.h
 )
 
 IF(CMAKE_COMPILER_IS_GNUCXX)

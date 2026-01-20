@@ -34,6 +34,7 @@
 
 
 #include "WriterNodeVisitor.h"
+#include "MViewMaterial.h"
 
 using namespace osg;
 using namespace osgAnimation;
@@ -192,6 +193,16 @@ namespace pluginfbx
 				}
 			}
 		}
+	}
+
+	FbxSurfacePhong* WriterNodeVisitor::MaterialParser::getMViewMaterial(const MViewMaterial& mvMat, FbxManager* pSdkManager)
+	{
+
+		FbxSurfacePhong* fbxMaterial = FbxSurfacePhong::Create(pSdkManager, mvMat.name.c_str());
+
+
+
+		return nullptr;
 	}
 
 	// Get texture's material property from UserData if applies
