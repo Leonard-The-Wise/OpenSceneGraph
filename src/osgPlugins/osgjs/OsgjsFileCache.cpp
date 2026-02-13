@@ -133,13 +133,26 @@ void FileCache::setCache(const std::set<std::string>& fileNames)
             if (getFileContent(realFileName, fileContent))
             {
                 found = true;
-                _fileCacheInternal.emplace(fileNameStripped, fileContent);
+                _fileCacheInternal.emplace(fileName, fileContent);
             }
             else
                 error = true;
         }
 
-        // Second attempt. This time, try original file.
+        // Second attempt: .bin.gz
+        fileNameStripped = stripAllExtensions(fileName) + ".bin.gz";
+        if (fileExistsInDirs(fileNameStripped, realFileName))
+        {
+            if (getFileContent(realFileName, fileContent))
+            {
+                found = true;
+                _fileCacheInternal.emplace(fileName, fileContent);
+            }
+            else
+                error = true;
+        }
+
+        // Third attempt. This time, try original file.
         if (!found)
         {
             if (fileExistsInDirs(fileName, realFileName))

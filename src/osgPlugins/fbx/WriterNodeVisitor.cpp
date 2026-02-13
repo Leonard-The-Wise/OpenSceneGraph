@@ -33,11 +33,14 @@
 #include <osgAnimation/StackedMatrixElement>
 #include <osgAnimation/StackedScaleElement>
 
-
+#include "json.hpp"
 #include "WriterNodeVisitor.h"
+#include "MViewMaterial.h"
 
 using namespace osg;
 using namespace osgAnimation;
+
+using json = nlohmann::json;
 
 // Use namespace qualification to avoid static-link symbol collisions
 // from multiply defined symbols.
@@ -381,6 +384,30 @@ namespace pluginfbx
 
 		*/
 	}
+
+	void WriterNodeVisitor::buildMViewMaterials(const std::string& fileContents)
+	{
+		json doc;
+
+		try {
+			doc = json::parse(fileContents);
+		}
+		catch (json::parse_error&)
+		{
+			return;
+		}
+
+		if (doc.contains("materials") && doc["materials"].is_array())
+		{
+			for (auto& material : doc["materials"])
+			{
+				std::string matName = material.value("name", "");
+				MViewMaterial newMat(material);
+				_mviewMaterials[matName] = MaterialParser::getMViewMaterial(newMat, _pSdkManager);
+			}
+		}
+	}
+
 	
 
 	void WriterNodeVisitor::apply(osg::Geometry& geometry)
@@ -452,6 +479,14 @@ namespace pluginfbx
 			//ignore the root node to maintain same hierarchy
 			_firstNodeProcessed = true;
 			_firstMatrixNode = _curFbxNode; // Temporary in case we don't find a first matrix
+
+			std::string mviewFile;
+			node.getUserValue("MVIEWScene", mviewFile);
+			if (!mviewFile.empty())
+			{
+				_modelTypeMVIEW = true;
+				buildMViewMaterials(mviewFile);
+			}
 
 			// Build animations targets list (needed to see which nodes we will create or not)
 			buildAnimationTargets(&node);

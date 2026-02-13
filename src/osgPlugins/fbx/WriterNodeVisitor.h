@@ -29,6 +29,8 @@
 #include <osgAnimation/RigGeometry>
 #include <osgAnimation/MorphGeometry>
 
+#include "MViewMaterial.h"
+
 #if defined(_MSC_VER)
 #pragma warning( disable : 4505 )
 #pragma warning( default : 4996 )
@@ -154,6 +156,8 @@ namespace pluginfbx
                 return _fbxMaterial;
             }
 
+            static FbxSurfacePhong* getMViewMaterial(const MViewMaterial& mvMat, FbxManager* pSdkManager);
+
         private:
             FbxSurfacePhong* _fbxMaterial;
 
@@ -226,6 +230,8 @@ namespace pluginfbx
         std::string buildNodePath(FbxNode* currentNode);
 
         void applyTransforms(FbxNode* transformNode, double scale, double rotation);
+
+        void buildMViewMaterials(const std::string& fileContents);
 
         /**
         * Build geometry triangles and control points (vertices)
@@ -364,6 +370,9 @@ namespace pluginfbx
         // Keep track of any StackedMatrix Transform
         std::map<FbxNode*, osg::Matrix> _stackedMatrices;
 
+        // Marmoset view models
+        bool _modelTypeMVIEW;                                        // Keep track if this is a marmoset viewer model
+        std::map<std::string, FbxSurfacePhong*> _mviewMaterials;     // Store MView Materials as surface phong
 
     };
 
