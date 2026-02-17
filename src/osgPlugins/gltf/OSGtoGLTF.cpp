@@ -2239,6 +2239,7 @@ int OSGtoGLTF::getCurrentMaterialV2(osg::Geometry* geometry)
 	if (!meshMaterialsParsed)
 	{
 		buildMaterials();
+		meshMaterialsParsed = true;
 	}
 
 	// Parse rig geometry
@@ -2803,20 +2804,20 @@ int OSGtoGLTF::createGltfMaterialV2(MaterialInfo2& materialInfo)
 		else
 			material.pbrMetallicRoughness.baseColorFactor = { opacity.Factor, opacity.Factor, opacity.Factor, opacity.Factor };
 
-		if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0)
+		if (opacity.Type == "alphaBlend" && opacity.Factor < 1.0 || opacity.Type == "blending")
 			material.alphaMode = "BLEND";
-		else if (opacity.Type == "dithering" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
+		else if (opacity.Type == "dithering" || opacity.Type == "dithering_thinLayer" || opacity.Type == "alphaBlend" && opacity.Factor == 1.0)
 			material.alphaMode = "MASK";
 		else
 			material.alphaMode = "OPAQUE";
 
-		if (opacity.Type == "dithering")
+		if (opacity.Type == "dithering" || opacity.Type == "dithering_thinLayer")
 		{
 			OSG_WARN << "WARNING: Material '" << material.name << "' contains a dithered channel, " <<
 				"which is ambiguous to GLTF format. You may need to adjust Alpha mode to Blend, Clip or Opaque later." << std::endl;
 		}
 
-		if (opacity.Type == "alphaBlend")
+		if (opacity.Type == "alphaBlend" || opacity.Type == "blending")
 		{
 			OSG_WARN << "WARNING: Material '" << material.name << "' contains a blending channel, " <<
 				"which is ambiguous to GLTF format. You may need to adjust Alpha mode to Blend, Clip or Opaque later." << std::endl;

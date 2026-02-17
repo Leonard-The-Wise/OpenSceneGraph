@@ -101,7 +101,51 @@ namespace osgJSONParser
 			"ClearCoatRoughness",
 			"SubsurfaceScattering",
 			"SubsurfaceTranslucency",
+		},
+		knownChannelNamesFAB{
+			"anisotropy",
+			"basecolor",
+			"bump",
+			"clearcoat",
+			"clearcoatnormal",
+			"clearcoatroughness",
+			"cutout",
+			"displacement",
+			"emission",
+			"metalness",
+			"normal",
+			"occlusion",
+			"opacity",
+			"roughness",
+			"sheen",
+			"specularlevel",
+			"subsurface",
+			"thickness",
+			"transmission"
+		},
+		FABToSketchFabChannels{
+			std::make_pair("anisotropy", "Anisotropy"),
+			std::make_pair("basecolor", "AlbedoPBR"),
+			std::make_pair("bump", "BumpMap"),
+			std::make_pair("clearcoat", "ClearCoat"),
+			std::make_pair("clearcoatnormal", "ClearCoatNormalMap"),
+			std::make_pair("clearcoatroughness", "ClearCoatRoughness"),
+			std::make_pair("cutout", "cutout"),  // no ref
+			std::make_pair("displacement", "Displacement"),
+			std::make_pair("emission", "EmitColor"),
+			std::make_pair("metalness", "MetalnessPBR"),
+			std::make_pair("normal", "NormalMap"),
+			std::make_pair("occlusion", "occlusion"), // no ref
+			std::make_pair("opacity", "Opacity"),
+			std::make_pair("roughness", "RoughnessPBR"),
+			std::make_pair("sheen", "Sheen"),
+			std::make_pair("specularlevel", "SpecularPBR"),
+			std::make_pair("subsurface", "SubsurfaceScattering"),
+			std::make_pair("thickness", "thickness"),
+			std::make_pair("transmission", "transmission")
 		}
+
+
 		{};
 
 		bool readMaterialFile(const std::string& viewerInfoFileName, const std::string& textureInfoFileName);
@@ -125,6 +169,9 @@ namespace osgJSONParser
 	private:
 
 		const std::set<std::string> knownChannelNames;
+		const std::set<std::string> knownChannelNamesFAB;
+		const std::map<std::string, std::string> FABToSketchFabChannels;
+
 		Materials _materials;
 		std::map<std::string, TextureInfo2> _textureMap;
 		std::map<int, std::string> _stateSetIDMaterial;
@@ -134,6 +181,8 @@ namespace osgJSONParser
 		bool parseViewerInfo(const nlohmann::json& viewerInfoDoc);
 
 		bool parseTextureInfo(const nlohmann::json& textureInfoDoc);
+
+		bool parseViewerInfoFAB(const nlohmann::json& viewerInfoDoc);
 
 	};
 }

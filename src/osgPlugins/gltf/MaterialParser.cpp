@@ -64,7 +64,7 @@ TextureInfo2 parseTexture(const json& textureInfoDoc)
 	return returnTexture;
 }
 
-static ChannelInfo2 parseChannel(const json& channelValue)
+ChannelInfo2 parseChannel(const json& channelValue)
 {
 	ChannelInfo2 returnInfo;
 
@@ -158,6 +158,54 @@ static ChannelInfo2 parseChannel(const json& channelValue)
 	return returnInfo;
 }
 
+ChannelInfo2 parseChannelFAB(const std::string channelName, const json& material)
+{
+	ChannelInfo2 returnInfo;
+
+	if (material.contains(channelName + ".enabled") && !material[channelName + ".enabled"].is_null())
+	{
+		returnInfo.Enable = material[channelName + ".enabled"].get<bool>();
+	}
+
+	if (material.contains(channelName + ".factor") && !material[channelName + ".factor"].is_null())
+	{
+		returnInfo.Factor = material[channelName + ".factor"].get<double>();
+	}
+
+	if (material.contains(channelName + ".type") && !material[channelName + ".type"].is_null())
+	{
+		returnInfo.Type = material[channelName + ".type"].get<std::string>();
+	}
+
+	if (material.contains(channelName + ".ior") && !material[channelName + ".ior"].is_null())
+	{
+		returnInfo.IOR = material[channelName + ".ior"].get<double>();
+	}
+
+	if (material.contains(channelName + ".color") && material[channelName + ".color"].is_array())
+	{
+		returnInfo.Color.resize(3);
+		for (int i = 0; i < 3 && i < material[channelName + ".color"].size(); ++i)
+		{
+			returnInfo.Color[i] = material[channelName + ".color"][i].get<double>();
+		}
+	}
+
+	if (material.contains(channelName + ".texture.uri") && !material[channelName + ".texture.uri"].is_null())
+	{
+		TextureInfo2 texture;
+		texture.TexCoordUnit = material.contains(channelName + ".texture.uv") ? material[channelName + ".texture.uv"].get<int>() : 0;
+		texture.TextureTarget = material[channelName + ".texture.uri"].get<std::string>();
+		texture.UID = material[channelName + ".texture.uri"].get<std::string>();
+
+		returnInfo.Texture = texture;
+	}
+
+	return returnInfo;
+}
+
+
+
 bool MaterialFile2::readMaterialFile(const std::string& viewerInfoFileName, const std::string& textureInfoFileName)
 {
 
@@ -178,8 +226,24 @@ bool MaterialFile2::readMaterialFile(const std::string& viewerInfoFileName, cons
 	viewerStream >> viewerInfoDoc;
 	textureStream >> textureInfoDoc;
 
-	if (!parseViewerInfo(viewerInfoDoc))
-		return false;
+	if (viewerInfoDoc.contains("parserVersion"))
+	{
+		if (viewerInfoDoc["parserVersion"].get<std::string>() == "SketchFab")
+		{
+			if (!parseViewerInfo(viewerInfoDoc))
+				return false;
+		}
+		else
+		{
+			if (!parseViewerInfoFAB(viewerInfoDoc))
+				return false;
+		}
+	}
+	else
+	{
+		if (!parseViewerInfo(viewerInfoDoc))
+			return false;
+	}
 
 	if (!parseTextureInfo(textureInfoDoc))
 		return false;
@@ -321,6 +385,63 @@ bool MaterialFile2::parseTextureInfo(const json& textureInfoDoc)
 
 	return true;;
 }
+
+bool MaterialFile2::parseViewerInfoFAB(const json& viewerInfoDoc)
+{
+	if (!viewerInfoDoc.contains("options"))
+		return false;
+
+	if (!viewerInfoDoc["options"].is_object())
+		return false;
+
+	const json& options = viewerInfoDoc["options"];
+
+	if (options.contains("materials") && options["materials"].is_object())
+	{
+		const json& materials = options["materials"];
+
+		for (auto& materialItem : materials.items())
+		{
+			if (materialItem.value().is_object())
+			{
+				MaterialInfo2 material;
+				std::string materialName;
+				auto& itemValue = materialItem.value();
+				material.UsePBR = true;
+
+				if (itemValue.contains("name"))
+				{
+					materialName = itemValue["name"].get<std::string>();
+					material.Name = materialName;
+				}
+				else
+					return false;
+
+				if (itemValue.contains("doublesided"))
+				{
+					material.BackfaceCull = !itemValue["doublesided"].get<bool>();
+				}
+
+				if (itemValue.contains("version"))
+					material.Version = itemValue["version"].get<int>();
+
+				if (itemValue.contains("uid"))
+					material.ID = itemValue["uid"].get<std::string>();
+
+				for (auto& channelName : knownChannelNamesFAB)
+				{
+					std::string realChannelName = FABToSketchFabChannels.at(channelName);
+					material.Channels[realChannelName] = parseChannelFAB(channelName, itemValue);
+				}
+
+				_materials[materialName] = material;
+			}
+		}
+	}
+
+	return true;
+}
+
 
 void osgJSONParser::MaterialFile2::renameTexture(const std::string& originalFile, const std::string& modifiedFile)
 {
