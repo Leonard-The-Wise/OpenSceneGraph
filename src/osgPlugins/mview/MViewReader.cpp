@@ -471,7 +471,8 @@ void MViewParser::MViewReader::solveAnimationLinks()
 
             if (animationObj.sceneObjectType == "MeshSO")
             {
-                int realMeshID = getMeshIndexFromID(animationObj.id);
+                int realMeshID;
+                if (realMeshID = getMeshIndexFromID(animationObj.id) == -1) continue;
                 if (animationObj.skinningRigIndex > -1)
                 {
                     _skinIDToMeshID[animationObj.skinningRigIndex] = realMeshID;
