@@ -1487,6 +1487,10 @@ void OSGtoGLTF::createVec3Sampler(tinygltf::Animation& gltfAnimation, int target
 	if (timesArray->size() == 0)
 		return;
 
+	// TODO: See what ScalingCompensation does - meanwhile skip
+	if (transformType == "ScalingCompensation")
+		return;
+
 	tinygltf::AnimationSampler sampler;
 	sampler.input = getOrCreateAccessor(timesArray, timesArray->size(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_SCALAR, 0);
 	sampler.output = getOrCreateAccessor(keysArray, keysArray->size(), TINYGLTF_PARAMETER_TYPE_FLOAT, TINYGLTF_TYPE_VEC3, 0);
@@ -3545,7 +3549,8 @@ void OSGtoGLTF::apply(osg::Node& node)
 	else if (skeleton && _gltfSkeletons.size() > 0)
 	{
 		// Mark a placeholder just to let the system know there are 2 or more skeletons
-		_gltfSkeletons.push(std::make_pair(-1, &_model.skins.back()));
+		auto emptySkin = tinygltf::Skin();
+		_gltfSkeletons.push(std::make_pair(-1, &emptySkin));
 	}
 
 	traverse(node);
@@ -3610,7 +3615,7 @@ void OSGtoGLTF::apply(osg::Group& group)
 	// Determine nature of group
 	osg::MatrixTransform* matrix = dynamic_cast<osg::MatrixTransform*>(&group);
 
-	// Only aply children for matrices since we are skipping normal groups
+	// Only apply children for matrices since we are skipping normal groups
 	if (matrix && !isEmptyNode(&group))
 	{
 		for (unsigned i = 0; i < group.getNumChildren(); ++i)
@@ -3661,7 +3666,11 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 	// Post-process skeleton... create inverse bind matrices accessor and skin weights
 	// Only for last skeleton
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
-	if (skeleton && _gltfSkeletons.size() == 1)
+	if (skeleton && _gltfSkeletons.size() > 1)
+	{
+		_gltfSkeletons.pop();
+	}
+	else if (skeleton && _gltfSkeletons.size() == 1)
 	{
 		int MatrixAccessor = createBindMatrixAccessor(_skeletonInvBindMatrices);
 		_gltfSkeletons.top().second->inverseBindMatrices = MatrixAccessor;
@@ -3674,10 +3683,6 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 		_gltfSkeletons.pop();
 		_riggedMeshMap.clear();
 		_gltfBoneIDNames.clear();
-	}
-	else if (skeleton && _gltfSkeletons.size() > 0)
-	{
-		_gltfSkeletons.pop();
 	}
 }
 
@@ -3735,7 +3740,9 @@ void OSGtoGLTF::apply(osg::Geometry& drawable)
 	if (rigGeometry)
 	{
 		_riggedMeshMap[meshID] = rigGeometry;
-		_model.nodes.back().skin = _gltfSkeletons.top().first;
+
+		if (_gltfSkeletons.size() > 0)
+			_model.nodes.back().skin = _gltfSkeletons.top().first;
 
 		// Transform vertices
 		osg::Matrix transformMatrix = getMatrixFromSkeletonToNode(*rigGeometry);
