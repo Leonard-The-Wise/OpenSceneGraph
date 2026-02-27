@@ -3546,12 +3546,6 @@ void OSGtoGLTF::apply(osg::Node& node)
 		_model.skins.push_back(tinygltf::Skin());
 		_gltfSkeletons.push(std::make_pair(_model.skins.size() - 1, &_model.skins.back()));
 	}
-	else if (skeleton && _gltfSkeletons.size() > 0)
-	{
-		// Mark a placeholder just to let the system know there are 2 or more skeletons
-		auto emptySkin = tinygltf::Skin();
-		_gltfSkeletons.push(std::make_pair(-1, &emptySkin));
-	}
 
 	traverse(node);
 
@@ -3664,13 +3658,8 @@ void OSGtoGLTF::apply(osg::Transform& xform)
 	}
 
 	// Post-process skeleton... create inverse bind matrices accessor and skin weights
-	// Only for last skeleton
 	osgAnimation::Skeleton* skeleton = dynamic_cast<osgAnimation::Skeleton*>(&xform);
-	if (skeleton && _gltfSkeletons.size() > 1)
-	{
-		_gltfSkeletons.pop();
-	}
-	else if (skeleton && _gltfSkeletons.size() == 1)
+	if (skeleton && _gltfSkeletons.size() == 1)
 	{
 		int MatrixAccessor = createBindMatrixAccessor(_skeletonInvBindMatrices);
 		_gltfSkeletons.top().second->inverseBindMatrices = MatrixAccessor;
